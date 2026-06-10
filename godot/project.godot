@@ -1,0 +1,23 @@
+config_version=5
+
+[application]
+
+config/name="폼 파티"
+run/main_scene="res://scenes/main.tscn"
+config/icon="res://assets/AppIcon.png"
+config/features=PackedStringArray("4.6", "Mobile")
+
+[display]
+
+window/size/viewport_width=390
+window/size/viewport_height=844
+window/size/mode=2
+window/handheld/orientation=1
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+
+renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true
+textures/canvas_textures/default_texture_filter=0

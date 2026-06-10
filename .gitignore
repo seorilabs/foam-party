@@ -1,0 +1,7 @@
+.DS_Store
+.godot/
+godot/.godot/
+godot/build/
+build/
+tmp/
+*.tmp
