@@ -8,6 +8,7 @@ const TOOL_SPONGE := "sponge"
 const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug"]
 const CLEAN_DAMAGE_RATE := 72.0
 const AUDIO_MIX_RATE := 22050
+const POP_NOTES := [523.25, 659.25, 783.99, 880.0, 1046.5]
 const GAMEPLAY_SCALE := 1.16
 const GAMEPLAY_PIVOT := Vector2(195.0, 545.0)
 const GAMEPLAY_OFFSET := Vector2(0.0, 0.0)
@@ -96,9 +97,12 @@ var tool_colors := {
 	TOOL_SOAP: Color("#f8f4a6"),
 	TOOL_SPONGE: Color("#ff9f5a"),
 }
+var style_cache: Dictionary = {}
 var tool_audio_streams: Dictionary = {}
 var ui_select_stream: AudioStreamWAV
 var completion_stream: AudioStreamWAV
+var removal_stream: AudioStreamWAV
+var removal_sfx_player: AudioStreamPlayer
 
 
 func _ready() -> void:
@@ -144,6 +148,19 @@ func _font() -> Font:
 	return get_theme_default_font()
 
 
+func _style(key: String, bg: Color, corner: float, border: Color = Color(0.0, 0.0, 0.0, 0.0), border_width: int = 0) -> StyleBoxFlat:
+	if style_cache.has(key):
+		return style_cache[key]
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg
+	style.set_corner_radius_all(int(corner))
+	if border_width > 0:
+		style.border_color = border
+		style.set_border_width_all(border_width)
+	style_cache[key] = style
+	return style
+
+
 func _setup_audio() -> void:
 	audio_playback_enabled = DisplayServer.get_name() != "headless"
 	tool_audio_streams = {
@@ -154,6 +171,7 @@ func _setup_audio() -> void:
 	}
 	ui_select_stream = _make_select_stream()
 	completion_stream = _make_completion_stream()
+	removal_stream = _make_removal_stream()
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "배경음악"
@@ -179,6 +197,11 @@ func _setup_audio() -> void:
 	completion_sfx_player.name = "완료효과음"
 	completion_sfx_player.volume_db = -5.0
 	add_child(completion_sfx_player)
+
+	removal_sfx_player = AudioStreamPlayer.new()
+	removal_sfx_player.name = "제거효과음"
+	removal_sfx_player.volume_db = -9.0
+	add_child(removal_sfx_player)
 
 
 func _update_audio() -> void:
@@ -226,6 +249,24 @@ func _play_completion_sound() -> void:
 	completion_sfx_player.play()
 
 
+func _play_removal_sound() -> void:
+	if removal_sfx_player == null or not audio_playback_enabled:
+		return
+	removal_sfx_player.stop()
+	removal_sfx_player.stream = removal_stream
+	removal_sfx_player.pitch_scale = rng.randf_range(0.9, 1.15)
+	removal_sfx_player.play()
+
+
+func _scale_pop(t: float, rate: float, width: float, note_shift: int, amp: float) -> float:
+	var phase: float = fmod(t * rate, 1.0)
+	if phase >= width:
+		return 0.0
+	var note_index: int = (int(floor(t * rate)) + note_shift) % POP_NOTES.size()
+	var envelope: float = sin(PI * phase / width)
+	return sin(TAU * POP_NOTES[note_index] * t) * envelope * amp
+
+
 func _on_bgm_finished() -> void:
 	if bgm_player != null and audio_playback_enabled:
 		bgm_player.play()
@@ -256,54 +297,44 @@ func _make_tool_loop_stream(tool_id: String) -> AudioStreamWAV:
 		high_noise = noise - high_filter
 		var sample: float = 0.0
 		if tool_id == TOOL_AIR:
-			var compressor_chug: float = 0.72 + 0.28 * sin(TAU * 8.5 * t)
-			var valve_burst: float = 0.68 + 0.32 * sin(TAU * 2.1 * t + sin(TAU * 0.7 * t) * 0.9)
-			var hose_resonance: float = sin(TAU * 92.0 * t) * 0.14 + sin(TAU * 147.0 * t + low_noise * 1.5) * 0.08
-			var compressed_air: float = (mid_noise * 0.35 + high_noise * 0.22) * compressor_chug * valve_burst
-			var nozzle_edge: float = sin(TAU * (760.0 + 90.0 * sin(TAU * 2.6 * t)) * t) * 0.035 * valve_burst
-			sample = hose_resonance + compressed_air + nozzle_edge
+			var swell: float = 0.62 + 0.38 * sin(TAU * 1.087 * t - PI * 0.5)
+			var breeze: float = (low_noise * 0.34 + mid_noise * 0.16) * swell
+			var whistle_freq: float = 520.0 + 170.0 * sin(TAU * 1.087 * t) + 40.0 * sin(TAU * 3.26 * t)
+			var whistle: float = sin(TAU * whistle_freq * t) * 0.085 * swell
+			var flutter: float = high_noise * 0.05 * (0.5 + 0.5 * sin(TAU * 5.43 * t))
+			sample = breeze + whistle + flutter
 		elif tool_id == TOOL_WATER:
-			var pressure_pulse: float = 0.76 + 0.24 * sin(TAU * 21.0 * t)
-			var impact_phase: float = fmod(t * 38.0, 1.0)
-			var impact_env: float = pow(max(0.0, 1.0 - impact_phase), 6.0)
-			var spray_phase: float = fmod(t * 13.0 + 0.23, 1.0)
-			var spray_env: float = pow(max(0.0, 1.0 - spray_phase), 3.0)
-			var hard_jet: float = high_noise * 0.42 * pressure_pulse
-			var water_body: float = mid_noise * 0.22 + sin(TAU * 210.0 * t) * 0.05
-			var hitting_metal: float = (noise_rng.randf_range(-1.0, 1.0) * 0.52 + sin(TAU * 980.0 * t) * 0.13) * impact_env
-			var splatter: float = noise_rng.randf_range(-1.0, 1.0) * 0.24 * spray_env
-			sample = hard_jet + water_body + hitting_metal + splatter
+			var flow: float = (low_noise * 0.24 + mid_noise * 0.20) * (0.82 + 0.18 * sin(TAU * 2.17 * t))
+			var burble_a: float = sin(TAU * (170.0 + 42.0 * sin(TAU * 1.087 * t)) * t) * 0.075
+			var burble_b: float = sin(TAU * (233.0 + 58.0 * sin(TAU * 2.174 * t + 1.7)) * t) * 0.055
+			var plink_rate := 6.52
+			var plink_phase: float = fmod(t * plink_rate, 1.0)
+			var plink_index: int = int(floor(t * plink_rate)) % POP_NOTES.size()
+			var plink: float = 0.0
+			if plink_phase < 0.16:
+				var plink_env: float = sin(PI * plink_phase / 0.16)
+				plink = sin(TAU * POP_NOTES[plink_index] * 0.5 * t) * plink_env * 0.11
+			sample = flow + burble_a + burble_b + plink
 		elif tool_id == TOOL_SOAP:
-			var fizz: float = high_noise * 0.075 + mid_noise * 0.035
-			var foam_swell: float = 0.55 + 0.45 * max(0.0, sin(TAU * 3.4 * t))
-			var pop_phase_a: float = fmod(t * 9.0, 1.0)
-			var pop_phase_b: float = fmod(t * 14.0 + 0.31, 1.0)
-			var pop_phase_c: float = fmod(t * 22.0 + 0.67, 1.0)
-			var pop_a: float = 0.0
-			var pop_b: float = 0.0
-			var pop_c: float = 0.0
-			if pop_phase_a < 0.075:
-				pop_a = sin(TAU * 520.0 * t) * pow(1.0 - pop_phase_a / 0.075, 2.8) * 0.20
-			if pop_phase_b < 0.052:
-				pop_b = sin(TAU * 1040.0 * t) * pow(1.0 - pop_phase_b / 0.052, 3.4) * 0.23
-			if pop_phase_c < 0.032:
-				pop_c = noise_rng.randf_range(-1.0, 1.0) * pow(1.0 - pop_phase_c / 0.032, 4.0) * 0.17
-			var soft_bubble: float = sin(TAU * 260.0 * t + low_noise * 3.0) * 0.045 * foam_swell
-			sample = fizz * foam_swell + pop_a + pop_b + pop_c + soft_bubble
+			var foam_swell: float = 0.6 + 0.4 * max(0.0, sin(TAU * 2.174 * t))
+			var fizz: float = (high_noise * 0.055 + mid_noise * 0.03) * foam_swell
+			var pop_a := _scale_pop(t, 7.6, 0.10, 0, 0.16)
+			var pop_b := _scale_pop(t, 11.96, 0.07, 2, 0.13)
+			var pop_c := _scale_pop(t, 17.39, 0.05, 4, 0.10)
+			var wobble: float = sin(TAU * 330.0 * t + sin(TAU * 4.35 * t) * 2.2) * 0.04 * foam_swell
+			sample = fizz + pop_a + pop_b + pop_c + wobble
 		elif tool_id == TOOL_SPONGE:
-			var wipe_phase: float = fmod(t * 4.2, 1.0)
-			var back_phase: float = fmod(t * 2.1, 1.0)
-			var wipe_env: float = pow(sin(PI * wipe_phase), 0.75)
-			var pressure_env: float = 0.45 + 0.55 * pow(sin(PI * back_phase), 2.0)
-			var cloth_drag: float = (mid_noise * 0.20 + low_noise * 0.12) * wipe_env * pressure_env
-			var glass_squeak_env: float = pow(max(0.0, sin(PI * wipe_phase)), 7.0)
-			var squeak_freq: float = 1220.0 + 980.0 * wipe_phase + 120.0 * sin(TAU * 9.0 * t)
-			var squeak: float = sin(TAU * squeak_freq * t) * glass_squeak_env * 0.34
-			var edge_chirp_phase: float = fmod(t * 8.4 + 0.12, 1.0)
-			var edge_chirp: float = 0.0
-			if edge_chirp_phase < 0.065:
-				edge_chirp = sin(TAU * 1880.0 * t) * pow(1.0 - edge_chirp_phase / 0.065, 2.0) * 0.12
-			sample = cloth_drag + squeak + edge_chirp
+			var wipe_phase: float = fmod(t * 3.26, 1.0)
+			var wipe_env: float = pow(sin(PI * wipe_phase), 1.4)
+			var squish: float = (low_noise * 0.30 + mid_noise * 0.13) * wipe_env
+			var rub_freq: float = 360.0 + 150.0 * wipe_phase
+			var rub: float = sin(TAU * rub_freq * t) * pow(wipe_env, 3.0) * 0.10
+			var boing_phase: float = fmod(t * 2.174, 1.0)
+			var boing: float = 0.0
+			if boing_phase < 0.12:
+				var boing_env: float = sin(PI * boing_phase / 0.12)
+				boing = sin(TAU * (190.0 - 70.0 * boing_phase / 0.12) * t) * boing_env * 0.09
+			sample = squish + rub + boing
 
 		var fade: float = min(1.0, float(sample_index) / 1600.0, float(total_samples - sample_index) / 1600.0)
 		_append_i16_sample(data, sample * fade * 0.92)
@@ -312,14 +343,33 @@ func _make_tool_loop_stream(tool_id: String) -> AudioStreamWAV:
 
 
 func _make_select_stream() -> AudioStreamWAV:
-	var duration := 0.11
+	var duration := 0.16
 	var total_samples: int = int(duration * float(AUDIO_MIX_RATE))
 	var data := PackedByteArray()
 	for sample_index in range(total_samples):
 		var t: float = float(sample_index) / float(AUDIO_MIX_RATE)
-		var fade: float = 1.0 - float(sample_index) / float(total_samples)
-		var sample: float = sin(TAU * (760.0 + 420.0 * t) * t) * 0.28 * fade
+		var freq := 659.25 if t < 0.07 else 987.77
+		var note_t := t if t < 0.07 else t - 0.07
+		var envelope: float = exp(-note_t * 26.0)
+		var sample: float = (sin(TAU * freq * t) * 0.26 + sin(TAU * freq * 2.0 * t) * 0.05) * envelope
 		_append_i16_sample(data, sample)
+	return _make_wav(data)
+
+
+func _make_removal_stream() -> AudioStreamWAV:
+	var duration := 0.24
+	var total_samples: int = int(duration * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var pop_rng := RandomNumberGenerator.new()
+	pop_rng.seed = 6606
+	for sample_index in range(total_samples):
+		var t: float = float(sample_index) / float(AUDIO_MIX_RATE)
+		var pop_env: float = exp(-t * 42.0)
+		var pop: float = sin(TAU * (820.0 - 360.0 * min(1.0, t * 9.0)) * t) * pop_env * 0.30
+		var fizz: float = pop_rng.randf_range(-1.0, 1.0) * exp(-t * 30.0) * 0.07
+		var chime_env: float = exp(-max(0.0, t - 0.05) * 16.0) * clamp((t - 0.05) / 0.02, 0.0, 1.0)
+		var chime: float = sin(TAU * 1318.5 * t) * chime_env * 0.10
+		_append_i16_sample(data, pop + fizz + chime)
 	return _make_wav(data)
 
 
@@ -332,8 +382,11 @@ func _make_completion_stream() -> AudioStreamWAV:
 		var t: float = float(sample_index) / float(AUDIO_MIX_RATE)
 		var note_index: int = clamp(int(floor(t / 0.18)), 0, notes.size() - 1)
 		var freq: float = notes[note_index]
+		var note_t: float = fmod(t, 0.18)
+		var pluck: float = exp(-note_t * 7.0)
 		var fade: float = 1.0 - clamp((t - 0.72) / 0.2, 0.0, 1.0)
-		var sample: float = (sin(TAU * freq * t) * 0.22 + sin(TAU * freq * 2.0 * t) * 0.07) * fade
+		var shimmer: float = sin(TAU * freq * 4.0 * t) * 0.04 * pluck
+		var sample: float = (sin(TAU * freq * t) * 0.24 + sin(TAU * freq * 2.0 * t) * 0.08 + shimmer) * pluck * fade
 		_append_i16_sample(data, sample)
 	return _make_wav(data)
 
@@ -344,18 +397,23 @@ func _make_bgm_stream() -> AudioStreamWAV:
 	var data := PackedByteArray()
 	var melody := [392.0, 440.0, 493.88, 587.33, 523.25, 493.88, 440.0, 392.0]
 	var bass := [130.81, 146.83, 164.81, 196.0]
+	var hat_rng := RandomNumberGenerator.new()
+	hat_rng.seed = 7707
 	for sample_index in range(total_samples):
 		var t: float = float(sample_index) / float(AUDIO_MIX_RATE)
 		var step: int = int(floor(t / 0.36)) % melody.size()
 		var bass_step: int = int(floor(t / 1.44)) % bass.size()
 		var beat_phase: float = fmod(t, 0.36) / 0.36
-		var pluck: float = pow(1.0 - beat_phase, 1.6)
-		var melody_sample: float = sin(TAU * melody[step] * t) * 0.10 * pluck
-		var harmony_sample: float = sin(TAU * melody[step] * 1.5 * t) * 0.035 * pluck
-		var bass_sample: float = sin(TAU * bass[bass_step] * t) * 0.07
-		var shimmer: float = sin(TAU * 880.0 * t) * 0.015 * max(0.0, sin(TAU * 2.0 * t))
+		var pluck: float = pow(1.0 - beat_phase, 1.8)
+		var melody_sample: float = (sin(TAU * melody[step] * t) * 0.10 + sin(TAU * melody[step] * 2.0 * t) * 0.025) * pluck
+		var harmony_sample: float = sin(TAU * melody[step] * 1.5 * t) * 0.03 * pluck
+		var bass_phase: float = fmod(t, 0.72) / 0.72
+		var bass_sample: float = sin(TAU * bass[bass_step] * t) * 0.075 * (0.6 + 0.4 * pow(1.0 - bass_phase, 1.2))
+		var hat_phase: float = fmod(t + 0.18, 0.36) / 0.36
+		var hat: float = hat_rng.randf_range(-1.0, 1.0) * 0.02 * pow(max(0.0, 1.0 - hat_phase * 5.0), 2.0)
+		var shimmer: float = sin(TAU * 880.0 * t) * 0.012 * max(0.0, sin(TAU * 2.0 * t))
 		var loop_fade: float = min(1.0, float(sample_index) / 1800.0, float(total_samples - sample_index) / 1800.0)
-		_append_i16_sample(data, (melody_sample + harmony_sample + bass_sample + shimmer) * loop_fade)
+		_append_i16_sample(data, (melody_sample + harmony_sample + bass_sample + hat + shimmer) * loop_fade)
 	return _make_wav(data)
 
 
@@ -816,11 +874,30 @@ func _is_patch_removed(patch: DirtPatch) -> bool:
 
 
 func _mark_patch_removed(patch: DirtPatch) -> void:
+	if patch.state == STATE_REMOVED:
+		return
+	var burst_center := _patch_center(patch)
+	var burst_radius := patch.radius
 	patch.state = STATE_REMOVED
 	patch.health = 0.0
 	patch.soap = 0.0
 	patch.wetness = 0.0
 	patch.looseness = 1.0
+	_spawn_removal_burst(burst_center, burst_radius)
+	_play_removal_sound()
+
+
+func _spawn_removal_burst(center: Vector2, radius: float) -> void:
+	for index in range(4):
+		var angle := rng.randf_range(0.0, TAU)
+		var offset := Vector2.from_angle(angle) * radius * rng.randf_range(0.2, 0.9)
+		var sparkle := WashParticle.new(center + offset, Vector2(0.0, rng.randf_range(-26.0, -8.0)), rng.randf_range(0.4, 0.75), rng.randf_range(3.5, 6.5), Color(1.0, 1.0, 1.0, 0.95), "sparkle")
+		particles.append(sparkle)
+	for index in range(5):
+		var angle := rng.randf_range(0.0, TAU)
+		var speed := rng.randf_range(40.0, 120.0)
+		var bubble := WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.3, 0.6), rng.randf_range(2.5, 5.5), Color(0.85, 0.96, 1.0, 0.85), "bubble")
+		particles.append(bubble)
 
 
 func _is_patch_outside_wash_area(patch: DirtPatch) -> bool:
@@ -846,35 +923,53 @@ func _spawn_tool_particles(point: Vector2, delta: float) -> void:
 		return
 	last_particle_spawn = 0.0
 
-	var count := 4
-	if selected_tool == TOOL_SOAP:
-		count = 7
+	if selected_tool == TOOL_WATER:
+		_spawn_water_particles(point)
 	elif selected_tool == TOOL_AIR:
-		count = 3
+		_spawn_air_particles(point)
+	elif selected_tool == TOOL_SOAP:
+		_spawn_soap_particles(point)
 	elif selected_tool == TOOL_SPONGE:
-		count = 5
+		_spawn_sponge_particles(point)
 
-	for particle_index in range(count):
-		var angle := rng.randf_range(0.0, TAU)
-		var speed := rng.randf_range(35.0, 130.0)
+
+func _spawn_water_particles(point: Vector2) -> void:
+	for index in range(5):
+		var angle := rng.randf_range(-PI, 0.0)
+		var speed := rng.randf_range(60.0, 170.0)
 		var velocity := Vector2.from_angle(angle) * speed
-		var color: Color = tool_colors[selected_tool]
-		var radius := rng.randf_range(2.0, 6.0)
-		var style := selected_tool
-		if selected_tool == TOOL_WATER:
-			velocity.y += rng.randf_range(40.0, 110.0)
-			color = Color("#89d8ff")
-		elif selected_tool == TOOL_SOAP:
-			color = Color(1.0, 1.0, 1.0, 0.8)
-		elif selected_tool == TOOL_AIR:
-			color = Color(1.0, 1.0, 1.0, 0.55)
-			radius = rng.randf_range(6.0, 12.0)
-		elif selected_tool == TOOL_SPONGE:
-			velocity = Vector2(rng.randf_range(-115.0, 115.0), rng.randf_range(-32.0, 32.0))
-			color = Color("#ffd0a6")
-			radius = rng.randf_range(5.0, 10.0)
-		var particle := WashParticle.new(point + Vector2(rng.randf_range(-10.0, 10.0), rng.randf_range(-10.0, 10.0)), velocity, rng.randf_range(0.25, 0.7), radius, color, style)
-		particles.append(particle)
+		var jitter := Vector2(rng.randf_range(-8.0, 8.0), rng.randf_range(-6.0, 6.0))
+		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.3, 0.6), rng.randf_range(2.0, 4.5), Color("#89d8ff"), "droplet"))
+	particles.append(WashParticle.new(point, Vector2.ZERO, 0.28, 6.0, Color(1.0, 1.0, 1.0, 0.5), "ring"))
+	if rng.randf() < 0.5:
+		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-12.0, 12.0), -6.0), Vector2(0.0, -16.0), rng.randf_range(0.4, 0.7), rng.randf_range(8.0, 14.0), Color(1.0, 1.0, 1.0, 0.22), "mist"))
+
+
+func _spawn_air_particles(point: Vector2) -> void:
+	for index in range(3):
+		var angle := rng.randf_range(-0.5, 0.5) + (PI if rng.randf() < 0.5 else 0.0)
+		var speed := rng.randf_range(120.0, 230.0)
+		var velocity := Vector2.from_angle(angle) * speed + Vector2(0.0, rng.randf_range(-36.0, -8.0))
+		var jitter := Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-14.0, 14.0))
+		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.2, 0.45), rng.randf_range(7.0, 13.0), Color(1.0, 1.0, 1.0, 0.55), "streak"))
+	if rng.randf() < 0.6:
+		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-16.0, 16.0)), Vector2(rng.randf_range(-50.0, 50.0), rng.randf_range(-60.0, -20.0)), rng.randf_range(0.35, 0.6), rng.randf_range(6.0, 11.0), Color(1.0, 1.0, 1.0, 0.4), "swirl"))
+
+
+func _spawn_soap_particles(point: Vector2) -> void:
+	for index in range(5):
+		var jitter := Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-14.0, 14.0))
+		var velocity := Vector2(rng.randf_range(-22.0, 22.0), rng.randf_range(-46.0, -14.0))
+		var tint := Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85)
+		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.5, 1.0), rng.randf_range(3.0, 8.0), tint, "bubble"))
+
+
+func _spawn_sponge_particles(point: Vector2) -> void:
+	for index in range(3):
+		var jitter := Vector2(rng.randf_range(-18.0, 18.0), rng.randf_range(-10.0, 14.0))
+		particles.append(WashParticle.new(point + jitter, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-8.0, 4.0)), rng.randf_range(0.4, 0.8), rng.randf_range(5.0, 10.0), Color(1.0, 1.0, 1.0, 0.7), "foam"))
+	if rng.randf() < 0.7:
+		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-12.0, 8.0)), Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-36.0, -12.0)), rng.randf_range(0.4, 0.8), rng.randf_range(2.5, 5.0), Color(0.95, 1.0, 1.0, 0.8), "bubble"))
 
 
 func _update_particles(delta: float) -> void:
@@ -882,9 +977,19 @@ func _update_particles(delta: float) -> void:
 		var particle := particles[index] as WashParticle
 		particle.ttl -= delta
 		particle.position += particle.velocity * delta
-		particle.velocity *= 0.92
-		if particle.style == TOOL_WATER:
-			particle.velocity.y += 180.0 * delta
+		if particle.style == "droplet":
+			particle.velocity.y += 320.0 * delta
+		elif particle.style == "ring" or particle.style == "mist":
+			particle.radius += delta * (60.0 if particle.style == "ring" else 24.0)
+		elif particle.style == "bubble":
+			particle.velocity *= 0.97
+			particle.position.x += sin(particle.ttl * 7.0) * 14.0 * delta
+		elif particle.style == "swirl":
+			particle.velocity *= 0.94
+		elif particle.style == "sparkle":
+			particle.velocity *= 0.95
+		else:
+			particle.velocity *= 0.92
 		if particle.ttl <= 0.0:
 			particles.remove_at(index)
 
@@ -936,15 +1041,25 @@ func _draw_background() -> void:
 
 func _draw_status() -> void:
 	var font: Font = _font()
-	draw_string(font, Vector2(24.0, 37.0), "폼 파티", HORIZONTAL_ALIGNMENT_LEFT, 220.0, 27, Color("#0d3b55"))
-	draw_string(font, Vector2(246.0, 33.0), "차량 %02d" % level_index, HORIZONTAL_ALIGNMENT_CENTER, 74.0, 15, Color("#0d3b55"))
+	var card := Rect2(14.0, 12.0, 362.0, 84.0)
+	draw_style_box(_style("hud_shadow", Color(0.05, 0.23, 0.33, 0.25), 20.0), Rect2(card.position + Vector2(0.0, 3.0), card.size))
+	draw_style_box(_style("hud_card", Color(0.97, 0.99, 1.0, 0.94), 20.0), card)
 
-	var bar_rect := Rect2(24.0, 58.0, 342.0, 19.0)
-	draw_rect(bar_rect.grow(3.0), Color("#0d3b55"))
-	draw_rect(bar_rect, Color("#dff9ff"))
-	draw_rect(Rect2(bar_rect.position, Vector2(bar_rect.size.x * clean_progress, bar_rect.size.y)), Color("#39d98a"))
-	draw_string(font, Vector2(24.0, 99.0), "청결도 %.0f%%" % (clean_progress * 100.0), HORIZONTAL_ALIGNMENT_LEFT, 170.0, 16, Color("#0d3b55"))
-	draw_string(font, Vector2(208.0, 99.0), _tool_hint(), HORIZONTAL_ALIGNMENT_RIGHT, 154.0, 16, Color("#0d3b55"))
+	draw_string(font, Vector2(32.0, 44.0), "폼 파티", HORIZONTAL_ALIGNMENT_LEFT, 160.0, 23, Color("#0d3b55"))
+	var badge := Rect2(282.0, 22.0, 78.0, 28.0)
+	draw_style_box(_style("level_badge", Color("#49a7ff"), 14.0), badge)
+	draw_string(font, Vector2(badge.position.x, badge.position.y + 20.0), "차량 %02d" % level_index, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 14, Color.WHITE)
+
+	var bar_rect := Rect2(32.0, 58.0, 254.0, 24.0)
+	draw_style_box(_style("bar_bg", Color("#d7e8ef"), 12.0), bar_rect)
+	var fill_width: float = bar_rect.size.x * clean_progress
+	if fill_width >= 8.0:
+		draw_style_box(_style("bar_fill", Color("#39d98a"), 12.0), Rect2(bar_rect.position, Vector2(fill_width, bar_rect.size.y)))
+	draw_string(font, Vector2(294.0, bar_rect.position.y + 18.0), "%.0f%%" % (clean_progress * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 66.0, 15, Color("#0d3b55"))
+
+	var hint_rect := Rect2(75.0, 702.0, 240.0, 30.0)
+	draw_style_box(_style("hint_bubble", Color(0.03, 0.14, 0.2, 0.78), 15.0), hint_rect)
+	draw_string(font, Vector2(hint_rect.position.x, hint_rect.position.y + 21.0), "%s · %s" % [tool_labels[selected_tool], _tool_hint()], HORIZONTAL_ALIGNMENT_CENTER, hint_rect.size.x, 14, Color(0.93, 0.99, 1.0))
 
 
 func _tool_hint() -> String:
@@ -961,49 +1076,102 @@ func _tool_hint() -> String:
 
 func _draw_car() -> void:
 	var outline := Color("#123246")
-	var shadow := Color(0.0, 0.0, 0.0, 0.16)
-	_draw_ellipse_shape(Vector2(195.0, 666.0), Vector2(164.0, 22.0), shadow)
-	draw_rect(Rect2(67.0, 654.0, 86.0, 10.0), Color(0.0, 0.0, 0.0, 0.12))
-	draw_rect(Rect2(247.0, 654.0, 86.0, 10.0), Color(0.0, 0.0, 0.0, 0.12))
+	_draw_ellipse_shape(Vector2(195.0, 668.0), Vector2(168.0, 20.0), Color(0.0, 0.0, 0.0, 0.16))
 
-	_draw_capsule(Rect2(47.0, 470.0, 296.0, 142.0), 46.0, outline)
-	_draw_capsule(Rect2(55.0, 478.0, 280.0, 126.0), 40.0, car_color)
+	draw_circle(Vector2(98.0, 642.0), 31.0, Color("#1d2b33"))
+	draw_circle(Vector2(98.0, 642.0), 15.0, Color("#cfd8dc"))
+	draw_circle(Vector2(292.0, 642.0), 31.0, Color("#1d2b33"))
+	draw_circle(Vector2(292.0, 642.0), 15.0, Color("#cfd8dc"))
 
-	var roof_outline := PackedVector2Array([Vector2(112.0, 484.0), Vector2(143.0, 371.0), Vector2(253.0, 371.0), Vector2(291.0, 484.0)])
-	var roof_fill := PackedVector2Array([Vector2(121.0, 479.0), Vector2(149.0, 383.0), Vector2(247.0, 383.0), Vector2(279.0, 479.0)])
-	draw_colored_polygon(roof_outline, outline)
-	draw_colored_polygon(roof_fill, car_color.lightened(0.08))
+	var silhouette := _smooth_polygon(PackedVector2Array([
+		Vector2(60.0, 650.0), Vector2(50.0, 588.0), Vector2(52.0, 518.0), Vector2(66.0, 478.0),
+		Vector2(98.0, 466.0), Vector2(116.0, 458.0), Vector2(124.0, 398.0), Vector2(138.0, 374.0),
+		Vector2(172.0, 364.0), Vector2(218.0, 364.0), Vector2(252.0, 374.0), Vector2(266.0, 398.0),
+		Vector2(274.0, 458.0), Vector2(292.0, 466.0), Vector2(324.0, 478.0), Vector2(338.0, 518.0),
+		Vector2(340.0, 588.0), Vector2(330.0, 650.0), Vector2(298.0, 660.0), Vector2(92.0, 660.0),
+	]), 2)
+	draw_colored_polygon(silhouette, car_color)
+	_draw_closed_outline(silhouette, outline, 5.0)
 
-	var window_color := Color("#dff9ff")
-	draw_colored_polygon(PackedVector2Array([Vector2(150.0, 392.0), Vector2(190.0, 392.0), Vector2(188.0, 465.0), Vector2(130.0, 465.0)]), window_color)
-	draw_colored_polygon(PackedVector2Array([Vector2(202.0, 392.0), Vector2(242.0, 392.0), Vector2(268.0, 465.0), Vector2(205.0, 465.0)]), window_color)
-	draw_line(Vector2(196.0, 390.0), Vector2(197.0, 466.0), outline, 5.0)
-	draw_line(Vector2(132.0, 465.0), Vector2(268.0, 465.0), outline, 4.0)
+	var bumper := _smooth_polygon(PackedVector2Array([
+		Vector2(64.0, 612.0), Vector2(326.0, 612.0), Vector2(330.0, 632.0), Vector2(322.0, 652.0),
+		Vector2(296.0, 658.0), Vector2(94.0, 658.0), Vector2(68.0, 652.0), Vector2(60.0, 632.0),
+	]), 2)
+	draw_colored_polygon(bumper, Color("#e7eef2"))
+	_draw_closed_outline(bumper, outline, 4.0)
 
-	draw_circle(Vector2(110.0, 617.0), 42.0, outline)
-	draw_circle(Vector2(110.0, 617.0), 25.0, Color("#e8f2f5"))
-	draw_circle(Vector2(110.0, 617.0), 12.0, Color("#79a1b1"))
-	draw_circle(Vector2(291.0, 617.0), 42.0, outline)
-	draw_circle(Vector2(291.0, 617.0), 25.0, Color("#e8f2f5"))
-	draw_circle(Vector2(291.0, 617.0), 12.0, Color("#79a1b1"))
+	var mirror_color := car_color.darkened(0.12)
+	var left_mirror := _smooth_polygon(PackedVector2Array([
+		Vector2(96.0, 460.0), Vector2(74.0, 452.0), Vector2(64.0, 462.0), Vector2(72.0, 478.0), Vector2(98.0, 478.0),
+	]), 2)
+	var right_mirror := _smooth_polygon(PackedVector2Array([
+		Vector2(294.0, 460.0), Vector2(316.0, 452.0), Vector2(326.0, 462.0), Vector2(318.0, 478.0), Vector2(292.0, 478.0),
+	]), 2)
+	draw_colored_polygon(left_mirror, mirror_color)
+	_draw_closed_outline(left_mirror, outline, 3.0)
+	draw_colored_polygon(right_mirror, mirror_color)
+	_draw_closed_outline(right_mirror, outline, 3.0)
 
-	draw_rect(Rect2(71.0, 532.0, 48.0, 16.0), Color("#ffe7a7"))
-	draw_rect(Rect2(284.0, 532.0, 40.0, 16.0), Color("#ff6b6b"))
-	draw_rect(Rect2(154.0, 550.0, 72.0, 17.0), Color("#f7fbff"))
-	draw_string(_font(), Vector2(154.0, 564.0), "세차", HORIZONTAL_ALIGNMENT_CENTER, 72.0, 12, Color("#123246"))
+	var windshield := _smooth_polygon(PackedVector2Array([
+		Vector2(142.0, 386.0), Vector2(248.0, 386.0), Vector2(262.0, 444.0), Vector2(254.0, 458.0),
+		Vector2(136.0, 458.0), Vector2(128.0, 444.0),
+	]), 2)
+	draw_colored_polygon(windshield, Color("#cfeeff"))
+	_draw_closed_outline(windshield, outline, 4.0)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(158.0, 392.0), Vector2(178.0, 392.0), Vector2(150.0, 452.0), Vector2(136.0, 442.0),
+	]), Color(1.0, 1.0, 1.0, 0.55))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(192.0, 392.0), Vector2(202.0, 392.0), Vector2(172.0, 452.0), Vector2(162.0, 452.0),
+	]), Color(1.0, 1.0, 1.0, 0.35))
 
-	draw_arc(Vector2(187.0, 518.0), 23.0, PI * 0.1, PI * 0.9, 18, Color("#123246"), 3.0)
-	draw_arc(Vector2(224.0, 518.0), 23.0, PI * 0.1, PI * 0.9, 18, Color("#123246"), 3.0)
-	draw_line(Vector2(187.0, 541.0), Vector2(223.0, 541.0), Color("#123246"), 3.0)
+	draw_arc(Vector2(195.0, 600.0), 128.0, PI + 0.42, TAU - 0.42, 26, outline.lerp(car_color, 0.55), 3.0)
+
+	draw_line(Vector2(186.0, 364.0), Vector2(182.0, 342.0), outline, 3.0)
+	draw_circle(Vector2(181.0, 338.0), 5.0, Color("#ff6b6b"))
+
+	_draw_headlight(Vector2(118.0, 545.0), outline)
+	_draw_headlight(Vector2(272.0, 545.0), outline)
+	draw_arc(Vector2(195.0, 538.0), 34.0, PI * 0.22, PI * 0.78, 18, outline, 4.0)
+
+	var plate := Rect2(159.0, 580.0, 72.0, 22.0)
+	draw_rect(plate, Color("#f7fbff"))
+	draw_rect(plate, outline, false, 2.5)
+	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), "폼 파티", HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
+
+	draw_circle(Vector2(86.0, 626.0), 8.0, Color("#ffe7a7"))
+	draw_circle(Vector2(86.0, 626.0), 8.0, outline, false, 2.0)
+	draw_circle(Vector2(304.0, 626.0), 8.0, Color("#ffe7a7"))
+	draw_circle(Vector2(304.0, 626.0), 8.0, outline, false, 2.0)
+
+	draw_arc(Vector2(195.0, 560.0), 118.0, PI + 0.55, PI + 1.0, 12, Color(1.0, 1.0, 1.0, 0.3), 7.0)
 
 
-func _draw_capsule(rect: Rect2, radius: float, color: Color) -> void:
-	draw_rect(Rect2(rect.position.x + radius, rect.position.y, rect.size.x - radius * 2.0, rect.size.y), color)
-	draw_rect(Rect2(rect.position.x, rect.position.y + radius, rect.size.x, rect.size.y - radius * 2.0), color)
-	draw_circle(rect.position + Vector2(radius, radius), radius, color)
-	draw_circle(rect.position + Vector2(rect.size.x - radius, radius), radius, color)
-	draw_circle(rect.position + Vector2(radius, rect.size.y - radius), radius, color)
-	draw_circle(rect.position + Vector2(rect.size.x - radius, rect.size.y - radius), radius, color)
+func _draw_headlight(center: Vector2, outline: Color) -> void:
+	draw_circle(center, 23.0, outline)
+	draw_circle(center, 19.0, Color("#fff7dd"))
+	draw_circle(center, 11.0, Color("#ffe289"))
+	draw_circle(center + Vector2(-5.0, -5.0), 4.5, Color(1.0, 1.0, 1.0, 0.9))
+
+
+func _smooth_polygon(points: PackedVector2Array, iterations: int) -> PackedVector2Array:
+	var current := points
+	for iteration in range(iterations):
+		var smoothed := PackedVector2Array()
+		for index in range(current.size()):
+			var point_a := current[index]
+			var point_b := current[(index + 1) % current.size()]
+			smoothed.append(point_a.lerp(point_b, 0.25))
+			smoothed.append(point_a.lerp(point_b, 0.75))
+		current = smoothed
+	return current
+
+
+func _draw_closed_outline(points: PackedVector2Array, color: Color, width: float) -> void:
+	var closed := points.duplicate()
+	if closed.size() > 0:
+		closed.append(closed[0])
+	draw_polyline(closed, color, width)
 
 
 func _draw_ellipse_shape(center: Vector2, radii: Vector2, color: Color) -> void:
@@ -1062,15 +1230,26 @@ func _draw_dust_patch(center: Vector2, radius: float, strength: float, seed_valu
 
 
 func _draw_leaf_patch(center: Vector2, radius: float, strength: float) -> void:
-	var color := Color(0.17, 0.56, 0.22, 0.9 * strength)
-	var leaf := PackedVector2Array([
-		center + Vector2(0.0, -radius),
-		center + Vector2(radius * 0.75, -radius * 0.12),
-		center + Vector2(0.0, radius),
-		center + Vector2(-radius * 0.75, -radius * 0.12),
-	])
-	draw_colored_polygon(leaf, color)
-	draw_line(center + Vector2(0.0, -radius * 0.7), center + Vector2(0.0, radius * 0.7), Color(0.08, 0.33, 0.1, 0.8 * strength), 2.0)
+	var color := Color(0.2, 0.58, 0.24, 0.92 * strength)
+	var vein := Color(0.1, 0.36, 0.13, 0.85 * strength)
+	var tilt := 0.5
+	var points := PackedVector2Array()
+	for index in range(14):
+		var progress := float(index) / 13.0
+		var along := -radius + progress * radius * 2.0
+		var width := sin(PI * progress) * radius * 0.55
+		points.append(center + Vector2(along, -width).rotated(tilt))
+	for index in range(14):
+		var progress := 1.0 - float(index) / 13.0
+		var along := -radius + progress * radius * 2.0
+		var width := sin(PI * progress) * radius * 0.55
+		points.append(center + Vector2(along, width).rotated(tilt))
+	draw_colored_polygon(points, color)
+	draw_line(center + Vector2(-radius * 0.85, 0.0).rotated(tilt), center + Vector2(radius * 0.85, 0.0).rotated(tilt), vein, 2.0)
+	for index in range(3):
+		var along := -radius * 0.45 + float(index) * radius * 0.4
+		draw_line(center + Vector2(along, 0.0).rotated(tilt), center + Vector2(along + radius * 0.28, -radius * 0.3).rotated(tilt), vein, 1.5)
+	draw_line(center + Vector2(-radius, 0.0).rotated(tilt), center + Vector2(-radius * 1.35, 0.18 * radius).rotated(tilt), vein, 2.5)
 
 
 func _draw_oil_patch(center: Vector2, radius: float, strength: float) -> void:
@@ -1130,91 +1309,236 @@ func _draw_particles() -> void:
 		var alpha: float = clamp(particle.ttl * 1.7, 0.0, 1.0)
 		var color: Color = particle.color
 		color.a *= alpha
-		if particle.style == TOOL_AIR:
-			draw_arc(particle.position, particle.radius, -0.3, 0.9, 12, color, 2.0)
-		elif particle.style == TOOL_WATER:
+		if particle.style == "droplet":
 			var direction := particle.velocity.normalized()
-			draw_line(particle.position, particle.position - direction * particle.radius * 4.0, color, max(2.0, particle.radius * 0.75))
-		elif particle.style == TOOL_SPONGE:
-			draw_line(particle.position + Vector2(-particle.radius, 0.0), particle.position + Vector2(particle.radius, 0.0), color, 2.0)
+			draw_line(particle.position, particle.position - direction * particle.radius * 3.0, color, max(2.0, particle.radius * 0.8))
+			draw_circle(particle.position, particle.radius * 0.6, color)
+		elif particle.style == "ring":
+			draw_arc(particle.position, particle.radius, 0.0, TAU, 22, color, 2.5)
+		elif particle.style == "mist":
+			draw_circle(particle.position, particle.radius, color)
+		elif particle.style == "streak":
+			var direction := particle.velocity.normalized()
+			if direction.length() < 0.1:
+				direction = Vector2.RIGHT
+			draw_line(particle.position, particle.position - direction * particle.radius * 2.4, color, 2.5)
+		elif particle.style == "swirl":
+			draw_arc(particle.position, particle.radius, particle.ttl * 5.0, particle.ttl * 5.0 + 3.6, 14, color, 2.0)
+		elif particle.style == "bubble":
+			draw_circle(particle.position, particle.radius, Color(color.r, color.g, color.b, color.a * 0.45))
+			draw_arc(particle.position, particle.radius, 0.0, TAU, 16, color, 1.5)
+			draw_circle(particle.position + Vector2(-particle.radius * 0.3, -particle.radius * 0.3), particle.radius * 0.25, Color(1.0, 1.0, 1.0, color.a))
+		elif particle.style == "foam":
+			draw_circle(particle.position, particle.radius, color)
+			draw_circle(particle.position + Vector2(particle.radius * 0.6, particle.radius * 0.2), particle.radius * 0.7, Color(color.r, color.g, color.b, color.a * 0.8))
+			draw_circle(particle.position + Vector2(-particle.radius * 0.55, particle.radius * 0.25), particle.radius * 0.6, Color(color.r, color.g, color.b, color.a * 0.8))
+		elif particle.style == "sparkle":
+			_draw_sparkle(particle.position, particle.radius, color)
 		elif particle.style == "confetti":
 			draw_rect(Rect2(particle.position, Vector2(particle.radius * 1.5, particle.radius)), color)
 		else:
 			draw_circle(particle.position, particle.radius, color)
 
 
+func _draw_sparkle(center: Vector2, radius: float, color: Color) -> void:
+	draw_line(center + Vector2(-radius, 0.0), center + Vector2(radius, 0.0), color, 2.0)
+	draw_line(center + Vector2(0.0, -radius), center + Vector2(0.0, radius), color, 2.0)
+	var diagonal := radius * 0.45
+	draw_line(center + Vector2(-diagonal, -diagonal), center + Vector2(diagonal, diagonal), color, 1.5)
+	draw_line(center + Vector2(-diagonal, diagonal), center + Vector2(diagonal, -diagonal), color, 1.5)
+	draw_circle(center, radius * 0.22, color)
+
+
 func _draw_tool_cursor() -> void:
-	if not is_washing or completed:
+	if completed:
 		return
+	var in_play_area := pointer_position.y > 120.0 and pointer_position.y < 744.0 and pointer_position != Vector2.ZERO
+	if not is_washing and not in_play_area:
+		return
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var alpha_scale := 1.0 if is_washing else 0.45
 	var radius := _tool_radius(selected_tool)
-	var color: Color = tool_colors[selected_tool]
-	color.a = 0.32
-	draw_circle(pointer_position, radius, color)
-	color.a = 0.9
-	draw_arc(pointer_position, radius, 0.0, TAU, 48, color, 3.0)
+	var ring_color: Color = tool_colors[selected_tool]
+	ring_color.a = 0.55 * alpha_scale
+	_draw_dashed_ring(pointer_position, radius, ring_color, time_now)
 
 	if selected_tool == TOOL_WATER:
-		draw_line(pointer_position + Vector2(-18.0, -40.0), pointer_position + Vector2(5.0, 18.0), Color("#d8f6ff"), 5.0)
-		draw_line(pointer_position + Vector2(2.0, -42.0), pointer_position + Vector2(22.0, 15.0), Color("#89d8ff"), 5.0)
+		_draw_water_gun(pointer_position, time_now, alpha_scale)
 	elif selected_tool == TOOL_AIR:
-		for index in range(3):
-			draw_arc(pointer_position + Vector2(-18.0, -10.0 + float(index) * 16.0), 26.0 + float(index) * 4.0, -0.5, 0.45, 18, Color(1.0, 1.0, 1.0, 0.7), 3.0)
+		_draw_air_blower(pointer_position, time_now, alpha_scale)
 	elif selected_tool == TOOL_SOAP:
-		for index in range(5):
-			draw_circle(pointer_position + Vector2.from_angle(float(index) * 1.2) * 18.0, 8.0, Color(1.0, 1.0, 1.0, 0.8))
+		_draw_foam_bottle(pointer_position, time_now, alpha_scale)
 	elif selected_tool == TOOL_SPONGE:
-		draw_rect(Rect2(pointer_position - Vector2(17.0, 12.0), Vector2(34.0, 24.0)), Color("#ff9f5a"))
-		draw_rect(Rect2(pointer_position - Vector2(17.0, 12.0), Vector2(34.0, 24.0)), Color("#9c4e1c"), false, 2.0)
+		_draw_sponge_tool(pointer_position, time_now, alpha_scale)
+
+
+func _draw_dashed_ring(center: Vector2, radius: float, color: Color, time_now: float) -> void:
+	var spin := time_now * 0.9
+	for index in range(10):
+		var start_angle := TAU * float(index) / 10.0 + spin
+		draw_arc(center, radius, start_angle, start_angle + TAU / 22.0, 5, color, 2.0)
+
+
+func _draw_water_gun(point: Vector2, time_now: float, alpha_scale: float) -> void:
+	var nozzle := point + Vector2(34.0, 44.0)
+	var grip := point + Vector2(64.0, 84.0)
+	if is_washing:
+		var wiggle := sin(time_now * 26.0) * 3.0
+		draw_line(nozzle, point + Vector2(wiggle, 0.0), Color(0.85, 0.96, 1.0, 0.95), 7.0)
+		draw_line(nozzle, point + Vector2(-9.0 + wiggle, 5.0), Color(0.54, 0.85, 1.0, 0.7), 4.0)
+		draw_line(nozzle, point + Vector2(9.0 + wiggle, 6.0), Color(0.54, 0.85, 1.0, 0.7), 4.0)
+		draw_line(nozzle, point + Vector2(wiggle * 0.5, 1.0), Color(1.0, 1.0, 1.0, 0.9), 2.5)
+	draw_line(grip, nozzle, Color(0.22, 0.28, 0.31, alpha_scale), 9.0)
+	draw_line(grip, grip + Vector2(4.0, 20.0), Color(0.22, 0.28, 0.31, alpha_scale), 9.0)
+	draw_circle(grip + Vector2(-2.0, -4.0), 10.0, Color(1.0, 0.83, 0.29, alpha_scale))
+	draw_circle(grip + Vector2(-2.0, -4.0), 10.0, Color(0.07, 0.2, 0.27, alpha_scale), false, 2.5)
+	draw_circle(nozzle, 5.5, Color(0.29, 0.65, 1.0, alpha_scale))
+
+
+func _draw_air_blower(point: Vector2, time_now: float, alpha_scale: float) -> void:
+	var nozzle := point + Vector2(40.0, 36.0)
+	var body := point + Vector2(72.0, 64.0)
+	if is_washing:
+		for index in range(3):
+			var sway := sin(time_now * 9.0 + float(index) * 2.1) * 6.0
+			var gust_center := point + Vector2(-10.0 - float(index) * 16.0, sway)
+			draw_arc(gust_center, 16.0 + float(index) * 7.0, -0.9, 0.9, 12, Color(1.0, 1.0, 1.0, 0.6 - float(index) * 0.15), 3.0)
+		draw_line(nozzle, point, Color(1.0, 1.0, 1.0, 0.35), 10.0)
+	draw_line(body, nozzle, Color(0.38, 0.49, 0.55, alpha_scale), 13.0)
+	draw_circle(body, 17.0, Color(1.0, 0.62, 0.35, alpha_scale))
+	draw_circle(body, 17.0, Color(0.07, 0.2, 0.27, alpha_scale), false, 3.0)
+	draw_arc(body, 10.0, 0.0, TAU, 14, Color(0.07, 0.2, 0.27, alpha_scale * 0.6), 2.0)
+	draw_circle(nozzle, 6.5, Color(0.27, 0.38, 0.43, alpha_scale))
+
+
+func _draw_foam_bottle(point: Vector2, time_now: float, alpha_scale: float) -> void:
+	var nozzle := point + Vector2(30.0, 40.0)
+	var bottle_top := point + Vector2(48.0, 56.0)
+	var bottle_bottom := point + Vector2(64.0, 88.0)
+	if is_washing:
+		for index in range(4):
+			var travel := fmod(time_now * 2.2 + float(index) * 0.25, 1.0)
+			var bubble_pos := nozzle.lerp(point, travel) + Vector2(sin(travel * 9.0) * 5.0, 0.0)
+			draw_circle(bubble_pos, 4.0 + travel * 4.0, Color(1.0, 1.0, 1.0, 0.8 - travel * 0.4))
+	var axis := (bottle_top - bottle_bottom).normalized()
+	var side := axis.orthogonal() * 10.0
+	var body := PackedVector2Array([
+		bottle_bottom - side + axis * -6.0, bottle_bottom + side + axis * -6.0,
+		bottle_top + side, bottle_top - side,
+	])
+	draw_colored_polygon(body, Color(0.93, 0.91, 0.65, alpha_scale))
+	_draw_closed_outline(body, Color(0.07, 0.2, 0.27, alpha_scale), 2.5)
+	draw_line(bottle_top, nozzle, Color(0.55, 0.62, 0.66, alpha_scale), 7.0)
+	draw_circle(nozzle, 6.0, Color(1.0, 1.0, 1.0, alpha_scale))
+	draw_circle(nozzle, 6.0, Color(0.07, 0.2, 0.27, alpha_scale), false, 2.0)
+
+
+func _draw_sponge_tool(point: Vector2, time_now: float, alpha_scale: float) -> void:
+	var angle := 0.0
+	if is_washing:
+		angle = sin(time_now * 11.0) * 0.16
+		point += Vector2(sin(time_now * 11.0) * 5.0, 0.0)
+	var half := Vector2(26.0, 18.0)
+	var top_half := Vector2(26.0, 8.0)
+	var body := _rotated_rect_points(point, half, angle)
+	var cap := _rotated_rect_points(point + Vector2(0.0, -10.0).rotated(angle), top_half, angle)
+	draw_colored_polygon(body, Color(1.0, 0.62, 0.35, alpha_scale))
+	draw_colored_polygon(cap, Color(1.0, 0.84, 0.31, alpha_scale))
+	_draw_closed_outline(body, Color(0.07, 0.2, 0.27, alpha_scale), 3.0)
+	if is_washing:
+		for index in range(4):
+			var foam_offset := Vector2(-21.0 + float(index) * 14.0, 17.0).rotated(angle)
+			draw_circle(point + foam_offset, 6.0 + sin(time_now * 8.0 + float(index)) * 1.5, Color(1.0, 1.0, 1.0, 0.85))
+
+
+func _rotated_rect_points(center: Vector2, half: Vector2, angle: float) -> PackedVector2Array:
+	return PackedVector2Array([
+		center + Vector2(-half.x, -half.y).rotated(angle),
+		center + Vector2(half.x, -half.y).rotated(angle),
+		center + Vector2(half.x, half.y).rotated(angle),
+		center + Vector2(-half.x, half.y).rotated(angle),
+	])
 
 
 func _draw_toolbar() -> void:
 	var font: Font = _font()
-	draw_rect(Rect2(0.0, 744.0, DESIGN_SIZE.x, 100.0), Color(0.05, 0.18, 0.24, 0.9))
+	draw_style_box(_style("toolbar", Color(0.04, 0.16, 0.22, 0.96), 24.0), Rect2(-24.0, 744.0, DESIGN_SIZE.x + 48.0, 124.0))
 	for index in range(tool_ids.size()):
 		var tool_id: String = tool_ids[index]
 		var rect := _get_tool_rect(index)
 		var color: Color = tool_colors[tool_id]
 		var is_selected := selected_tool == tool_id
-		draw_rect(rect, Color("#f7fbff") if is_selected else Color("#163847"))
-		draw_rect(rect, color, false, 3.0 if is_selected else 1.5)
-		_draw_tool_icon(tool_id, rect.position + Vector2(rect.size.x * 0.5, 31.0))
-		draw_string(font, rect.position + Vector2(0.0, 66.0), tool_labels[tool_id], HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 14, Color("#123246") if is_selected else Color("#f7fbff"))
+		var visual_rect := rect
+		if is_selected:
+			visual_rect = Rect2(rect.position - Vector2(0.0, 8.0), rect.size + Vector2(0.0, 8.0))
+			draw_style_box(_style("tool_glow_" + tool_id, Color(color.r, color.g, color.b, 0.35), 18.0), visual_rect.grow(4.0))
+			draw_style_box(_style("tool_selected", Color("#f7fbff"), 16.0), visual_rect)
+			draw_style_box(_style("tool_selected_border_" + tool_id, Color(0.0, 0.0, 0.0, 0.0), 16.0, color, 3), visual_rect)
+		else:
+			draw_style_box(_style("tool_idle", Color("#16384a"), 16.0), visual_rect)
+		_draw_tool_icon(tool_id, visual_rect.position + Vector2(visual_rect.size.x * 0.5, 30.0))
+		draw_string(font, visual_rect.position + Vector2(0.0, visual_rect.size.y - 9.0), tool_labels[tool_id], HORIZONTAL_ALIGNMENT_CENTER, visual_rect.size.x, 14, Color("#123246") if is_selected else Color(0.85, 0.93, 0.97))
 
 
 func _draw_tool_icon(tool_id: String, center: Vector2) -> void:
 	if tool_id == TOOL_AIR:
 		for index in range(3):
-			var y := -17.0 + float(index) * 14.0
-			draw_arc(center + Vector2(-9.0, y), 29.0 - float(index) * 2.0, -0.15, 0.72, 22, Color("#b7f0ff"), 4.2)
-			draw_line(center + Vector2(-30.0, y + 5.0), center + Vector2(24.0, y + 1.0), Color("#d9f8ff"), 3.2)
-		draw_arc(center + Vector2(17.0, 1.0), 14.0, -1.1, 1.15, 18, Color("#b7f0ff"), 3.6)
+			var y := -10.0 + float(index) * 10.0
+			var sweep := 22.0 - absf(float(index) - 1.0) * 5.0
+			draw_line(center + Vector2(-sweep, y), center + Vector2(sweep, y), Color("#b7f0ff"), 3.5)
+			draw_circle(center + Vector2(sweep, y), 2.4, Color("#d9f8ff"))
+		draw_arc(center + Vector2(-14.0, 0.0), 10.0, PI * 0.5, PI * 1.5, 12, Color("#d9f8ff"), 3.0)
 	elif tool_id == TOOL_WATER:
-		draw_circle(center + Vector2(0.0, 4.0), 13.0, Color("#49a7ff"))
-		draw_colored_polygon(PackedVector2Array([center + Vector2(0.0, -19.0), center + Vector2(13.0, 3.0), center + Vector2(-13.0, 3.0)]), Color("#49a7ff"))
-		draw_circle(center + Vector2(5.0, 2.0), 4.0, Color(1.0, 1.0, 1.0, 0.55))
+		draw_circle(center + Vector2(0.0, 6.0), 12.0, Color("#49a7ff"))
+		draw_colored_polygon(PackedVector2Array([center + Vector2(0.0, -17.0), center + Vector2(12.0, 5.0), center + Vector2(-12.0, 5.0)]), Color("#49a7ff"))
+		draw_circle(center + Vector2(-4.0, 4.0), 3.5, Color(1.0, 1.0, 1.0, 0.7))
 	elif tool_id == TOOL_SOAP:
-		draw_circle(center + Vector2(-8.0, 3.0), 11.0, Color(1.0, 1.0, 1.0, 0.85))
-		draw_circle(center + Vector2(8.0, -4.0), 13.0, Color(1.0, 1.0, 1.0, 0.75))
-		draw_circle(center + Vector2(9.0, 11.0), 7.0, Color("#f8f4a6"))
+		draw_circle(center + Vector2(-8.0, 4.0), 10.0, Color(1.0, 1.0, 1.0, 0.5))
+		draw_arc(center + Vector2(-8.0, 4.0), 10.0, 0.0, TAU, 16, Color(1.0, 1.0, 1.0, 0.9), 1.8)
+		draw_circle(center + Vector2(8.0, -5.0), 12.0, Color(0.97, 0.95, 0.75, 0.5))
+		draw_arc(center + Vector2(8.0, -5.0), 12.0, 0.0, TAU, 16, Color(1.0, 1.0, 1.0, 0.9), 1.8)
+		draw_circle(center + Vector2(4.0, -9.0), 3.0, Color(1.0, 1.0, 1.0, 0.95))
+		draw_circle(center + Vector2(-11.0, 0.0), 2.4, Color(1.0, 1.0, 1.0, 0.95))
 	elif tool_id == TOOL_SPONGE:
-		draw_rect(Rect2(center - Vector2(19.0, 13.0), Vector2(38.0, 26.0)), Color("#ff9f5a"))
-		for index in range(3):
-			draw_line(center + Vector2(-15.0, -6.0 + float(index) * 8.0), center + Vector2(15.0, -6.0 + float(index) * 8.0), Color("#cf6c2a"), 2.0)
+		draw_style_box(_style("icon_sponge_base", Color("#ff9f5a"), 6.0), Rect2(center - Vector2(18.0, 6.0), Vector2(36.0, 18.0)))
+		draw_style_box(_style("icon_sponge_cap", Color("#ffd54f"), 6.0), Rect2(center - Vector2(18.0, 14.0), Vector2(36.0, 10.0)))
+		draw_circle(center + Vector2(-12.0, 13.0), 4.0, Color(1.0, 1.0, 1.0, 0.9))
+		draw_circle(center + Vector2(0.0, 15.0), 5.0, Color(1.0, 1.0, 1.0, 0.9))
+		draw_circle(center + Vector2(12.0, 13.0), 4.0, Color(1.0, 1.0, 1.0, 0.9))
 
 
 func _draw_completion_panel() -> void:
 	if not completed:
 		return
 	var font: Font = _font()
-	var panel := Rect2(38.0, 225.0, 314.0, 164.0)
-	draw_rect(panel.grow(5.0), Color("#123246"))
-	draw_rect(panel, Color("#f7fbff"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 47.0), "반짝반짝 완료", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 78.0), "차량 %02d 세차 완료" % level_index, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 16, Color("#2c6b78"))
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.35))
+	var panel := Rect2(38.0, 210.0, 314.0, 188.0)
+	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
+	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
+
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	for index in range(3):
+		var star_center := Vector2(145.0 + float(index) * 50.0, panel.position.y + 44.0)
+		var pulse := 1.0 + sin(time_now * 4.0 + float(index) * 0.9) * 0.08
+		_draw_star(star_center, 17.0 * pulse, Color("#ffce3d"), Color("#e0a818"))
+
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 88.0), "반짝반짝 완료!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 114.0), "차량 %02d 세차 완료" % level_index, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 15, Color("#2c6b78"))
+
 	var next_rect := _get_next_rect()
-	draw_rect(next_rect, Color("#39d98a"))
-	draw_rect(next_rect, Color("#123246"), false, 3.0)
-	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 31.0), "다음 차", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#123246"))
+	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))
+	draw_style_box(_style("next_button", Color("#39d98a"), 14.0), next_rect)
+	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 31.0), "다음 차 ▶", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 17, Color("#0d3b2a"))
+
+
+func _draw_star(center: Vector2, radius: float, fill: Color, rim: Color) -> void:
+	var points := PackedVector2Array()
+	for index in range(10):
+		var angle := -PI * 0.5 + TAU * float(index) / 10.0
+		var reach := radius if index % 2 == 0 else radius * 0.45
+		points.append(center + Vector2.from_angle(angle) * reach)
+	draw_colored_polygon(points, fill)
+	_draw_closed_outline(points, rim, 2.0)
 
 
 func _get_tool_rect(index: int) -> Rect2:
@@ -1225,4 +1549,4 @@ func _get_tool_rect(index: int) -> Rect2:
 
 
 func _get_next_rect() -> Rect2:
-	return Rect2(103.0, 327.0, 184.0, 48.0)
+	return Rect2(103.0, 340.0, 184.0, 46.0)

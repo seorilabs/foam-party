@@ -50,10 +50,21 @@ Android export에는 ETC2/ASTC texture import 설정이 필요합니다. `godot/
 - Firebase, Google Play, App Store, AppsInToss release setup은 아직 추가하지 않았습니다.
 - 이후 플랫폼 서비스는 gameplay script에 직접 섞지 말고 adapter 뒤에 둡니다.
 
+## 스크린샷 캡처
+
+디스플레이가 있는 환경(또는 Xvfb)에서 기본 화면, 도구별 세차 장면, 완료 화면 PNG를 캡처합니다:
+
+```bash
+xvfb-run -a godot --path godot --script res://tests/screenshot_scene.gd --audio-driver Dummy
+```
+
+`FOAM_SHOT_DIR` 환경 변수로 저장 위치를 바꿀 수 있습니다(기본 `/tmp`).
+
 ## 오디오 메모
 
-- 도구 효과음은 `godot/scripts/main.gd`에서 런타임 합성합니다.
-- 바람은 에어 컴프레셔 질감에 맞춰 저역 풍압, 호스 공진, 노즐 고역을 섞습니다.
-- 고압수는 물줄기 hiss보다 차체를 때리는 충돌 펄스와 튀는 물방울을 강조합니다.
-- 비누는 부드러운 fizz와 작은 거품 pop을 여러 속도로 겹칩니다.
-- 스펀지는 걸레가 유리를 왕복 문지르는 마찰음과 높은 squeak을 반복합니다.
+- 도구 효과음은 `godot/scripts/main.gd`에서 런타임 합성하며, 현실적인 기계음 대신 카툰 게임 톤을 지향합니다.
+- 바람은 부드러운 바람 스웰에 가벼운 휘파람 톤을 섞습니다.
+- 고압수는 보글거리는 물 흐름과 음계를 따라 떨어지는 물방울 플링크를 씁니다.
+- 비누는 펜타토닉 음계 거품 팝과 몽글한 fizz를 겹칩니다.
+- 스펀지는 말랑한 squish 리듬과 귀여운 boing을 반복합니다.
+- 오물 제거 시 피치가 살짝 바뀌는 팝+차임 효과음이 추가로 재생됩니다.
