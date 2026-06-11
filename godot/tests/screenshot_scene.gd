@@ -14,8 +14,8 @@ func _run() -> void:
 		out_dir = "/tmp" if DirAccess.dir_exists_absolute("/tmp") else OS.get_user_data_dir()
 	elif out_dir.is_relative_path():
 		var cwd := DirAccess.open(".")
-		if cwd != null:
-			out_dir = cwd.get_current_dir().path_join(out_dir)
+		var base_dir := cwd.get_current_dir() if cwd != null else OS.get_user_data_dir()
+		out_dir = base_dir.path_join(out_dir)
 	if not DirAccess.dir_exists_absolute(out_dir):
 		var make_error := DirAccess.make_dir_recursive_absolute(out_dir)
 		if make_error != OK:
