@@ -18,7 +18,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test"]:
+	for method_name in ["get_combo_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("combo/star test API missing: " + method_name)
 			return
@@ -119,9 +119,19 @@ func _run_smoke() -> void:
 		_fail("expected 1 star for slow clear")
 		return
 
+	if String(root_node.call("get_car_type_for_test")) != "compact":
+		_fail("level 1 should be a compact car")
+		return
+
 	root_node.call("reset_game", 2)
 	if int(root_node.call("get_combo_for_test")) != 0 or float(root_node.call("get_level_time_for_test")) != 0.0:
 		_fail("reset did not clear combo state")
+		return
+	if String(root_node.call("get_car_type_for_test")) != "sports":
+		_fail("level 2 should rotate to the sports car")
+		return
+	if int(root_node.call("get_patch_count_for_test")) < 20:
+		_fail("level 2 should respawn dirt patches")
 		return
 
 	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])

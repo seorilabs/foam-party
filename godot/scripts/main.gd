@@ -6,6 +6,7 @@ const TOOL_WATER := "water"
 const TOOL_SOAP := "soap"
 const TOOL_SPONGE := "sponge"
 const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug"]
+const CAR_TYPES := ["compact", "sports", "truck"]
 const CLEAN_DAMAGE_RATE := 72.0
 const AUDIO_MIX_RATE := 22050
 const POP_NOTES := [523.25, 659.25, 783.99, 880.0, 1046.5]
@@ -94,6 +95,12 @@ var earned_stars := 0
 var combo_pop_time := -10.0
 var last_particle_spawn := 0.0
 var car_color := Color("#ffcf5a")
+var car_type := "compact"
+var car_type_labels := {
+	"compact": "시티카",
+	"sports": "스포츠카",
+	"truck": "트럭",
+}
 var canvas_origin := Vector2.ZERO
 var canvas_scale := 1.0
 var ui_font: Font
@@ -597,6 +604,10 @@ func calc_stars_for_test() -> int:
 	return _calc_stars()
 
 
+func get_car_type_for_test() -> String:
+	return car_type
+
+
 func get_patch_index_by_kind_for_test(kind: String) -> int:
 	for index in range(dirt_patches.size()):
 		var patch := dirt_patches[index] as DirtPatch
@@ -709,8 +720,14 @@ func _handle_tap(point: Vector2) -> bool:
 
 
 func _set_car_palette() -> void:
+	car_type = CAR_TYPES[(level_index - 1) % CAR_TYPES.size()]
 	var hue := fmod(0.10 + float(level_index - 1) * 0.18, 1.0)
-	car_color = Color.from_hsv(hue, 0.62, 1.0)
+	if car_type == "sports":
+		car_color = Color.from_hsv(hue, 0.85, 1.0)
+	elif car_type == "truck":
+		car_color = Color.from_hsv(hue, 0.42, 0.9)
+	else:
+		car_color = Color.from_hsv(hue, 0.62, 1.0)
 
 
 func _spawn_dirt() -> void:
@@ -1121,9 +1138,9 @@ func _draw_status() -> void:
 	draw_style_box(_style("hud_card", Color(0.97, 0.99, 1.0, 0.94), 20.0), card)
 
 	draw_string(font, Vector2(32.0, 44.0), "폼 파티", HORIZONTAL_ALIGNMENT_LEFT, 160.0, 23, Color("#0d3b55"))
-	var badge := Rect2(282.0, 22.0, 78.0, 28.0)
+	var badge := Rect2(248.0, 22.0, 112.0, 28.0)
 	draw_style_box(_style("level_badge", Color("#49a7ff"), 14.0), badge)
-	draw_string(font, Vector2(badge.position.x, badge.position.y + 20.0), "차량 %02d" % level_index, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 14, Color.WHITE)
+	draw_string(font, Vector2(badge.position.x, badge.position.y + 20.0), "%s %02d" % [car_type_labels[car_type], level_index], HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 13, Color.WHITE)
 
 	var bar_rect := Rect2(32.0, 58.0, 254.0, 24.0)
 	draw_style_box(_style("bar_bg", Color("#d7e8ef"), 12.0), bar_rect)
@@ -1150,91 +1167,210 @@ func _tool_hint() -> String:
 
 
 func _build_car_shapes() -> void:
-	car_shapes["silhouette"] = _smooth_polygon(PackedVector2Array([
-		Vector2(60.0, 650.0), Vector2(50.0, 588.0), Vector2(52.0, 518.0), Vector2(66.0, 478.0),
-		Vector2(98.0, 466.0), Vector2(116.0, 458.0), Vector2(124.0, 398.0), Vector2(138.0, 374.0),
-		Vector2(172.0, 364.0), Vector2(218.0, 364.0), Vector2(252.0, 374.0), Vector2(266.0, 398.0),
-		Vector2(274.0, 458.0), Vector2(292.0, 466.0), Vector2(324.0, 478.0), Vector2(338.0, 518.0),
-		Vector2(340.0, 588.0), Vector2(330.0, 650.0), Vector2(298.0, 660.0), Vector2(92.0, 660.0),
-	]), 2)
-	car_shapes["bumper"] = _smooth_polygon(PackedVector2Array([
-		Vector2(64.0, 612.0), Vector2(326.0, 612.0), Vector2(330.0, 632.0), Vector2(322.0, 652.0),
-		Vector2(296.0, 658.0), Vector2(94.0, 658.0), Vector2(68.0, 652.0), Vector2(60.0, 632.0),
-	]), 2)
-	car_shapes["left_mirror"] = _smooth_polygon(PackedVector2Array([
-		Vector2(96.0, 460.0), Vector2(74.0, 452.0), Vector2(64.0, 462.0), Vector2(72.0, 478.0), Vector2(98.0, 478.0),
-	]), 2)
-	car_shapes["right_mirror"] = _smooth_polygon(PackedVector2Array([
-		Vector2(294.0, 460.0), Vector2(316.0, 452.0), Vector2(326.0, 462.0), Vector2(318.0, 478.0), Vector2(292.0, 478.0),
-	]), 2)
-	car_shapes["windshield"] = _smooth_polygon(PackedVector2Array([
-		Vector2(142.0, 386.0), Vector2(248.0, 386.0), Vector2(262.0, 444.0), Vector2(254.0, 458.0),
-		Vector2(136.0, 458.0), Vector2(128.0, 444.0),
-	]), 2)
+	car_shapes["compact"] = {
+		"silhouette": _smooth_polygon(PackedVector2Array([
+			Vector2(60.0, 650.0), Vector2(50.0, 588.0), Vector2(52.0, 518.0), Vector2(66.0, 478.0),
+			Vector2(98.0, 466.0), Vector2(116.0, 458.0), Vector2(124.0, 398.0), Vector2(138.0, 374.0),
+			Vector2(172.0, 364.0), Vector2(218.0, 364.0), Vector2(252.0, 374.0), Vector2(266.0, 398.0),
+			Vector2(274.0, 458.0), Vector2(292.0, 466.0), Vector2(324.0, 478.0), Vector2(338.0, 518.0),
+			Vector2(340.0, 588.0), Vector2(330.0, 650.0), Vector2(298.0, 660.0), Vector2(92.0, 660.0),
+		]), 2),
+		"bumper": _smooth_polygon(PackedVector2Array([
+			Vector2(64.0, 612.0), Vector2(326.0, 612.0), Vector2(330.0, 632.0), Vector2(322.0, 652.0),
+			Vector2(296.0, 658.0), Vector2(94.0, 658.0), Vector2(68.0, 652.0), Vector2(60.0, 632.0),
+		]), 2),
+		"left_mirror": _smooth_polygon(PackedVector2Array([
+			Vector2(96.0, 460.0), Vector2(74.0, 452.0), Vector2(64.0, 462.0), Vector2(72.0, 478.0), Vector2(98.0, 478.0),
+		]), 2),
+		"right_mirror": _smooth_polygon(PackedVector2Array([
+			Vector2(294.0, 460.0), Vector2(316.0, 452.0), Vector2(326.0, 462.0), Vector2(318.0, 478.0), Vector2(292.0, 478.0),
+		]), 2),
+		"windshield": _smooth_polygon(PackedVector2Array([
+			Vector2(142.0, 386.0), Vector2(248.0, 386.0), Vector2(262.0, 444.0), Vector2(254.0, 458.0),
+			Vector2(136.0, 458.0), Vector2(128.0, 444.0),
+		]), 2),
+	}
+	car_shapes["sports"] = {
+		"silhouette": _smooth_polygon(PackedVector2Array([
+			Vector2(64.0, 654.0), Vector2(48.0, 600.0), Vector2(50.0, 540.0), Vector2(60.0, 500.0),
+			Vector2(86.0, 480.0), Vector2(120.0, 462.0), Vector2(130.0, 404.0), Vector2(146.0, 376.0),
+			Vector2(176.0, 366.0), Vector2(214.0, 366.0), Vector2(244.0, 376.0), Vector2(260.0, 404.0),
+			Vector2(270.0, 462.0), Vector2(304.0, 480.0), Vector2(330.0, 500.0), Vector2(340.0, 540.0),
+			Vector2(342.0, 600.0), Vector2(326.0, 654.0), Vector2(296.0, 662.0), Vector2(94.0, 662.0),
+		]), 2),
+		"bumper": _smooth_polygon(PackedVector2Array([
+			Vector2(62.0, 616.0), Vector2(328.0, 616.0), Vector2(334.0, 634.0), Vector2(326.0, 654.0),
+			Vector2(296.0, 662.0), Vector2(94.0, 662.0), Vector2(64.0, 654.0), Vector2(56.0, 634.0),
+		]), 2),
+		"left_mirror": _smooth_polygon(PackedVector2Array([
+			Vector2(112.0, 468.0), Vector2(88.0, 462.0), Vector2(78.0, 472.0), Vector2(88.0, 486.0), Vector2(114.0, 484.0),
+		]), 2),
+		"right_mirror": _smooth_polygon(PackedVector2Array([
+			Vector2(278.0, 468.0), Vector2(302.0, 462.0), Vector2(312.0, 472.0), Vector2(302.0, 486.0), Vector2(276.0, 484.0),
+		]), 2),
+		"windshield": _smooth_polygon(PackedVector2Array([
+			Vector2(150.0, 390.0), Vector2(240.0, 390.0), Vector2(254.0, 444.0), Vector2(246.0, 456.0),
+			Vector2(144.0, 456.0), Vector2(136.0, 444.0),
+		]), 2),
+	}
+	car_shapes["truck"] = {
+		"silhouette": _smooth_polygon(PackedVector2Array([
+			Vector2(58.0, 652.0), Vector2(50.0, 590.0), Vector2(52.0, 506.0), Vector2(60.0, 474.0),
+			Vector2(94.0, 464.0), Vector2(114.0, 456.0), Vector2(118.0, 394.0), Vector2(124.0, 370.0),
+			Vector2(130.0, 364.0), Vector2(152.0, 360.0), Vector2(238.0, 360.0), Vector2(260.0, 364.0),
+			Vector2(266.0, 370.0), Vector2(272.0, 394.0), Vector2(276.0, 456.0), Vector2(296.0, 464.0),
+			Vector2(330.0, 474.0), Vector2(338.0, 506.0), Vector2(340.0, 590.0), Vector2(332.0, 652.0),
+			Vector2(300.0, 660.0), Vector2(90.0, 660.0),
+		]), 2),
+		"bumper": _smooth_polygon(PackedVector2Array([
+			Vector2(60.0, 600.0), Vector2(330.0, 600.0), Vector2(334.0, 626.0), Vector2(328.0, 654.0),
+			Vector2(298.0, 662.0), Vector2(92.0, 662.0), Vector2(62.0, 654.0), Vector2(56.0, 626.0),
+		]), 2),
+		"left_mirror": _smooth_polygon(PackedVector2Array([
+			Vector2(94.0, 448.0), Vector2(68.0, 440.0), Vector2(56.0, 452.0), Vector2(66.0, 472.0), Vector2(96.0, 470.0),
+		]), 2),
+		"right_mirror": _smooth_polygon(PackedVector2Array([
+			Vector2(296.0, 448.0), Vector2(322.0, 440.0), Vector2(334.0, 452.0), Vector2(324.0, 472.0), Vector2(294.0, 470.0),
+		]), 2),
+		"windshield": _smooth_polygon(PackedVector2Array([
+			Vector2(138.0, 378.0), Vector2(252.0, 378.0), Vector2(260.0, 444.0), Vector2(252.0, 456.0),
+			Vector2(138.0, 456.0), Vector2(130.0, 444.0),
+		]), 2),
+	}
 
 
 func _draw_car() -> void:
 	var outline := Color("#123246")
+	var shapes: Dictionary = car_shapes[car_type]
 	_draw_ellipse_shape(Vector2(195.0, 668.0), Vector2(168.0, 20.0), Color(0.0, 0.0, 0.0, 0.16))
 
-	draw_circle(Vector2(98.0, 642.0), 31.0, Color("#1d2b33"))
-	draw_circle(Vector2(98.0, 642.0), 15.0, Color("#cfd8dc"))
-	draw_circle(Vector2(292.0, 642.0), 31.0, Color("#1d2b33"))
-	draw_circle(Vector2(292.0, 642.0), 15.0, Color("#cfd8dc"))
+	var wheel_y := 642.0
+	var wheel_radius := 31.0
+	if car_type == "truck":
+		wheel_y = 636.0
+		wheel_radius = 35.0
+	elif car_type == "sports":
+		wheel_y = 646.0
+		wheel_radius = 29.0
+	for wheel_x in [98.0, 292.0]:
+		draw_circle(Vector2(wheel_x, wheel_y), wheel_radius, Color("#1d2b33"))
+		draw_circle(Vector2(wheel_x, wheel_y), wheel_radius * 0.48, Color("#cfd8dc"))
 
-	var silhouette: PackedVector2Array = car_shapes["silhouette"]
+	var silhouette: PackedVector2Array = shapes["silhouette"]
 	draw_colored_polygon(silhouette, car_color)
 	_draw_closed_outline(silhouette, outline, 5.0)
 
-	var bumper: PackedVector2Array = car_shapes["bumper"]
-	draw_colored_polygon(bumper, Color("#e7eef2"))
+	var bumper: PackedVector2Array = shapes["bumper"]
+	draw_colored_polygon(bumper, Color("#d6dde1") if car_type == "truck" else Color("#e7eef2"))
 	_draw_closed_outline(bumper, outline, 4.0)
 
 	var mirror_color := car_color.darkened(0.12)
-	var left_mirror: PackedVector2Array = car_shapes["left_mirror"]
-	var right_mirror: PackedVector2Array = car_shapes["right_mirror"]
-	draw_colored_polygon(left_mirror, mirror_color)
-	_draw_closed_outline(left_mirror, outline, 3.0)
-	draw_colored_polygon(right_mirror, mirror_color)
-	_draw_closed_outline(right_mirror, outline, 3.0)
+	for mirror_key in ["left_mirror", "right_mirror"]:
+		var mirror: PackedVector2Array = shapes[mirror_key]
+		draw_colored_polygon(mirror, mirror_color)
+		_draw_closed_outline(mirror, outline, 3.0)
 
-	var windshield: PackedVector2Array = car_shapes["windshield"]
+	var windshield: PackedVector2Array = shapes["windshield"]
 	draw_colored_polygon(windshield, Color("#cfeeff"))
 	_draw_closed_outline(windshield, outline, 4.0)
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(158.0, 392.0), Vector2(178.0, 392.0), Vector2(150.0, 452.0), Vector2(136.0, 442.0),
+		Vector2(158.0, 394.0), Vector2(178.0, 394.0), Vector2(152.0, 450.0), Vector2(140.0, 442.0),
 	]), Color(1.0, 1.0, 1.0, 0.55))
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(192.0, 392.0), Vector2(202.0, 392.0), Vector2(172.0, 452.0), Vector2(162.0, 452.0),
+		Vector2(192.0, 394.0), Vector2(202.0, 394.0), Vector2(174.0, 450.0), Vector2(164.0, 450.0),
 	]), Color(1.0, 1.0, 1.0, 0.35))
 
-	draw_arc(Vector2(195.0, 600.0), 128.0, PI + 0.42, TAU - 0.42, 26, outline.lerp(car_color, 0.55), 3.0)
+	if car_type == "compact":
+		_draw_compact_details(outline)
+	elif car_type == "sports":
+		_draw_sports_details(outline)
+	elif car_type == "truck":
+		_draw_truck_details(outline)
 
-	draw_line(Vector2(186.0, 364.0), Vector2(182.0, 342.0), outline, 3.0)
-	draw_circle(Vector2(181.0, 338.0), 5.0, Color("#ff6b6b"))
-
-	_draw_headlight(Vector2(118.0, 545.0), outline)
-	_draw_headlight(Vector2(272.0, 545.0), outline)
-	draw_arc(Vector2(195.0, 538.0), 34.0, PI * 0.22, PI * 0.78, 18, outline, 4.0)
-
-	var plate := Rect2(159.0, 580.0, 72.0, 22.0)
+	var plate := Rect2(159.0, 582.0, 72.0, 22.0)
 	draw_rect(plate, Color("#f7fbff"))
 	draw_rect(plate, outline, false, 2.5)
 	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), "폼 파티", HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
 
-	draw_circle(Vector2(86.0, 626.0), 8.0, Color("#ffe7a7"))
-	draw_circle(Vector2(86.0, 626.0), 8.0, outline, false, 2.0)
-	draw_circle(Vector2(304.0, 626.0), 8.0, Color("#ffe7a7"))
-	draw_circle(Vector2(304.0, 626.0), 8.0, outline, false, 2.0)
 
+func _draw_compact_details(outline: Color) -> void:
+	draw_arc(Vector2(195.0, 600.0), 128.0, PI + 0.42, TAU - 0.42, 26, outline.lerp(car_color, 0.55), 3.0)
+	draw_line(Vector2(186.0, 364.0), Vector2(182.0, 342.0), outline, 3.0)
+	draw_circle(Vector2(181.0, 338.0), 5.0, Color("#ff6b6b"))
+	_draw_round_headlight(Vector2(118.0, 545.0), outline)
+	_draw_round_headlight(Vector2(272.0, 545.0), outline)
+	draw_arc(Vector2(195.0, 538.0), 34.0, PI * 0.22, PI * 0.78, 18, outline, 4.0)
+	for fog_x in [86.0, 304.0]:
+		draw_circle(Vector2(fog_x, 626.0), 8.0, Color("#ffe7a7"))
+		draw_circle(Vector2(fog_x, 626.0), 8.0, outline, false, 2.0)
 	draw_arc(Vector2(195.0, 560.0), 118.0, PI + 0.55, PI + 1.0, 12, Color(1.0, 1.0, 1.0, 0.3), 7.0)
 
 
-func _draw_headlight(center: Vector2, outline: Color) -> void:
+func _draw_sports_details(outline: Color) -> void:
+	var scoop := Rect2(173.0, 472.0, 44.0, 16.0)
+	draw_rect(scoop, outline)
+	draw_rect(Rect2(scoop.position + Vector2(4.0, 4.0), scoop.size - Vector2(8.0, 8.0)), Color("#22343d"))
+	_draw_sleek_headlight(Vector2(116.0, 540.0), outline, false)
+	_draw_sleek_headlight(Vector2(274.0, 540.0), outline, true)
+	draw_arc(Vector2(195.0, 536.0), 30.0, PI * 0.3, PI * 0.66, 14, outline, 4.0)
+	for slat_index in range(3):
+		var slat_y := 556.0 + float(slat_index) * 11.0
+		draw_line(Vector2(74.0, slat_y), Vector2(96.0, slat_y + 4.0), outline, 3.0)
+		draw_line(Vector2(316.0, slat_y), Vector2(294.0, slat_y + 4.0), outline, 3.0)
+	for led_x in [78.0, 290.0]:
+		draw_rect(Rect2(led_x, 624.0, 22.0, 5.0), Color("#dff4ff"))
+		draw_rect(Rect2(led_x, 624.0, 22.0, 5.0), outline, false, 1.5)
+	draw_line(Vector2(96.0, 656.0), Vector2(294.0, 656.0), Color("#22343d"), 6.0)
+	draw_arc(Vector2(195.0, 640.0), 150.0, PI + 0.5, PI + 0.9, 10, Color(1.0, 1.0, 1.0, 0.3), 7.0)
+
+
+func _draw_truck_details(outline: Color) -> void:
+	draw_line(Vector2(150.0, 354.0), Vector2(240.0, 354.0), outline, 4.0)
+	draw_line(Vector2(158.0, 354.0), Vector2(158.0, 362.0), outline, 3.0)
+	draw_line(Vector2(232.0, 354.0), Vector2(232.0, 362.0), outline, 3.0)
+	_draw_square_headlight(Rect2(94.0, 528.0, 46.0, 32.0), outline)
+	_draw_square_headlight(Rect2(250.0, 528.0, 46.0, 32.0), outline)
+	for bar_index in range(3):
+		var bar_y := 530.0 + float(bar_index) * 11.0
+		draw_rect(Rect2(152.0, bar_y, 86.0, 5.0), outline.lerp(car_color, 0.35))
+	draw_arc(Vector2(195.0, 568.0), 24.0, PI * 0.25, PI * 0.75, 12, outline, 4.0)
+	for fog_x in [80.0, 296.0]:
+		draw_rect(Rect2(fog_x, 620.0, 15.0, 11.0), Color("#ffe7a7"))
+		draw_rect(Rect2(fog_x, 620.0, 15.0, 11.0), outline, false, 2.0)
+	draw_rect(Rect2(168.0, 636.0, 54.0, 12.0), Color("#9aa7ad"))
+	draw_rect(Rect2(168.0, 636.0, 54.0, 12.0), outline, false, 2.0)
+	draw_arc(Vector2(195.0, 620.0), 140.0, PI + 0.5, PI + 0.85, 10, Color(1.0, 1.0, 1.0, 0.26), 7.0)
+
+
+func _draw_round_headlight(center: Vector2, outline: Color) -> void:
 	draw_circle(center, 23.0, outline)
 	draw_circle(center, 19.0, Color("#fff7dd"))
 	draw_circle(center, 11.0, Color("#ffe289"))
 	draw_circle(center + Vector2(-5.0, -5.0), 4.5, Color(1.0, 1.0, 1.0, 0.9))
+
+
+func _draw_sleek_headlight(center: Vector2, outline: Color, flip: bool) -> void:
+	draw_circle(center, 21.0, outline)
+	draw_circle(center, 17.0, Color("#fff7dd"))
+	draw_circle(center, 9.0, Color("#ffd24d"))
+	var lid_left_y := -14.0 if flip else -6.0
+	var lid_right_y := -6.0 if flip else -14.0
+	draw_colored_polygon(PackedVector2Array([
+		center + Vector2(-22.0, lid_left_y),
+		center + Vector2(22.0, lid_right_y),
+		center + Vector2(22.0, -24.0),
+		center + Vector2(-22.0, -24.0),
+	]), car_color)
+	draw_line(center + Vector2(-21.0, lid_left_y), center + Vector2(21.0, lid_right_y), outline, 4.0)
+	draw_circle(center + Vector2(-4.0, 2.0), 3.5, Color(1.0, 1.0, 1.0, 0.9))
+
+
+func _draw_square_headlight(rect: Rect2, outline: Color) -> void:
+	draw_style_box(_style("truck_light_border", outline, 9.0), rect.grow(3.0))
+	draw_style_box(_style("truck_light", Color("#fff7dd"), 7.0), rect)
+	var center := rect.get_center()
+	draw_circle(center, 8.0, Color("#ffe289"))
+	draw_circle(center + Vector2(-4.0, -4.0), 3.0, Color(1.0, 1.0, 1.0, 0.9))
 
 
 func _smooth_polygon(points: PackedVector2Array, iterations: int) -> PackedVector2Array:
@@ -1625,7 +1761,7 @@ func _draw_completion_panel() -> void:
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 88.0), "반짝반짝 완료!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
 	var minutes := int(level_time / 60.0)
 	var seconds := int(level_time) % 60
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 114.0), "차량 %02d · %02d:%02d · 최고 콤보 x%d" % [level_index, minutes, seconds, best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 15, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 114.0), "%s %02d · %02d:%02d · 최고 콤보 x%d" % [car_type_labels[car_type], level_index, minutes, seconds, best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
 
 	var next_rect := _get_next_rect()
 	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))
