@@ -1,8 +1,8 @@
 extends SceneTree
 
 ## 개발용 스크린샷 캡처 스크립트.
-## xvfb-run godot --path godot --script res://tests/screenshot_scene.gd 로 실행하면
-## FOAM_SHOT_DIR(기본 /tmp)에 기본 화면과 도구별 세차 장면, 완료 화면 PNG를 저장합니다.
+## xvfb-run -a godot --path godot --script res://tests/screenshot_scene.gd --audio-driver Dummy
+## 로 실행하면 FOAM_SHOT_DIR(기본 /tmp)에 기본 화면과 도구별 세차 장면, 완료 화면 PNG를 저장합니다.
 
 func _initialize() -> void:
 	_run.call_deferred()
@@ -31,8 +31,11 @@ func _run() -> void:
 	var node := scene.instantiate()
 	get_root().add_child(node)
 
+	get_root().mode = Window.MODE_WINDOWED
+	get_root().size = Vector2i(390, 844)
+
 	await _settle(20)
-	if not await _capture(out_dir + "/shot_default.png"):
+	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return
 
@@ -47,7 +50,7 @@ func _run() -> void:
 		node.set("pointer_position", wash_points[tool_id])
 		node.set("is_washing", true)
 		await _settle(25)
-		var tool_saved: bool = await _capture(out_dir + "/shot_%s.png" % tool_id)
+		var tool_saved: bool = await _capture(out_dir.path_join("shot_%s.png" % tool_id))
 		node.set("is_washing", false)
 		if not tool_saved:
 			quit(1)
@@ -56,7 +59,7 @@ func _run() -> void:
 	for patch in node.get("dirt_patches"):
 		patch.set("health", 0.0)
 	await _settle(12)
-	if not await _capture(out_dir + "/shot_complete.png"):
+	if not await _capture(out_dir.path_join("shot_complete.png")):
 		quit(1)
 		return
 
