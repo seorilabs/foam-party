@@ -23,6 +23,7 @@ func _run() -> void:
 			quit(1)
 			return
 
+	OS.set_environment("FOAM_DISABLE_SAVE", "1")
 	var scene: PackedScene = load("res://scenes/main.tscn") as PackedScene
 	if scene == null:
 		push_error("main scene failed to load")
@@ -35,6 +36,19 @@ func _run() -> void:
 	get_root().size = Vector2i(390, 844)
 
 	await _settle(20)
+	if not await _capture(out_dir.path_join("shot_title.png")):
+		quit(1)
+		return
+
+	node.call("start_game")
+	await _settle(5)
+	if not await _capture(out_dir.path_join("shot_tutorial.png")):
+		quit(1)
+		return
+	node.call("_dismiss_tutorial")
+	node.set("coins", 120)
+
+	await _settle(10)
 	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return

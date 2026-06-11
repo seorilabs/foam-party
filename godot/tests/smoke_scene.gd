@@ -38,6 +38,21 @@ func _run_smoke() -> void:
 		_fail("expected four tool audio streams")
 		return
 
+	if String(root_node.get("game_state")) != "title":
+		_fail("game should boot to the title screen")
+		return
+	root_node.call("start_game")
+	if String(root_node.get("game_state")) != "playing":
+		_fail("start_game should enter playing state")
+		return
+	if not bool(root_node.get("show_tutorial")):
+		_fail("first run should show the tutorial")
+		return
+	root_node.call("_dismiss_tutorial")
+	if bool(root_node.get("show_tutorial")):
+		_fail("tutorial should dismiss")
+		return
+
 	var progress_before: float = root_node.call("get_clean_progress_for_test")
 	var mud_index: int = root_node.call("get_patch_index_by_kind_for_test", "mud")
 	if mud_index < 0:
@@ -119,6 +134,15 @@ func _run_smoke() -> void:
 		_fail("expected 1 star for slow clear")
 		return
 
+	if int(root_node.call("calc_coin_reward_for_test")) != 50:
+		_fail("expected 50 coins for 1-star clear with max combo bonus")
+		return
+	root_node.set("level_time", 60.0)
+	root_node.set("best_combo", 5)
+	if int(root_node.call("calc_coin_reward_for_test")) != 60:
+		_fail("expected 60 coins for 3-star clear")
+		return
+
 	if String(root_node.call("get_car_type_for_test")) != "compact":
 		_fail("level 1 should be a compact car")
 		return
@@ -132,6 +156,19 @@ func _run_smoke() -> void:
 		return
 	if int(root_node.call("get_patch_count_for_test")) < 20:
 		_fail("level 2 should respawn dirt patches")
+		return
+
+	root_node.set("coins", 100)
+	var bomb_oil_index: int = root_node.call("get_patch_index_by_kind_for_test", "oil")
+	if bomb_oil_index < 0:
+		_fail("level 2 oil patch missing")
+		return
+	root_node.call("apply_foam_bomb")
+	if int(root_node.call("get_coins_for_test")) != 100 - 40:
+		_fail("foam bomb should cost 40 coins")
+		return
+	if float(root_node.call("get_patch_soap_for_test", bomb_oil_index)) < 0.9:
+		_fail("foam bomb should soap oil patches")
 		return
 
 	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])

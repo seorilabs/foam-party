@@ -14,6 +14,10 @@ const COMBO_WINDOW := 2.5
 const STAR3_TIME := 75.0
 const STAR3_COMBO := 4
 const STAR2_TIME := 140.0
+const SAVE_PATH := "user://foam_party_save.cfg"
+const BOMB_COST := 40
+const STATE_TITLE := "title"
+const STATE_PLAYING := "playing"
 const GAMEPLAY_SCALE := 1.16
 const GAMEPLAY_PIVOT := Vector2(195.0, 545.0)
 const GAMEPLAY_OFFSET := Vector2(0.0, 0.0)
@@ -93,6 +97,14 @@ var best_combo := 0
 var level_time := 0.0
 var earned_stars := 0
 var combo_pop_time := -10.0
+var game_state := STATE_TITLE
+var coins := 0
+var total_stars := 0
+var coin_reward := 0
+var sound_enabled := true
+var tutorial_seen := false
+var show_tutorial := false
+var persistence_enabled := true
 var last_particle_spawn := 0.0
 var car_color := Color("#ffcf5a")
 var car_type := "compact"
@@ -137,14 +149,53 @@ func _ready() -> void:
 	rng.seed = 42690
 	sfx_rng.seed = 8808
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	persistence_enabled = DisplayServer.get_name() != "headless" and OS.get_environment("FOAM_DISABLE_SAVE") != "1"
 	_setup_font()
 	_build_car_shapes()
+	_load_progress()
 	_setup_audio()
-	reset_game(1)
+	_apply_sound_setting()
+	reset_game(level_index)
+
+
+func _load_progress() -> void:
+	if not persistence_enabled:
+		return
+	var config := ConfigFile.new()
+	if config.load(SAVE_PATH) != OK:
+		return
+	level_index = max(1, int(config.get_value("game", "level", 1)))
+	coins = max(0, int(config.get_value("game", "coins", 0)))
+	total_stars = max(0, int(config.get_value("game", "total_stars", 0)))
+	sound_enabled = bool(config.get_value("settings", "sound", true))
+	tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
+
+
+func _save_progress() -> void:
+	if not persistence_enabled:
+		return
+	var config := ConfigFile.new()
+	config.set_value("game", "level", level_index)
+	config.set_value("game", "coins", coins)
+	config.set_value("game", "total_stars", total_stars)
+	config.set_value("settings", "sound", sound_enabled)
+	config.set_value("settings", "tutorial_seen", tutorial_seen)
+	config.save(SAVE_PATH)
+
+
+func _apply_sound_setting() -> void:
+	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), not sound_enabled)
+
+
+func start_game() -> void:
+	game_state = STATE_PLAYING
+	if not tutorial_seen:
+		show_tutorial = true
+	queue_redraw()
 
 
 func _process(delta: float) -> void:
-	if not completed:
+	if game_state == STATE_PLAYING and not completed and not show_tutorial:
 		level_time += delta
 		if combo_timer > 0.0:
 			combo_timer -= delta
@@ -152,7 +203,7 @@ func _process(delta: float) -> void:
 				combo_timer = 0.0
 				combo_count = 0
 
-	if is_washing and not completed:
+	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial:
 		_apply_tool_at(pointer_position, delta)
 
 	_update_dirt_motion(delta)
@@ -165,6 +216,8 @@ func _process(delta: float) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		queue_redraw()
+	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
+		_save_progress()
 
 
 func _setup_font() -> void:
@@ -539,16 +592,24 @@ func _draw() -> void:
 	_set_design_draw_transform()
 
 	_draw_background()
-	_draw_status()
+	if game_state == STATE_PLAYING:
+		_draw_status()
 	_set_gameplay_draw_transform()
 	_draw_car()
 	_set_design_draw_transform()
 	_draw_dirt()
 	_draw_particles()
-	_draw_tool_cursor()
-	_draw_combo_badge()
-	_draw_toolbar()
-	_draw_completion_panel()
+	if game_state == STATE_TITLE:
+		_draw_title_screen()
+	else:
+		_draw_tool_cursor()
+		_draw_combo_badge()
+		_draw_bomb_button()
+		_draw_toolbar()
+		_draw_completion_panel()
+	_draw_top_buttons()
+	if show_tutorial:
+		_draw_tutorial()
 
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
@@ -606,6 +667,14 @@ func calc_stars_for_test() -> int:
 
 func get_car_type_for_test() -> String:
 	return car_type
+
+
+func get_coins_for_test() -> int:
+	return coins
+
+
+func calc_coin_reward_for_test() -> int:
+	return _calc_coin_reward(_calc_stars())
 
 
 func get_patch_index_by_kind_for_test(kind: String) -> int:
@@ -692,6 +761,14 @@ func _gameplay_length(value: float) -> float:
 
 
 func _handle_key(keycode: Key) -> void:
+	if game_state == STATE_TITLE:
+		if keycode == KEY_SPACE or keycode == KEY_ENTER:
+			start_game()
+		return
+	if show_tutorial:
+		if keycode == KEY_SPACE or keycode == KEY_ENTER or keycode == KEY_ESCAPE:
+			_dismiss_tutorial()
+		return
 	if keycode == KEY_1:
 		selected_tool = TOOL_AIR
 	elif keycode == KEY_2:
@@ -705,8 +782,36 @@ func _handle_key(keycode: Key) -> void:
 
 
 func _handle_tap(point: Vector2) -> bool:
+	if show_tutorial:
+		_dismiss_tutorial()
+		return true
+
+	if game_state == STATE_TITLE:
+		if _get_start_rect().has_point(point):
+			start_game()
+			_play_ui_select()
+		elif _get_sound_rect().has_point(point):
+			_toggle_sound()
+		elif _get_help_rect().has_point(point):
+			show_tutorial = true
+		return true
+
 	if completed and _get_next_rect().has_point(point):
 		reset_game(level_index + 1)
+		_save_progress()
+		return true
+
+	if _get_sound_rect().has_point(point):
+		_toggle_sound()
+		return true
+
+	if _get_help_rect().has_point(point):
+		show_tutorial = true
+		is_washing = false
+		return true
+
+	if not completed and _get_bomb_rect().has_point(point):
+		apply_foam_bomb()
 		return true
 
 	for index in range(tool_ids.size()):
@@ -717,6 +822,47 @@ func _handle_tap(point: Vector2) -> bool:
 			return true
 
 	return false
+
+
+func _dismiss_tutorial() -> void:
+	show_tutorial = false
+	if not tutorial_seen:
+		tutorial_seen = true
+		_save_progress()
+
+
+func _toggle_sound() -> void:
+	sound_enabled = not sound_enabled
+	_apply_sound_setting()
+	_save_progress()
+	_play_ui_select()
+
+
+func apply_foam_bomb() -> void:
+	if completed or coins < BOMB_COST:
+		return
+	coins -= BOMB_COST
+	for raw_patch in dirt_patches:
+		var patch := raw_patch as DirtPatch
+		if _is_patch_removed(patch) or patch.state == STATE_FLYING:
+			continue
+		patch.soap = 1.0
+		patch.wetness = max(patch.wetness, 0.3)
+		patch.looseness = max(patch.looseness, 0.7)
+		if patch.kind == "oil" or patch.kind == "bug":
+			patch.state = STATE_LOOSENED
+		elif patch.kind == "mud":
+			patch.state = STATE_SOAPED
+		var center := _patch_center(patch)
+		for bubble_index in range(3):
+			var offset := Vector2(rng.randf_range(-patch.radius, patch.radius), rng.randf_range(-patch.radius, patch.radius))
+			particles.append(WashParticle.new(center + offset, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-40.0, -16.0)), rng.randf_range(0.6, 1.1), rng.randf_range(4.0, 9.0), Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85), STYLE_BUBBLE))
+	_play_ui_select()
+	_save_progress()
+
+
+func _calc_coin_reward(stars: int) -> int:
+	return 20 + stars * 10 + min(best_combo, 10) * 2
 
 
 func _set_car_palette() -> void:
@@ -743,14 +889,23 @@ func _spawn_dirt() -> void:
 		Vector2(102.0, 620.0), Vector2(303.0, 620.0)
 	]
 
-	for index in range(positions.size()):
+	var pool: Array = positions.duplicate()
+	for index in range(pool.size() - 1, 0, -1):
+		var swap_index := rng.randi_range(0, index)
+		var swap_value: Vector2 = pool[index]
+		pool[index] = pool[swap_index]
+		pool[swap_index] = swap_value
+
+	var spawn_count: int = min(pool.size(), 18 + level_index * 2)
+	var health_scale := 1.0 + minf(0.5, float(level_index - 1) * 0.06)
+	for index in range(spawn_count):
 		var kind: String = DIRT_TYPES[index % DIRT_TYPES.size()]
-		var base_position: Vector2 = _gameplay_point(positions[index])
+		var base_position: Vector2 = _gameplay_point(pool[index])
 		var jitter := Vector2(rng.randf_range(-10.0, 10.0), rng.randf_range(-8.0, 8.0)) * GAMEPLAY_SCALE
 		var radius := _gameplay_length(rng.randf_range(13.0, 24.0))
-		var health := rng.randf_range(70.0, 120.0)
+		var health := rng.randf_range(70.0, 120.0) * health_scale
 		if kind == "oil" or kind == "bug":
-			health += 25.0
+			health += 25.0 * health_scale
 		var patch := DirtPatch.new(kind, base_position + jitter, radius, health, rng.randf_range(0.0, 10.0))
 		dirt_patches.append(patch)
 
@@ -1088,6 +1243,10 @@ func _update_clean_progress() -> void:
 		completed = true
 		is_washing = false
 		earned_stars = _calc_stars()
+		coin_reward = _calc_coin_reward(earned_stars)
+		coins += coin_reward
+		total_stars += earned_stars
+		_save_progress()
 		_stop_tool_loop()
 		_play_completion_sound()
 		_spawn_completion_burst()
@@ -1137,7 +1296,12 @@ func _draw_status() -> void:
 	draw_style_box(_style("hud_shadow", Color(0.05, 0.23, 0.33, 0.25), 20.0), Rect2(card.position + Vector2(0.0, 3.0), card.size))
 	draw_style_box(_style("hud_card", Color(0.97, 0.99, 1.0, 0.94), 20.0), card)
 
-	draw_string(font, Vector2(32.0, 44.0), "폼 파티", HORIZONTAL_ALIGNMENT_LEFT, 160.0, 23, Color("#0d3b55"))
+	draw_string(font, Vector2(32.0, 44.0), "폼 파티", HORIZONTAL_ALIGNMENT_LEFT, 110.0, 20, Color("#0d3b55"))
+	var coin_chip := Rect2(142.0, 22.0, 98.0, 28.0)
+	draw_style_box(_style("coin_chip", Color("#fff3cf"), 14.0), coin_chip)
+	draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#ffce3d"))
+	draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#9a7400"), false, 1.5)
+	draw_string(font, Vector2(coin_chip.position.x + 30.0, coin_chip.position.y + 20.0), "%d" % coins, HORIZONTAL_ALIGNMENT_LEFT, 62.0, 14, Color("#6b5200"))
 	var badge := Rect2(248.0, 22.0, 112.0, 28.0)
 	draw_style_box(_style("level_badge", Color("#49a7ff"), 14.0), badge)
 	draw_string(font, Vector2(badge.position.x, badge.position.y + 20.0), "%s %02d" % [car_type_labels[car_type], level_index], HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 13, Color.WHITE)
@@ -1149,9 +1313,9 @@ func _draw_status() -> void:
 		draw_style_box(_style("bar_fill", Color("#39d98a"), 12.0), Rect2(bar_rect.position, Vector2(fill_width, bar_rect.size.y)))
 	draw_string(font, Vector2(294.0, bar_rect.position.y + 18.0), "%.0f%%" % (clean_progress * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 66.0, 15, Color("#0d3b55"))
 
-	var hint_rect := Rect2(75.0, 702.0, 240.0, 30.0)
+	var hint_rect := Rect2(22.0, 696.0, 244.0, 30.0)
 	draw_style_box(_style("hint_bubble", Color(0.03, 0.14, 0.2, 0.78), 15.0), hint_rect)
-	draw_string(font, Vector2(hint_rect.position.x, hint_rect.position.y + 21.0), "%s · %s" % [tool_labels[selected_tool], _tool_hint()], HORIZONTAL_ALIGNMENT_CENTER, hint_rect.size.x, 14, Color(0.93, 0.99, 1.0))
+	draw_string(font, Vector2(hint_rect.position.x, hint_rect.position.y + 21.0), "%s · %s" % [tool_labels[selected_tool], _tool_hint()], HORIZONTAL_ALIGNMENT_CENTER, hint_rect.size.x, 13, Color(0.93, 0.99, 1.0))
 
 
 func _tool_hint() -> String:
@@ -1679,6 +1843,95 @@ func _rotated_rect_points(center: Vector2, half: Vector2, angle: float) -> Packe
 	])
 
 
+func _draw_title_screen() -> void:
+	var font: Font = _font()
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.21, 0.69, 0.74, 0.82))
+	for bubble_index in range(8):
+		var bubble_x := 40.0 + float(bubble_index) * 45.0
+		var bubble_y := 120.0 + sin(float(bubble_index) * 1.9) * 50.0
+		draw_circle(Vector2(bubble_x, bubble_y), 14.0 + float(bubble_index % 3) * 8.0, Color(1.0, 1.0, 1.0, 0.18))
+
+	draw_circle(Vector2(130.0, 268.0), 44.0, Color(1.0, 1.0, 1.0, 0.35))
+	draw_circle(Vector2(258.0, 252.0), 30.0, Color(1.0, 1.0, 1.0, 0.3))
+	draw_circle(Vector2(220.0, 296.0), 20.0, Color(1.0, 1.0, 1.0, 0.28))
+	draw_string(font, Vector2(2.0, 332.0), "폼 파티", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color("#0d3b55"))
+	draw_string(font, Vector2(0.0, 328.0), "폼 파티", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color.WHITE)
+	draw_string(font, Vector2(0.0, 368.0), "반짝반짝 세차 게임", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 18, Color("#0d3b55"))
+
+	var start_rect := _get_start_rect()
+	draw_style_box(_style("start_shadow", Color("#1f8a55"), 16.0), Rect2(start_rect.position + Vector2(0.0, 5.0), start_rect.size))
+	draw_style_box(_style("start_button", Color("#39d98a"), 16.0), start_rect)
+	var start_label := "세차 시작"
+	if level_index > 1:
+		start_label = "이어하기 · %s %02d" % [car_type_labels[car_type], level_index]
+	draw_string(font, Vector2(start_rect.position.x, start_rect.position.y + 38.0), start_label, HORIZONTAL_ALIGNMENT_CENTER, start_rect.size.x, 19, Color("#0d3b2a"))
+
+	draw_string(font, Vector2(0.0, 588.0), "코인 %d · 모은 별 %d" % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
+	draw_string(font, Vector2(0.0, 826.0), "v0.1", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 12, Color(1.0, 1.0, 1.0, 0.5))
+
+
+func _draw_top_buttons() -> void:
+	var font: Font = _font()
+	var sound_rect := _get_sound_rect()
+	var help_rect := _get_help_rect()
+	for rect in [sound_rect, help_rect]:
+		draw_style_box(_style("round_button", Color(0.03, 0.14, 0.2, 0.62), 18.0), rect)
+	var icon_color := Color(0.93, 0.99, 1.0)
+	var speaker_center := sound_rect.get_center()
+	draw_colored_polygon(PackedVector2Array([
+		speaker_center + Vector2(-9.0, -3.0), speaker_center + Vector2(-3.0, -3.0), speaker_center + Vector2(3.0, -9.0),
+		speaker_center + Vector2(3.0, 9.0), speaker_center + Vector2(-3.0, 3.0), speaker_center + Vector2(-9.0, 3.0),
+	]), icon_color)
+	if sound_enabled:
+		draw_arc(speaker_center + Vector2(4.0, 0.0), 7.0, -1.0, 1.0, 8, icon_color, 2.0)
+	else:
+		draw_line(speaker_center + Vector2(-11.0, -11.0), speaker_center + Vector2(11.0, 11.0), Color("#ff6b6b"), 3.0)
+	draw_string(font, Vector2(help_rect.position.x, help_rect.position.y + 26.0), "?", HORIZONTAL_ALIGNMENT_CENTER, help_rect.size.x, 20, icon_color)
+
+
+func _draw_tutorial() -> void:
+	var font: Font = _font()
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.55))
+	var panel := Rect2(30.0, 176.0, 330.0, 452.0)
+	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
+	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 44.0), "세차 가이드", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+
+	var rows := [
+		[TOOL_AIR, "바람", "낙엽과 먼지를 차 밖으로 날려요"],
+		[TOOL_WATER, "고압수", "흙탕물을 씻고 비누 거품을 헹궈요"],
+		[TOOL_SOAP, "비누", "기름·벌레 자국을 먼저 불려요"],
+		[TOOL_SPONGE, "스펀지", "불린 자국을 문질러 닦아요"],
+	]
+	for row_index in range(rows.size()):
+		var row: Array = rows[row_index]
+		var row_y := panel.position.y + 92.0 + float(row_index) * 72.0
+		draw_style_box(_style("tutorial_row", Color("#e8f3f8"), 14.0), Rect2(panel.position.x + 18.0, row_y - 26.0, panel.size.x - 36.0, 58.0))
+		_draw_tool_icon(row[0], Vector2(panel.position.x + 52.0, row_y + 2.0))
+		draw_string(font, Vector2(panel.position.x + 92.0, row_y - 2.0), row[1], HORIZONTAL_ALIGNMENT_LEFT, 200.0, 17, Color("#123246"))
+		draw_string(font, Vector2(panel.position.x + 92.0, row_y + 20.0), row[2], HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 116.0, 13, Color("#2c6b78"))
+
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 410.0), "콤보를 이어가면 별 3개! 거품 폭탄은 코인 %d개" % BOMB_COST, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 436.0), "화면을 탭하면 시작!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 16, Color("#1f8a55"))
+
+
+func _draw_bomb_button() -> void:
+	if completed:
+		return
+	var font: Font = _font()
+	var rect := _get_bomb_rect()
+	var can_afford := coins >= BOMB_COST
+	var bg := Color("#f8f4a6") if can_afford else Color(0.55, 0.6, 0.63, 0.85)
+	draw_style_box(_style("bomb_on" if can_afford else "bomb_off", bg, 14.0), rect)
+	draw_circle(rect.position + Vector2(22.0, 17.0), 9.0, Color(1.0, 1.0, 1.0, 0.95))
+	draw_circle(rect.position + Vector2(32.0, 12.0), 6.0, Color(1.0, 1.0, 1.0, 0.8))
+	draw_circle(rect.position + Vector2(30.0, 22.0), 4.5, Color(1.0, 1.0, 1.0, 0.8))
+	draw_string(font, Vector2(rect.position.x + 42.0, rect.position.y + 20.0), "거품폭탄", HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 11, Color("#123246"))
+	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
+	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
+	draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
+
+
 func _draw_combo_badge() -> void:
 	if completed or combo_count < 2:
 		return
@@ -1763,6 +2016,12 @@ func _draw_completion_panel() -> void:
 	var seconds := int(level_time) % 60
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 114.0), "%s %02d · %02d:%02d · 최고 콤보 x%d" % [car_type_labels[car_type], level_index, minutes, seconds, best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
 
+	var reward_chip := Rect2(panel.position.x + panel.size.x - 106.0, panel.position.y - 14.0, 96.0, 30.0)
+	draw_style_box(_style("reward_chip", Color("#ffce3d"), 15.0), reward_chip)
+	draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#fff3cf"))
+	draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#9a7400"), false, 1.5)
+	draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 21.0), "+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 15, Color("#6b5200"))
+
 	var next_rect := _get_next_rect()
 	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))
 	draw_style_box(_style("next_button", Color("#39d98a"), 14.0), next_rect)
@@ -1788,3 +2047,19 @@ func _get_tool_rect(index: int) -> Rect2:
 
 func _get_next_rect() -> Rect2:
 	return Rect2(103.0, 340.0, 184.0, 46.0)
+
+
+func _get_start_rect() -> Rect2:
+	return Rect2(95.0, 488.0, 200.0, 58.0)
+
+
+func _get_sound_rect() -> Rect2:
+	return Rect2(306.0, 104.0, 36.0, 36.0)
+
+
+func _get_help_rect() -> Rect2:
+	return Rect2(344.0, 104.0, 36.0, 36.0)
+
+
+func _get_bomb_rect() -> Rect2:
+	return Rect2(276.0, 688.0, 92.0, 46.0)
