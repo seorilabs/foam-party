@@ -11,7 +11,13 @@ func _initialize() -> void:
 func _run() -> void:
 	var out_dir := OS.get_environment("FOAM_SHOT_DIR")
 	if out_dir == "":
-		out_dir = "/tmp"
+		out_dir = "/tmp" if DirAccess.dir_exists_absolute("/tmp") else OS.get_user_data_dir()
+	if not DirAccess.dir_exists_absolute(out_dir):
+		var make_error := DirAccess.make_dir_recursive_absolute(out_dir)
+		if make_error != OK:
+			push_error("failed to create output dir: " + out_dir)
+			quit(1)
+			return
 
 	var scene: PackedScene = load("res://scenes/main.tscn") as PackedScene
 	if scene == null:
@@ -22,7 +28,9 @@ func _run() -> void:
 	get_root().add_child(node)
 
 	await _settle(20)
-	await _capture(out_dir + "/shot_default.png")
+	if not await _capture(out_dir + "/shot_default.png"):
+		quit(1)
+		return
 
 	var wash_points := {
 		"water": Vector2(140.0, 510.0),
@@ -35,12 +43,17 @@ func _run() -> void:
 		node.set("pointer_position", wash_points[tool_id])
 		node.set("is_washing", true)
 		await _settle(25)
-		await _capture(out_dir + "/shot_%s.png" % tool_id)
+		var tool_saved: bool = await _capture(out_dir + "/shot_%s.png" % tool_id)
 		node.set("is_washing", false)
+		if not tool_saved:
+			quit(1)
+			return
 
 	node.set("completed", true)
 	await _settle(10)
-	await _capture(out_dir + "/shot_complete.png")
+	if not await _capture(out_dir + "/shot_complete.png"):
+		quit(1)
+		return
 
 	quit(0)
 
@@ -50,8 +63,19 @@ func _settle(frames: int) -> void:
 		await process_frame
 
 
-func _capture(path: String) -> void:
+func _capture(path: String) -> bool:
 	await process_frame
-	var image := get_root().get_texture().get_image()
-	image.save_png(path)
+	var texture := get_root().get_texture()
+	if texture == null:
+		push_error("viewport texture unavailable for " + path)
+		return false
+	var image := texture.get_image()
+	if image == null:
+		push_error("viewport image unavailable for " + path)
+		return false
+	var save_error := image.save_png(path)
+	if save_error != OK:
+		push_error("failed to save " + path)
+		return false
 	print("saved ", path)
+	return true

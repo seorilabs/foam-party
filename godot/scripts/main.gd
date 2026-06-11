@@ -98,6 +98,7 @@ var tool_colors := {
 	TOOL_SPONGE: Color("#ff9f5a"),
 }
 var style_cache: Dictionary = {}
+var car_shapes: Dictionary = {}
 var tool_audio_streams: Dictionary = {}
 var ui_select_stream: AudioStreamWAV
 var completion_stream: AudioStreamWAV
@@ -109,6 +110,7 @@ func _ready() -> void:
 	rng.seed = 42690
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_setup_font()
+	_build_car_shapes()
 	_setup_audio()
 	reset_game(1)
 
@@ -348,10 +350,13 @@ func _make_select_stream() -> AudioStreamWAV:
 	var data := PackedByteArray()
 	for sample_index in range(total_samples):
 		var t: float = float(sample_index) / float(AUDIO_MIX_RATE)
-		var freq := 659.25 if t < 0.07 else 987.77
-		var note_t := t if t < 0.07 else t - 0.07
-		var envelope: float = exp(-note_t * 26.0)
-		var sample: float = (sin(TAU * freq * t) * 0.26 + sin(TAU * freq * 2.0 * t) * 0.05) * envelope
+		var first_env: float = exp(-t * 30.0)
+		var sample: float = (sin(TAU * 659.25 * t) * 0.26 + sin(TAU * 1318.5 * t) * 0.05) * first_env
+		if t >= 0.07:
+			var second_t := t - 0.07
+			var attack: float = clamp(second_t / 0.008, 0.0, 1.0)
+			var second_env: float = exp(-second_t * 26.0) * attack
+			sample += (sin(TAU * 987.77 * second_t) * 0.26 + sin(TAU * 1975.53 * second_t) * 0.05) * second_env
 		_append_i16_sample(data, sample)
 	return _make_wav(data)
 
@@ -1074,6 +1079,30 @@ func _tool_hint() -> String:
 	return ""
 
 
+func _build_car_shapes() -> void:
+	car_shapes["silhouette"] = _smooth_polygon(PackedVector2Array([
+		Vector2(60.0, 650.0), Vector2(50.0, 588.0), Vector2(52.0, 518.0), Vector2(66.0, 478.0),
+		Vector2(98.0, 466.0), Vector2(116.0, 458.0), Vector2(124.0, 398.0), Vector2(138.0, 374.0),
+		Vector2(172.0, 364.0), Vector2(218.0, 364.0), Vector2(252.0, 374.0), Vector2(266.0, 398.0),
+		Vector2(274.0, 458.0), Vector2(292.0, 466.0), Vector2(324.0, 478.0), Vector2(338.0, 518.0),
+		Vector2(340.0, 588.0), Vector2(330.0, 650.0), Vector2(298.0, 660.0), Vector2(92.0, 660.0),
+	]), 2)
+	car_shapes["bumper"] = _smooth_polygon(PackedVector2Array([
+		Vector2(64.0, 612.0), Vector2(326.0, 612.0), Vector2(330.0, 632.0), Vector2(322.0, 652.0),
+		Vector2(296.0, 658.0), Vector2(94.0, 658.0), Vector2(68.0, 652.0), Vector2(60.0, 632.0),
+	]), 2)
+	car_shapes["left_mirror"] = _smooth_polygon(PackedVector2Array([
+		Vector2(96.0, 460.0), Vector2(74.0, 452.0), Vector2(64.0, 462.0), Vector2(72.0, 478.0), Vector2(98.0, 478.0),
+	]), 2)
+	car_shapes["right_mirror"] = _smooth_polygon(PackedVector2Array([
+		Vector2(294.0, 460.0), Vector2(316.0, 452.0), Vector2(326.0, 462.0), Vector2(318.0, 478.0), Vector2(292.0, 478.0),
+	]), 2)
+	car_shapes["windshield"] = _smooth_polygon(PackedVector2Array([
+		Vector2(142.0, 386.0), Vector2(248.0, 386.0), Vector2(262.0, 444.0), Vector2(254.0, 458.0),
+		Vector2(136.0, 458.0), Vector2(128.0, 444.0),
+	]), 2)
+
+
 func _draw_car() -> void:
 	var outline := Color("#123246")
 	_draw_ellipse_shape(Vector2(195.0, 668.0), Vector2(168.0, 20.0), Color(0.0, 0.0, 0.0, 0.16))
@@ -1083,39 +1112,23 @@ func _draw_car() -> void:
 	draw_circle(Vector2(292.0, 642.0), 31.0, Color("#1d2b33"))
 	draw_circle(Vector2(292.0, 642.0), 15.0, Color("#cfd8dc"))
 
-	var silhouette := _smooth_polygon(PackedVector2Array([
-		Vector2(60.0, 650.0), Vector2(50.0, 588.0), Vector2(52.0, 518.0), Vector2(66.0, 478.0),
-		Vector2(98.0, 466.0), Vector2(116.0, 458.0), Vector2(124.0, 398.0), Vector2(138.0, 374.0),
-		Vector2(172.0, 364.0), Vector2(218.0, 364.0), Vector2(252.0, 374.0), Vector2(266.0, 398.0),
-		Vector2(274.0, 458.0), Vector2(292.0, 466.0), Vector2(324.0, 478.0), Vector2(338.0, 518.0),
-		Vector2(340.0, 588.0), Vector2(330.0, 650.0), Vector2(298.0, 660.0), Vector2(92.0, 660.0),
-	]), 2)
+	var silhouette: PackedVector2Array = car_shapes["silhouette"]
 	draw_colored_polygon(silhouette, car_color)
 	_draw_closed_outline(silhouette, outline, 5.0)
 
-	var bumper := _smooth_polygon(PackedVector2Array([
-		Vector2(64.0, 612.0), Vector2(326.0, 612.0), Vector2(330.0, 632.0), Vector2(322.0, 652.0),
-		Vector2(296.0, 658.0), Vector2(94.0, 658.0), Vector2(68.0, 652.0), Vector2(60.0, 632.0),
-	]), 2)
+	var bumper: PackedVector2Array = car_shapes["bumper"]
 	draw_colored_polygon(bumper, Color("#e7eef2"))
 	_draw_closed_outline(bumper, outline, 4.0)
 
 	var mirror_color := car_color.darkened(0.12)
-	var left_mirror := _smooth_polygon(PackedVector2Array([
-		Vector2(96.0, 460.0), Vector2(74.0, 452.0), Vector2(64.0, 462.0), Vector2(72.0, 478.0), Vector2(98.0, 478.0),
-	]), 2)
-	var right_mirror := _smooth_polygon(PackedVector2Array([
-		Vector2(294.0, 460.0), Vector2(316.0, 452.0), Vector2(326.0, 462.0), Vector2(318.0, 478.0), Vector2(292.0, 478.0),
-	]), 2)
+	var left_mirror: PackedVector2Array = car_shapes["left_mirror"]
+	var right_mirror: PackedVector2Array = car_shapes["right_mirror"]
 	draw_colored_polygon(left_mirror, mirror_color)
 	_draw_closed_outline(left_mirror, outline, 3.0)
 	draw_colored_polygon(right_mirror, mirror_color)
 	_draw_closed_outline(right_mirror, outline, 3.0)
 
-	var windshield := _smooth_polygon(PackedVector2Array([
-		Vector2(142.0, 386.0), Vector2(248.0, 386.0), Vector2(262.0, 444.0), Vector2(254.0, 458.0),
-		Vector2(136.0, 458.0), Vector2(128.0, 444.0),
-	]), 2)
+	var windshield: PackedVector2Array = car_shapes["windshield"]
 	draw_colored_polygon(windshield, Color("#cfeeff"))
 	_draw_closed_outline(windshield, outline, 4.0)
 	draw_colored_polygon(PackedVector2Array([
