@@ -947,9 +947,10 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		best_combo = max(best_combo, combo_count)
 		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
 	_spawn_removal_burst(burst_center, burst_radius)
-	_play_removal_sound()
-	if OS.has_feature("mobile"):
-		Input.vibrate_handheld(28)
+	if not completed:
+		_play_removal_sound()
+		if OS.has_feature("mobile"):
+			Input.vibrate_handheld(28)
 
 
 func _spawn_removal_burst(center: Vector2, radius: float) -> void:
