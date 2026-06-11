@@ -60,7 +60,7 @@ func _run() -> void:
 	node.set("selected_tool", "water")
 	node.set("pointer_position", Vector2(195.0, 520.0))
 	for patch in node.get("dirt_patches"):
-		if Vector2(patch.get("position")).distance_to(Vector2(195.0, 520.0)) < 120.0:
+		if patch.get("position").distance_to(Vector2(195.0, 520.0)) < 120.0:
 			patch.set("health", 1.0)
 	node.set("is_washing", true)
 	await _settle(10)
