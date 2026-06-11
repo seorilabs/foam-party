@@ -1622,7 +1622,7 @@ func _draw_completion_panel() -> void:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 88.0), "반짝반짝 완료!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
-	var minutes := int(level_time) / 60
+	var minutes := int(level_time / 60.0)
 	var seconds := int(level_time) % 60
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 114.0), "차량 %02d · %02d:%02d · 최고 콤보 x%d" % [level_index, minutes, seconds, best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 15, Color("#2c6b78"))
 
