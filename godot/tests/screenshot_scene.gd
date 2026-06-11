@@ -53,8 +53,9 @@ func _run() -> void:
 			quit(1)
 			return
 
-	node.set("completed", true)
-	await _settle(10)
+	for patch in node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	await _settle(12)
 	if not await _capture(out_dir + "/shot_complete.png"):
 		quit(1)
 		return
