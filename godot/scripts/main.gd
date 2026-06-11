@@ -940,10 +940,11 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 	patch.soap = 0.0
 	patch.wetness = 0.0
 	patch.looseness = 1.0
-	combo_count += 1
-	combo_timer = COMBO_WINDOW
-	best_combo = max(best_combo, combo_count)
-	combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
+	if not completed:
+		combo_count += 1
+		combo_timer = COMBO_WINDOW
+		best_combo = max(best_combo, combo_count)
+		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
 	_spawn_removal_burst(burst_center, burst_radius)
 	_play_removal_sound()
 	if audio_playback_enabled:
