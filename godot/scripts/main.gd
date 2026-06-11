@@ -65,6 +65,7 @@ var selected_tool: String = TOOL_WATER
 var dirt_patches: Array = []
 var particles: Array = []
 var rng := RandomNumberGenerator.new()
+var sfx_rng := RandomNumberGenerator.new()
 var is_washing := false
 var pointer_position := Vector2.ZERO
 var clean_progress := 0.0
@@ -108,6 +109,7 @@ var removal_sfx_player: AudioStreamPlayer
 
 func _ready() -> void:
 	rng.seed = 42690
+	sfx_rng.seed = 8808
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_setup_font()
 	_build_car_shapes()
@@ -256,7 +258,7 @@ func _play_removal_sound() -> void:
 		return
 	removal_sfx_player.stop()
 	removal_sfx_player.stream = removal_stream
-	removal_sfx_player.pitch_scale = rng.randf_range(0.9, 1.15)
+	removal_sfx_player.pitch_scale = sfx_rng.randf_range(0.9, 1.15)
 	removal_sfx_player.play()
 
 
