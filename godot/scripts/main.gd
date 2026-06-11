@@ -19,6 +19,15 @@ const STATE_LOOSENED := "loosened"
 const STATE_RUNOFF := "runoff"
 const STATE_FLYING := "flying"
 const STATE_REMOVED := "removed"
+const STYLE_DROPLET := "droplet"
+const STYLE_RING := "ring"
+const STYLE_MIST := "mist"
+const STYLE_STREAK := "streak"
+const STYLE_SWIRL := "swirl"
+const STYLE_BUBBLE := "bubble"
+const STYLE_FOAM := "foam"
+const STYLE_SPARKLE := "sparkle"
+const STYLE_CONFETTI := "confetti"
 
 class DirtPatch:
 	var kind: String
@@ -898,12 +907,12 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 	for index in range(4):
 		var angle := rng.randf_range(0.0, TAU)
 		var offset := Vector2.from_angle(angle) * radius * rng.randf_range(0.2, 0.9)
-		var sparkle := WashParticle.new(center + offset, Vector2(0.0, rng.randf_range(-26.0, -8.0)), rng.randf_range(0.4, 0.75), rng.randf_range(3.5, 6.5), Color(1.0, 1.0, 1.0, 0.95), "sparkle")
+		var sparkle := WashParticle.new(center + offset, Vector2(0.0, rng.randf_range(-26.0, -8.0)), rng.randf_range(0.4, 0.75), rng.randf_range(3.5, 6.5), Color(1.0, 1.0, 1.0, 0.95), STYLE_SPARKLE)
 		particles.append(sparkle)
 	for index in range(5):
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(40.0, 120.0)
-		var bubble := WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.3, 0.6), rng.randf_range(2.5, 5.5), Color(0.85, 0.96, 1.0, 0.85), "bubble")
+		var bubble := WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.3, 0.6), rng.randf_range(2.5, 5.5), Color(0.85, 0.96, 1.0, 0.85), STYLE_BUBBLE)
 		particles.append(bubble)
 
 
@@ -946,10 +955,10 @@ func _spawn_water_particles(point: Vector2) -> void:
 		var speed := rng.randf_range(60.0, 170.0)
 		var velocity := Vector2.from_angle(angle) * speed
 		var jitter := Vector2(rng.randf_range(-8.0, 8.0), rng.randf_range(-6.0, 6.0))
-		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.3, 0.6), rng.randf_range(2.0, 4.5), Color("#89d8ff"), "droplet"))
-	particles.append(WashParticle.new(point, Vector2.ZERO, 0.28, 6.0, Color(1.0, 1.0, 1.0, 0.5), "ring"))
+		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.3, 0.6), rng.randf_range(2.0, 4.5), Color("#89d8ff"), STYLE_DROPLET))
+	particles.append(WashParticle.new(point, Vector2.ZERO, 0.28, 6.0, Color(1.0, 1.0, 1.0, 0.5), STYLE_RING))
 	if rng.randf() < 0.5:
-		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-12.0, 12.0), -6.0), Vector2(0.0, -16.0), rng.randf_range(0.4, 0.7), rng.randf_range(8.0, 14.0), Color(1.0, 1.0, 1.0, 0.22), "mist"))
+		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-12.0, 12.0), -6.0), Vector2(0.0, -16.0), rng.randf_range(0.4, 0.7), rng.randf_range(8.0, 14.0), Color(1.0, 1.0, 1.0, 0.22), STYLE_MIST))
 
 
 func _spawn_air_particles(point: Vector2) -> void:
@@ -958,9 +967,9 @@ func _spawn_air_particles(point: Vector2) -> void:
 		var speed := rng.randf_range(120.0, 230.0)
 		var velocity := Vector2.from_angle(angle) * speed + Vector2(0.0, rng.randf_range(-36.0, -8.0))
 		var jitter := Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-14.0, 14.0))
-		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.2, 0.45), rng.randf_range(7.0, 13.0), Color(1.0, 1.0, 1.0, 0.55), "streak"))
+		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.2, 0.45), rng.randf_range(7.0, 13.0), Color(1.0, 1.0, 1.0, 0.55), STYLE_STREAK))
 	if rng.randf() < 0.6:
-		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-16.0, 16.0)), Vector2(rng.randf_range(-50.0, 50.0), rng.randf_range(-60.0, -20.0)), rng.randf_range(0.35, 0.6), rng.randf_range(6.0, 11.0), Color(1.0, 1.0, 1.0, 0.4), "swirl"))
+		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-16.0, 16.0)), Vector2(rng.randf_range(-50.0, 50.0), rng.randf_range(-60.0, -20.0)), rng.randf_range(0.35, 0.6), rng.randf_range(6.0, 11.0), Color(1.0, 1.0, 1.0, 0.4), STYLE_SWIRL))
 
 
 func _spawn_soap_particles(point: Vector2) -> void:
@@ -968,15 +977,15 @@ func _spawn_soap_particles(point: Vector2) -> void:
 		var jitter := Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-14.0, 14.0))
 		var velocity := Vector2(rng.randf_range(-22.0, 22.0), rng.randf_range(-46.0, -14.0))
 		var tint := Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85)
-		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.5, 1.0), rng.randf_range(3.0, 8.0), tint, "bubble"))
+		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.5, 1.0), rng.randf_range(3.0, 8.0), tint, STYLE_BUBBLE))
 
 
 func _spawn_sponge_particles(point: Vector2) -> void:
 	for index in range(3):
 		var jitter := Vector2(rng.randf_range(-18.0, 18.0), rng.randf_range(-10.0, 14.0))
-		particles.append(WashParticle.new(point + jitter, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-8.0, 4.0)), rng.randf_range(0.4, 0.8), rng.randf_range(5.0, 10.0), Color(1.0, 1.0, 1.0, 0.7), "foam"))
+		particles.append(WashParticle.new(point + jitter, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-8.0, 4.0)), rng.randf_range(0.4, 0.8), rng.randf_range(5.0, 10.0), Color(1.0, 1.0, 1.0, 0.7), STYLE_FOAM))
 	if rng.randf() < 0.7:
-		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-12.0, 8.0)), Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-36.0, -12.0)), rng.randf_range(0.4, 0.8), rng.randf_range(2.5, 5.0), Color(0.95, 1.0, 1.0, 0.8), "bubble"))
+		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-12.0, 8.0)), Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-36.0, -12.0)), rng.randf_range(0.4, 0.8), rng.randf_range(2.5, 5.0), Color(0.95, 1.0, 1.0, 0.8), STYLE_BUBBLE))
 
 
 func _update_particles(delta: float) -> void:
@@ -984,16 +993,16 @@ func _update_particles(delta: float) -> void:
 		var particle := particles[index] as WashParticle
 		particle.ttl -= delta
 		particle.position += particle.velocity * delta
-		if particle.style == "droplet":
+		if particle.style == STYLE_DROPLET:
 			particle.velocity.y += 320.0 * delta
-		elif particle.style == "ring" or particle.style == "mist":
-			particle.radius += delta * (60.0 if particle.style == "ring" else 24.0)
-		elif particle.style == "bubble":
+		elif particle.style == STYLE_RING or particle.style == STYLE_MIST:
+			particle.radius += delta * (60.0 if particle.style == STYLE_RING else 24.0)
+		elif particle.style == STYLE_BUBBLE:
 			particle.velocity *= 0.97
 			particle.position.x += sin(particle.ttl * 7.0) * 14.0 * delta
-		elif particle.style == "swirl":
+		elif particle.style == STYLE_SWIRL:
 			particle.velocity *= 0.94
-		elif particle.style == "sparkle":
+		elif particle.style == STYLE_SPARKLE:
 			particle.velocity *= 0.95
 		else:
 			particle.velocity *= 0.92
@@ -1024,7 +1033,7 @@ func _spawn_completion_burst() -> void:
 		var angle := rng.randf_range(-PI, 0.0)
 		var speed := rng.randf_range(70.0, 230.0)
 		var color := Color.from_hsv(rng.randf(), 0.55, 1.0, 0.95)
-		var particle := WashParticle.new(Vector2(rng.randf_range(70.0, 330.0), rng.randf_range(300.0, 620.0)), Vector2.from_angle(angle) * speed, rng.randf_range(0.7, 1.6), rng.randf_range(3.0, 7.0), color, "confetti")
+		var particle := WashParticle.new(Vector2(rng.randf_range(70.0, 330.0), rng.randf_range(300.0, 620.0)), Vector2.from_angle(angle) * speed, rng.randf_range(0.7, 1.6), rng.randf_range(3.0, 7.0), color, STYLE_CONFETTI)
 		particles.append(particle)
 
 
@@ -1324,32 +1333,32 @@ func _draw_particles() -> void:
 		var alpha: float = clamp(particle.ttl * 1.7, 0.0, 1.0)
 		var color: Color = particle.color
 		color.a *= alpha
-		if particle.style == "droplet":
+		if particle.style == STYLE_DROPLET:
 			var direction := particle.velocity.normalized()
 			draw_line(particle.position, particle.position - direction * particle.radius * 3.0, color, max(2.0, particle.radius * 0.8))
 			draw_circle(particle.position, particle.radius * 0.6, color)
-		elif particle.style == "ring":
+		elif particle.style == STYLE_RING:
 			draw_arc(particle.position, particle.radius, 0.0, TAU, 22, color, 2.5)
-		elif particle.style == "mist":
+		elif particle.style == STYLE_MIST:
 			draw_circle(particle.position, particle.radius, color)
-		elif particle.style == "streak":
+		elif particle.style == STYLE_STREAK:
 			var direction := particle.velocity.normalized()
 			if direction.length() < 0.1:
 				direction = Vector2.RIGHT
 			draw_line(particle.position, particle.position - direction * particle.radius * 2.4, color, 2.5)
-		elif particle.style == "swirl":
+		elif particle.style == STYLE_SWIRL:
 			draw_arc(particle.position, particle.radius, particle.ttl * 5.0, particle.ttl * 5.0 + 3.6, 14, color, 2.0)
-		elif particle.style == "bubble":
+		elif particle.style == STYLE_BUBBLE:
 			draw_circle(particle.position, particle.radius, Color(color.r, color.g, color.b, color.a * 0.45))
 			draw_arc(particle.position, particle.radius, 0.0, TAU, 16, color, 1.5)
 			draw_circle(particle.position + Vector2(-particle.radius * 0.3, -particle.radius * 0.3), particle.radius * 0.25, Color(1.0, 1.0, 1.0, color.a))
-		elif particle.style == "foam":
+		elif particle.style == STYLE_FOAM:
 			draw_circle(particle.position, particle.radius, color)
 			draw_circle(particle.position + Vector2(particle.radius * 0.6, particle.radius * 0.2), particle.radius * 0.7, Color(color.r, color.g, color.b, color.a * 0.8))
 			draw_circle(particle.position + Vector2(-particle.radius * 0.55, particle.radius * 0.25), particle.radius * 0.6, Color(color.r, color.g, color.b, color.a * 0.8))
-		elif particle.style == "sparkle":
+		elif particle.style == STYLE_SPARKLE:
 			_draw_sparkle(particle.position, particle.radius, color)
-		elif particle.style == "confetti":
+		elif particle.style == STYLE_CONFETTI:
 			draw_rect(Rect2(particle.position, Vector2(particle.radius * 1.5, particle.radius)), color)
 		else:
 			draw_circle(particle.position, particle.radius, color)
