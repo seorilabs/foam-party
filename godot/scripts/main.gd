@@ -9,6 +9,10 @@ const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug"]
 const CLEAN_DAMAGE_RATE := 72.0
 const AUDIO_MIX_RATE := 22050
 const POP_NOTES := [523.25, 659.25, 783.99, 880.0, 1046.5]
+const COMBO_WINDOW := 2.5
+const STAR3_TIME := 75.0
+const STAR3_COMBO := 4
+const STAR2_TIME := 140.0
 const GAMEPLAY_SCALE := 1.16
 const GAMEPLAY_PIVOT := Vector2(195.0, 545.0)
 const GAMEPLAY_OFFSET := Vector2(0.0, 0.0)
@@ -82,6 +86,12 @@ var initial_dirt_total := 1.0
 var level_index := 1
 var completed := false
 var completion_burst_done := false
+var combo_count := 0
+var combo_timer := 0.0
+var best_combo := 0
+var level_time := 0.0
+var earned_stars := 0
+var combo_pop_time := -10.0
 var last_particle_spawn := 0.0
 var car_color := Color("#ffcf5a")
 var canvas_origin := Vector2.ZERO
@@ -127,6 +137,13 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if not completed:
+		level_time += delta
+		if combo_timer > 0.0:
+			combo_timer -= delta
+			if combo_timer <= 0.0:
+				combo_count = 0
+
 	if is_washing and not completed:
 		_apply_tool_at(pointer_position, delta)
 
@@ -267,7 +284,8 @@ func _play_removal_sound() -> void:
 		return
 	removal_sfx_player.stop()
 	removal_sfx_player.stream = removal_stream
-	removal_sfx_player.pitch_scale = sfx_rng.randf_range(0.9, 1.15)
+	var combo_pitch: float = 0.92 + 0.05 * float(min(combo_count, 9))
+	removal_sfx_player.pitch_scale = combo_pitch + sfx_rng.randf_range(-0.02, 0.02)
 	removal_sfx_player.play()
 
 
@@ -520,6 +538,7 @@ func _draw() -> void:
 	_draw_dirt()
 	_draw_particles()
 	_draw_tool_cursor()
+	_draw_combo_badge()
 	_draw_toolbar()
 	_draw_completion_panel()
 
@@ -531,6 +550,12 @@ func reset_game(new_level: int) -> void:
 	completed = false
 	completion_burst_done = false
 	is_washing = false
+	combo_count = 0
+	combo_timer = 0.0
+	best_combo = 0
+	level_time = 0.0
+	earned_stars = 0
+	combo_pop_time = -10.0
 	_stop_tool_loop()
 	particles.clear()
 	_set_car_palette()
@@ -553,6 +578,22 @@ func get_selected_tool_label_for_test() -> String:
 
 func get_audio_stream_count_for_test() -> int:
 	return tool_audio_streams.size()
+
+
+func get_combo_for_test() -> int:
+	return combo_count
+
+
+func get_best_combo_for_test() -> int:
+	return best_combo
+
+
+func get_level_time_for_test() -> float:
+	return level_time
+
+
+func calc_stars_for_test() -> int:
+	return _calc_stars()
 
 
 func get_patch_index_by_kind_for_test(kind: String) -> int:
@@ -899,8 +940,14 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 	patch.soap = 0.0
 	patch.wetness = 0.0
 	patch.looseness = 1.0
+	combo_count += 1
+	combo_timer = COMBO_WINDOW
+	best_combo = max(best_combo, combo_count)
+	combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
 	_spawn_removal_burst(burst_center, burst_radius)
 	_play_removal_sound()
+	if audio_playback_enabled:
+		Input.vibrate_handheld(28)
 
 
 func _spawn_removal_burst(center: Vector2, radius: float) -> void:
@@ -1020,9 +1067,18 @@ func _update_clean_progress() -> void:
 	if clean_progress >= 0.985 and not completed:
 		completed = true
 		is_washing = false
+		earned_stars = _calc_stars()
 		_stop_tool_loop()
 		_play_completion_sound()
 		_spawn_completion_burst()
+
+
+func _calc_stars() -> int:
+	if level_time <= STAR3_TIME and best_combo >= STAR3_COMBO:
+		return 3
+	if level_time <= STAR2_TIME:
+		return 2
+	return 1
 
 
 func _spawn_completion_burst() -> void:
@@ -1484,6 +1540,20 @@ func _rotated_rect_points(center: Vector2, half: Vector2, angle: float) -> Packe
 	])
 
 
+func _draw_combo_badge() -> void:
+	if completed or combo_count < 2:
+		return
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var pop: float = 1.0 + 0.35 * exp(-(time_now - combo_pop_time) * 6.0)
+	var badge_size := Vector2(118.0, 36.0) * pop
+	var badge := Rect2(Vector2(195.0, 134.0) - badge_size * 0.5, badge_size)
+	var is_hot := combo_count >= STAR3_COMBO
+	var style_key := "combo_hot" if is_hot else "combo_cool"
+	var bg := Color("#ffce3d") if is_hot else Color(0.97, 0.99, 1.0, 0.95)
+	draw_style_box(_style(style_key, bg, 18.0), badge)
+	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "콤보 x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
+
+
 func _draw_toolbar() -> void:
 	var font: Font = _font()
 	draw_style_box(_style("toolbar", Color(0.04, 0.16, 0.22, 0.96), 24.0), Rect2(-24.0, 744.0, DESIGN_SIZE.x + 48.0, 124.0))
@@ -1543,11 +1613,16 @@ func _draw_completion_panel() -> void:
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
 	for index in range(3):
 		var star_center := Vector2(145.0 + float(index) * 50.0, panel.position.y + 44.0)
-		var pulse := 1.0 + sin(time_now * 4.0 + float(index) * 0.9) * 0.08
-		_draw_star(star_center, 17.0 * pulse, Color("#ffce3d"), Color("#e0a818"))
+		if index < earned_stars:
+			var pulse := 1.0 + sin(time_now * 4.0 + float(index) * 0.9) * 0.08
+			_draw_star(star_center, 17.0 * pulse, Color("#ffce3d"), Color("#e0a818"))
+		else:
+			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 88.0), "반짝반짝 완료!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 114.0), "차량 %02d 세차 완료" % level_index, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 15, Color("#2c6b78"))
+	var minutes := int(level_time) / 60
+	var seconds := int(level_time) % 60
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 114.0), "차량 %02d · %02d:%02d · 최고 콤보 x%d" % [level_index, minutes, seconds, best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 15, Color("#2c6b78"))
 
 	var next_rect := _get_next_rect()
 	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))

@@ -81,7 +81,20 @@ func _run_smoke() -> void:
 		_fail("rinsing soaped oil did not clean enough")
 		return
 
-	print("Foam Party smoke passed: patches=%d progress=%.3f" % [patch_count, progress_after])
+	var best_combo: int = root_node.call("get_best_combo_for_test")
+	if best_combo < 1:
+		_fail("removals did not register a combo")
+		return
+	var stars: int = root_node.call("calc_stars_for_test")
+	if stars < 1 or stars > 3:
+		_fail("star rating out of range")
+		return
+	root_node.call("reset_game", 2)
+	if int(root_node.call("get_combo_for_test")) != 0 or float(root_node.call("get_level_time_for_test")) != 0.0:
+		_fail("reset did not clear combo state")
+		return
+
+	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])
 	get_root().remove_child(root_node)
 	root_node.free()
 	await process_frame
