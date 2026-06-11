@@ -52,6 +52,7 @@ func _run() -> void:
 		await _settle(25)
 		var tool_saved: bool = await _capture(out_dir.path_join("shot_%s.png" % tool_id))
 		node.set("is_washing", false)
+		node.get("particles").clear()
 		if not tool_saved:
 			quit(1)
 			return
