@@ -142,6 +142,7 @@ func _process(delta: float) -> void:
 		if combo_timer > 0.0:
 			combo_timer -= delta
 			if combo_timer <= 0.0:
+				combo_timer = 0.0
 				combo_count = 0
 
 	if is_washing and not completed:
@@ -947,7 +948,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
 	_spawn_removal_burst(burst_center, burst_radius)
 	_play_removal_sound()
-	if audio_playback_enabled:
+	if OS.has_feature("mobile"):
 		Input.vibrate_handheld(28)
 
 
