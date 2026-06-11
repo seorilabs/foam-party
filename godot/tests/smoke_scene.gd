@@ -20,7 +20,7 @@ func _run_smoke() -> void:
 		return
 	for method_name in ["get_combo_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test"]:
 		if not root_node.has_method(method_name):
-			_fail("combo/star test API missing: " + method_name)
+			_fail("test helper API missing: " + method_name)
 			return
 
 	var patch_count: int = root_node.call("get_patch_count_for_test")
