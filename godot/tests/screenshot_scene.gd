@@ -57,6 +57,20 @@ func _run() -> void:
 			quit(1)
 			return
 
+	node.set("selected_tool", "water")
+	node.set("pointer_position", Vector2(195.0, 520.0))
+	for patch in node.get("dirt_patches"):
+		if patch.get("position").distance_to(Vector2(195.0, 520.0)) < 120.0:
+			patch.set("health", 1.0)
+	node.set("is_washing", true)
+	await _settle(10)
+	var combo_saved: bool = await _capture(out_dir.path_join("shot_combo.png"))
+	node.set("is_washing", false)
+	node.get("particles").clear()
+	if not combo_saved:
+		quit(1)
+		return
+
 	for patch in node.get("dirt_patches"):
 		patch.set("health", 0.0)
 	await _settle(12)

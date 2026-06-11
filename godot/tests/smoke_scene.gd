@@ -18,6 +18,10 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
+	for method_name in ["get_combo_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test"]:
+		if not root_node.has_method(method_name):
+			_fail("combo/star test API missing: " + method_name)
+			return
 
 	var patch_count: int = root_node.call("get_patch_count_for_test")
 	if patch_count < 20:
@@ -81,7 +85,46 @@ func _run_smoke() -> void:
 		_fail("rinsing soaped oil did not clean enough")
 		return
 
-	print("Foam Party smoke passed: patches=%d progress=%.3f" % [patch_count, progress_after])
+	var best_combo: int = root_node.call("get_best_combo_for_test")
+	if best_combo < 1:
+		_fail("removals did not register a combo")
+		return
+	var stars: int = root_node.call("calc_stars_for_test")
+	if stars < 1 or stars > 3:
+		_fail("star rating out of range")
+		return
+
+	root_node.set("combo_count", 3)
+	root_node.set("combo_timer", 0.0001)
+	await process_frame
+	if int(root_node.call("get_combo_for_test")) != 0:
+		_fail("combo did not reset after window expired")
+		return
+	if float(root_node.get("combo_timer")) < 0.0:
+		_fail("combo timer went negative")
+		return
+
+	root_node.set("level_time", 60.0)
+	root_node.set("best_combo", 5)
+	if int(root_node.call("calc_stars_for_test")) != 3:
+		_fail("expected 3 stars for fast clear with combo")
+		return
+	root_node.set("best_combo", 2)
+	if int(root_node.call("calc_stars_for_test")) != 2:
+		_fail("expected 2 stars when combo threshold is missed")
+		return
+	root_node.set("level_time", 200.0)
+	root_node.set("best_combo", 10)
+	if int(root_node.call("calc_stars_for_test")) != 1:
+		_fail("expected 1 star for slow clear")
+		return
+
+	root_node.call("reset_game", 2)
+	if int(root_node.call("get_combo_for_test")) != 0 or float(root_node.call("get_level_time_for_test")) != 0.0:
+		_fail("reset did not clear combo state")
+		return
+
+	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])
 	get_root().remove_child(root_node)
 	root_node.free()
 	await process_frame
