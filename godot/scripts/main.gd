@@ -226,6 +226,11 @@ func _process(delta: float) -> void:
 	_update_particles(delta)
 	_update_clean_progress()
 	_update_audio()
+	# Per-frame redraw drives all animation (dirt, particles, combo/tool pulses,
+	# hint fade). The coaching glow pulses via sin(time), so keep redrawing while
+	# a hint is active even if the unconditional redraw below is ever made lazy.
+	if _active_hint_tool() != "":
+		queue_redraw()
 	queue_redraw()
 
 
