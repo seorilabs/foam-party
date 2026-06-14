@@ -220,9 +220,15 @@ func _run_smoke() -> void:
 	if String(root_node.call("simulate_patch_hint_for_test", "water", hint_leaf, 0.6)) != "air":
 		_fail("rubbing the wrong tool on leaf should surface an air hint")
 		return
+	if String(root_node.call("get_active_hint_tool_for_test")) != "air":
+		_fail("active hint tool should report air while coaching")
+		return
 	root_node.call("simulate_patch_hint_for_test", "air", hint_leaf, 0.1)
 	if float(root_node.call("get_patch_hint_time_for_test", hint_leaf)) > 0.0:
 		_fail("switching to the correct tool should clear the hint")
+		return
+	if String(root_node.call("get_active_hint_tool_for_test")) != "":
+		_fail("active hint tool should clear once the hint is gone")
 		return
 	if String(root_node.call("get_recommended_tool_for_test", hint_oil)) != "soap":
 		_fail("dry oil should recommend soap first")
