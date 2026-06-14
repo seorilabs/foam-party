@@ -100,6 +100,31 @@ func _run_smoke() -> void:
 		_fail("rinsing soaped oil did not clean enough")
 		return
 
+	# Contextual tool guidance: recommend the correct tool when the wrong one is used.
+	var mud_guidance_index: int = root_node.call("get_patch_index_by_kind_for_test", "mud")
+	if mud_guidance_index >= 0:
+		if String(root_node.call("get_recommended_tool_for_test", mud_guidance_index)) != "water":
+			_fail("mud should recommend the water tool")
+			return
+		if bool(root_node.call("is_tool_effective_for_test", "air", mud_guidance_index)):
+			_fail("air should be flagged ineffective on mud")
+			return
+		if not bool(root_node.call("is_tool_effective_for_test", "water", mud_guidance_index)):
+			_fail("water should be flagged effective on mud")
+			return
+	var bug_guidance_index: int = root_node.call("get_patch_index_by_kind_for_test", "bug")
+	if bug_guidance_index >= 0:
+		if String(root_node.call("get_recommended_tool_for_test", bug_guidance_index)) != "soap":
+			_fail("fresh bug stain should recommend soap first")
+			return
+		if bool(root_node.call("is_tool_effective_for_test", "sponge", bug_guidance_index)):
+			_fail("sponge should be ineffective on an un-soaped bug stain")
+			return
+		root_node.call("apply_tool_to_patch_for_test", "soap", bug_guidance_index, 0.8)
+		if String(root_node.call("get_recommended_tool_for_test", bug_guidance_index)) != "sponge":
+			_fail("soaked bug stain should recommend the sponge next")
+			return
+
 	var best_combo: int = root_node.call("get_best_combo_for_test")
 	if best_combo < 1:
 		_fail("removals did not register a combo")

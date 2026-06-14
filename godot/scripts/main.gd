@@ -106,6 +106,9 @@ var tutorial_seen := false
 var show_tutorial := false
 var persistence_enabled := true
 var last_particle_spawn := 0.0
+var guidance_tool := ""
+var guidance_kind := ""
+var guidance_timer := 0.0
 var car_color := Color("#ffcf5a")
 var car_type := "compact"
 var car_type_labels := {
@@ -206,6 +209,7 @@ func _process(delta: float) -> void:
 	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial:
 		_apply_tool_at(pointer_position, delta)
 
+	_update_guidance(delta)
 	_update_dirt_motion(delta)
 	_update_particles(delta)
 	_update_clean_progress()
@@ -603,6 +607,7 @@ func _draw() -> void:
 		_draw_title_screen()
 	else:
 		_draw_tool_cursor()
+		_draw_guidance()
 		_draw_combo_badge()
 		_draw_bomb_button()
 		_draw_toolbar()
@@ -625,6 +630,9 @@ func reset_game(new_level: int) -> void:
 	level_time = 0.0
 	earned_stars = 0
 	combo_pop_time = -10.0
+	guidance_tool = ""
+	guidance_kind = ""
+	guidance_timer = 0.0
 	_stop_tool_loop()
 	particles.clear()
 	_set_car_palette()
@@ -690,6 +698,18 @@ func get_patch_state_for_test(patch_index: int) -> String:
 		return ""
 	var patch := dirt_patches[patch_index] as DirtPatch
 	return patch.state
+
+
+func get_recommended_tool_for_test(patch_index: int) -> String:
+	if patch_index < 0 or patch_index >= dirt_patches.size():
+		return ""
+	return _recommended_tool_for(dirt_patches[patch_index] as DirtPatch)
+
+
+func is_tool_effective_for_test(tool_id: String, patch_index: int) -> bool:
+	if patch_index < 0 or patch_index >= dirt_patches.size():
+		return false
+	return _tool_is_effective(tool_id, dirt_patches[patch_index] as DirtPatch)
 
 
 func get_patch_health_for_test(patch_index: int) -> float:
@@ -1330,6 +1350,91 @@ func _tool_hint() -> String:
 	return ""
 
 
+func _tool_is_effective(tool_id: String, patch: DirtPatch) -> bool:
+	match patch.kind:
+		"leaf":
+			return tool_id == TOOL_AIR
+		"dust":
+			return tool_id == TOOL_AIR or tool_id == TOOL_WATER
+		"mud":
+			if tool_id == TOOL_WATER:
+				return true
+			if tool_id == TOOL_SPONGE:
+				return patch.wetness > 0.2 or patch.soap > 0.15
+			return false
+		"oil", "bug":
+			var prepared: bool = patch.soap > 0.25 or patch.looseness > 0.35
+			if tool_id == TOOL_SOAP:
+				return not prepared
+			if tool_id == TOOL_SPONGE:
+				return prepared
+			if tool_id == TOOL_WATER:
+				return patch.soap * (0.75 + patch.looseness) > 0.25
+			return false
+	return false
+
+
+func _recommended_tool_for(patch: DirtPatch) -> String:
+	match patch.kind:
+		"leaf":
+			return TOOL_AIR
+		"dust":
+			return TOOL_AIR
+		"mud":
+			return TOOL_WATER
+		"oil", "bug":
+			var prepared: bool = patch.soap > 0.25 or patch.looseness > 0.35
+			return TOOL_SPONGE if prepared else TOOL_SOAP
+	return TOOL_WATER
+
+
+func _guidance_text(tool_id: String, kind: String) -> String:
+	match tool_id:
+		TOOL_AIR:
+			return "바람으로 날려요"
+		TOOL_WATER:
+			return "고압수로 헹궈요" if (kind == "oil" or kind == "bug") else "고압수로 씻어요"
+		TOOL_SOAP:
+			return "비누로 불려요"
+		TOOL_SPONGE:
+			return "스펀지로 닦아요"
+	return ""
+
+
+func _nearest_patch_under_pointer() -> DirtPatch:
+	var tool_radius := _tool_radius(selected_tool)
+	var best: DirtPatch = null
+	var best_dist := INF
+	for raw_patch in dirt_patches:
+		var patch := raw_patch as DirtPatch
+		if _is_patch_removed(patch) or patch.state == STATE_FLYING:
+			continue
+		var distance := pointer_position.distance_to(_patch_center(patch))
+		if distance <= tool_radius + patch.radius and distance < best_dist:
+			best_dist = distance
+			best = patch
+	return best
+
+
+func _update_guidance(delta: float) -> void:
+	var target_tool := ""
+	var target_kind := ""
+	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial:
+		var patch := _nearest_patch_under_pointer()
+		if patch != null and not _tool_is_effective(selected_tool, patch):
+			target_tool = _recommended_tool_for(patch)
+			target_kind = patch.kind
+	if target_tool != "":
+		guidance_tool = target_tool
+		guidance_kind = target_kind
+		guidance_timer = min(guidance_timer + delta, 1.2)
+	else:
+		guidance_timer = max(guidance_timer - delta * 3.0, 0.0)
+		if guidance_timer <= 0.0:
+			guidance_tool = ""
+			guidance_kind = ""
+
+
 func _build_car_shapes() -> void:
 	car_shapes["compact"] = {
 		"silhouette": _smooth_polygon(PackedVector2Array([
@@ -1753,6 +1858,30 @@ func _draw_tool_cursor() -> void:
 		_draw_foam_bottle(pointer_position, time_now, alpha_scale)
 	elif selected_tool == TOOL_SPONGE:
 		_draw_sponge_tool(pointer_position, time_now, alpha_scale)
+
+
+func _draw_guidance() -> void:
+	if completed or guidance_tool == "" or guidance_timer < 0.3:
+		return
+	var font: Font = _font()
+	var text := _guidance_text(guidance_tool, guidance_kind)
+	if text == "":
+		return
+	var tool_color: Color = tool_colors.get(guidance_tool, Color.WHITE)
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var bob := sin(time_now * 6.0) * 2.0
+	var width := 156.0
+	var height := 34.0
+	var anchor := pointer_position + Vector2(0.0, -_tool_radius(selected_tool) - 28.0 + bob)
+	anchor.x = clamp(anchor.x, width * 0.5 + 10.0, DESIGN_SIZE.x - width * 0.5 - 10.0)
+	anchor.y = clamp(anchor.y, 120.0, DESIGN_SIZE.y - 150.0)
+	var rect := Rect2(anchor - Vector2(width * 0.5, height * 0.5), Vector2(width, height))
+	draw_style_box(_style("guide_shadow", Color(0.03, 0.13, 0.19, 0.32), 16.0), Rect2(rect.position + Vector2(0.0, 2.0), rect.size))
+	draw_style_box(_style("guide_bubble_" + guidance_tool, Color(0.04, 0.16, 0.22, 0.94), 16.0, tool_color, 2), rect)
+	var dot := rect.position + Vector2(22.0, height * 0.5)
+	draw_circle(dot, 8.0, tool_color)
+	draw_circle(dot, 8.0, Color(1.0, 1.0, 1.0, 0.55), false, 1.5)
+	draw_string(font, Vector2(rect.position.x + 38.0, rect.position.y + 22.0), text, HORIZONTAL_ALIGNMENT_CENTER, width - 48.0, 13, Color(0.95, 0.99, 1.0))
 
 
 func _draw_dashed_ring(center: Vector2, radius: float, color: Color, time_now: float) -> void:
