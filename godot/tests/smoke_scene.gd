@@ -197,6 +197,72 @@ func _run_smoke() -> void:
 		_fail("foam bomb should soap oil patches")
 		return
 
+	# --- contextual "use this tool" hint ---
+	for hint_method in ["is_tool_misapplied_for_test", "get_recommended_tool_for_test", "get_patch_hint_time_for_test", "simulate_patch_hint_for_test"]:
+		if not root_node.has_method(hint_method):
+			_fail("hint helper API missing: " + hint_method)
+			return
+	root_node.call("reset_game", 3)
+	var hint_leaf: int = root_node.call("get_patch_index_by_kind_for_test", "leaf")
+	var hint_oil: int = root_node.call("get_patch_index_by_kind_for_test", "oil")
+	if hint_leaf < 0 or hint_oil < 0:
+		_fail("hint test patches missing")
+		return
+	if not bool(root_node.call("is_tool_misapplied_for_test", "water", hint_leaf)):
+		_fail("water on leaf should be flagged as the wrong tool")
+		return
+	if bool(root_node.call("is_tool_misapplied_for_test", "air", hint_leaf)):
+		_fail("air on leaf should not be flagged")
+		return
+	if String(root_node.call("get_recommended_tool_for_test", hint_leaf)) != "air":
+		_fail("leaf should recommend air")
+		return
+	if String(root_node.call("simulate_patch_hint_for_test", "water", hint_leaf, 0.6)) != "air":
+		_fail("rubbing the wrong tool on leaf should surface an air hint")
+		return
+	root_node.call("simulate_patch_hint_for_test", "air", hint_leaf, 0.1)
+	if float(root_node.call("get_patch_hint_time_for_test", hint_leaf)) > 0.0:
+		_fail("switching to the correct tool should clear the hint")
+		return
+	if String(root_node.call("get_recommended_tool_for_test", hint_oil)) != "soap":
+		_fail("dry oil should recommend soap first")
+		return
+	if not bool(root_node.call("is_tool_misapplied_for_test", "sponge", hint_oil)):
+		_fail("sponge on un-soaped oil should be flagged")
+		return
+	root_node.call("apply_tool_to_patch_for_test", "soap", hint_oil, 0.8)
+	if String(root_node.call("get_recommended_tool_for_test", hint_oil)) != "sponge":
+		_fail("soaped oil should recommend sponge")
+		return
+	if bool(root_node.call("is_tool_misapplied_for_test", "sponge", hint_oil)):
+		_fail("sponge on soaped oil should not be flagged")
+		return
+
+	# Dry mud should coach toward water when scrubbed straight with a sponge.
+	root_node.call("reset_game", 3)
+	var hint_mud: int = root_node.call("get_patch_index_by_kind_for_test", "mud")
+	if hint_mud < 0:
+		_fail("mud patch missing for hint test")
+		return
+	if not bool(root_node.call("is_tool_misapplied_for_test", "sponge", hint_mud)):
+		_fail("sponge on dry mud should be flagged")
+		return
+	if String(root_node.call("get_recommended_tool_for_test", hint_mud)) != "water":
+		_fail("dry mud should recommend water")
+		return
+	if bool(root_node.call("is_tool_misapplied_for_test", "water", hint_mud)):
+		_fail("water on mud should not be flagged")
+		return
+
+	# Brief stray touches must not accumulate into a hint (resist decays).
+	var hint_leaf2: int = root_node.call("get_patch_index_by_kind_for_test", "leaf")
+	if float(root_node.call("simulate_choppy_hint_for_test", "water", hint_leaf2, 0.15, 0.15, 3)) > 0.0:
+		_fail("short stray rubs should not surface a hint")
+		return
+	if String(root_node.call("simulate_patch_hint_for_test", "water", hint_leaf2, 0.6)) != "air":
+		_fail("sustained wrong rubbing should still surface the hint")
+		return
+
 	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])
 	get_root().remove_child(root_node)
 	root_node.free()
