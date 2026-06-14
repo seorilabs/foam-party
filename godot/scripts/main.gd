@@ -52,6 +52,9 @@ class DirtPatch:
 	var drift: Vector2 = Vector2.ZERO
 	var velocity: Vector2 = Vector2.ZERO
 	var state: String = "stuck"
+	var resist_time: float = 0.0
+	var hint_time: float = 0.0
+	var hint_tool: String = ""
 
 	func _init(new_kind: String, new_position: Vector2, new_radius: float, new_health: float, new_seed: float) -> void:
 		kind = new_kind
@@ -751,6 +754,37 @@ func apply_tool_to_patch_for_test(tool_id: String, patch_index: int, seconds: fl
 	return patch.health
 
 
+func get_patch_hint_time_for_test(patch_index: int) -> float:
+	if patch_index < 0 or patch_index >= dirt_patches.size():
+		return -1.0
+	return (dirt_patches[patch_index] as DirtPatch).hint_time
+
+
+func get_recommended_tool_for_test(patch_index: int) -> String:
+	if patch_index < 0 or patch_index >= dirt_patches.size():
+		return ""
+	return _recommended_tool(dirt_patches[patch_index] as DirtPatch)
+
+
+func is_tool_misapplied_for_test(tool_id: String, patch_index: int) -> bool:
+	if patch_index < 0 or patch_index >= dirt_patches.size():
+		return false
+	return _tool_misapplied(tool_id, dirt_patches[patch_index] as DirtPatch)
+
+
+func simulate_patch_hint_for_test(tool_id: String, patch_index: int, seconds: float) -> String:
+	if patch_index < 0 or patch_index >= dirt_patches.size():
+		return ""
+	var old_tool := selected_tool
+	selected_tool = tool_id
+	var patch: DirtPatch = dirt_patches[patch_index]
+	var steps: int = max(1, int(ceil(seconds * 30.0)))
+	for step_index in range(steps):
+		_update_patch_hint(patch, 1.0 / 30.0)
+	selected_tool = old_tool
+	return patch.hint_tool if patch.hint_time > 0.0 else ""
+
+
 func _update_canvas_transform() -> void:
 	var available_size := size
 	if available_size.x <= 0.0 or available_size.y <= 0.0:
@@ -952,17 +986,72 @@ func _spawn_dirt() -> void:
 func _apply_tool_at(point: Vector2, delta: float) -> void:
 	var tool_radius := _tool_radius(selected_tool)
 	var applied := false
+	var focus_patch: DirtPatch = null
+	var focus_distance := INF
 	for raw_patch in dirt_patches:
 		var patch := raw_patch as DirtPatch
 		if _is_patch_removed(patch) or patch.state == STATE_FLYING:
 			continue
-		var distance := point.distance_to(_patch_center(patch))
-		if distance <= tool_radius + patch.radius:
+		var center_distance := point.distance_to(_patch_center(patch))
+		if center_distance <= tool_radius + patch.radius:
 			_apply_tool_to_patch(patch, delta, point)
 			applied = true
+			if center_distance < focus_distance:
+				focus_distance = center_distance
+				focus_patch = patch
+
+	# Coach only the patch directly under the tool so at most one hint shows.
+	if focus_patch != null:
+		_update_patch_hint(focus_patch, delta)
 
 	if applied:
 		_spawn_tool_particles(point, delta)
+
+
+# Decides whether the current tool is the wrong choice for this patch right now.
+func _tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
+	match patch.kind:
+		"mud":
+			return tool_id == TOOL_AIR
+		"dust":
+			return tool_id == TOOL_SOAP
+		"leaf":
+			return tool_id != TOOL_AIR
+		"oil", "bug":
+			if tool_id == TOOL_AIR:
+				return true
+			var soaped: bool = patch.soap > 0.25 or patch.looseness > 0.35
+			if not soaped:
+				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
+			return false
+	return false
+
+
+# The tool the player should reach for next on this patch.
+func _recommended_tool(patch: DirtPatch) -> String:
+	match patch.kind:
+		"leaf":
+			return TOOL_AIR
+		"oil", "bug":
+			if patch.soap > 0.25 or patch.looseness > 0.35:
+				return TOOL_SPONGE
+			return TOOL_SOAP
+	return TOOL_WATER
+
+
+func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
+	if _is_patch_removed(patch) or patch.state == STATE_FLYING:
+		return
+	if patch.health / max(1.0, patch.max_health) < 0.12:
+		return
+	if _tool_misapplied(selected_tool, patch):
+		patch.resist_time += delta
+		if patch.resist_time >= 0.3:
+			patch.hint_tool = _recommended_tool(patch)
+			patch.hint_time = max(patch.hint_time, 1.4)
+	else:
+		patch.resist_time = 0.0
+		patch.hint_time = 0.0
 
 
 func _apply_tool_to_patch(patch: DirtPatch, delta: float, source_point: Vector2) -> void:
@@ -1084,6 +1173,8 @@ func _update_dirt_motion(delta: float) -> void:
 		if _is_patch_removed(patch):
 			continue
 
+		patch.hint_time = max(0.0, patch.hint_time - delta)
+
 		if patch.state == STATE_FLYING:
 			patch.drift += patch.velocity * delta
 			patch.velocity *= 0.965
@@ -1147,6 +1238,8 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 	patch.soap = 0.0
 	patch.wetness = 0.0
 	patch.looseness = 1.0
+	patch.hint_time = 0.0
+	patch.resist_time = 0.0
 	if not completed:
 		combo_count += 1
 		combo_timer = COMBO_WINDOW
@@ -1652,6 +1745,54 @@ func _draw_dirt() -> void:
 			_draw_wet_gloss(center, patch.radius, patch.wetness)
 		if patch.soap > 0.05:
 			_draw_soap_foam(center, patch.radius, patch.soap)
+		if patch.hint_time > 0.0 and patch.hint_tool != "":
+			_draw_patch_hint(patch, center)
+
+
+func _draw_patch_hint(patch: DirtPatch, center: Vector2) -> void:
+	var font: Font = _font()
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var alpha: float = clamp(patch.hint_time / 0.45, 0.0, 1.0)
+	var tool_color: Color = tool_colors[patch.hint_tool]
+	# Gentle ring around the patch to draw the eye to where to act.
+	draw_arc(center, patch.radius + 5.0, 0.0, TAU, 22, Color(tool_color.r, tool_color.g, tool_color.b, 0.5 * alpha), 2.5)
+
+	var bob := sin(time_now * 5.0 + patch.seed_offset) * 2.0
+	var label := "%s!" % tool_labels[patch.hint_tool]
+	var text_width: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13).x
+	var pill_size := Vector2(text_width + 40.0, 26.0)
+	var pill_center := center + Vector2(0.0, -patch.radius - 24.0 + bob)
+	var pill := Rect2(pill_center - pill_size * 0.5, pill_size)
+
+	# Arrow pointing down to the patch.
+	var arrow := PackedVector2Array([
+		pill_center + Vector2(-6.0, pill_size.y * 0.5 - 1.0),
+		pill_center + Vector2(6.0, pill_size.y * 0.5 - 1.0),
+		pill_center + Vector2(0.0, pill_size.y * 0.5 + 8.0),
+	])
+	var border_color := Color(tool_color.r, tool_color.g, tool_color.b, 0.95 * alpha)
+	draw_colored_polygon(arrow, border_color)
+
+	_draw_round_rect(Rect2(pill.position + Vector2(0.0, 2.0), pill.size), Color(0.04, 0.16, 0.22, 0.26 * alpha), pill_size.y * 0.5)
+	_draw_round_rect(pill, border_color, pill_size.y * 0.5)
+	_draw_round_rect(pill.grow(-2.0), Color(1.0, 1.0, 1.0, 0.98 * alpha), pill_size.y * 0.5 - 2.0)
+	var dot_center := Vector2(pill.position.x + 16.0, pill_center.y)
+	draw_circle(dot_center, 7.0, Color(tool_color.r, tool_color.g, tool_color.b, alpha))
+	draw_circle(dot_center, 7.0, Color(0.1, 0.22, 0.3, 0.55 * alpha), false, 1.4)
+	draw_string(font, Vector2(pill.position.x + 28.0, pill_center.y + 5.0), label, HORIZONTAL_ALIGNMENT_LEFT, pill_size.x - 32.0, 13, Color(0.07, 0.2, 0.29, alpha))
+
+
+func _draw_round_rect(rect: Rect2, color: Color, radius: float) -> void:
+	radius = min(radius, min(rect.size.x, rect.size.y) * 0.5)
+	if radius <= 0.0:
+		draw_rect(rect, color)
+		return
+	draw_rect(Rect2(rect.position + Vector2(radius, 0.0), Vector2(rect.size.x - radius * 2.0, rect.size.y)), color)
+	draw_rect(Rect2(rect.position + Vector2(0.0, radius), Vector2(rect.size.x, rect.size.y - radius * 2.0)), color)
+	draw_circle(rect.position + Vector2(radius, radius), radius, color)
+	draw_circle(rect.position + Vector2(rect.size.x - radius, radius), radius, color)
+	draw_circle(rect.position + Vector2(radius, rect.size.y - radius), radius, color)
+	draw_circle(rect.position + Vector2(rect.size.x - radius, rect.size.y - radius), radius, color)
 
 
 func _draw_mud_patch(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
