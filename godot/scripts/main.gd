@@ -14,6 +14,10 @@ const COMBO_WINDOW := 2.5
 const STAR3_TIME := 75.0
 const STAR3_COMBO := 4
 const STAR2_TIME := 140.0
+const STAR_WARN_SECONDS := 15.0
+const GRADE_SLOT_EARNED := "earned"
+const GRADE_SLOT_TARGET := "target"
+const GRADE_SLOT_LOCKED := "locked"
 const SAVE_PATH := "user://foam_party_save.cfg"
 const BOMB_COST := 40
 const STATE_TITLE := "title"
@@ -624,6 +628,7 @@ func _draw() -> void:
 		_draw_title_screen()
 	else:
 		_draw_tool_cursor()
+		_draw_grade_tracker()
 		_draw_combo_badge()
 		_draw_bomb_button()
 		_draw_toolbar()
@@ -686,6 +691,14 @@ func get_level_time_for_test() -> float:
 
 func calc_stars_for_test() -> int:
 	return _calc_stars()
+
+
+func get_grade_slot_state_for_test(slot_index: int) -> String:
+	return _grade_slot_state(slot_index)
+
+
+func get_grade_time_to_downgrade_for_test() -> float:
+	return _grade_time_to_downgrade()
 
 
 func get_car_type_for_test() -> String:
@@ -1448,6 +1461,40 @@ func _calc_stars() -> int:
 	return 1
 
 
+# Live state of one star slot in the HUD grade tracker (0 = first star).
+# earned: counted in the grade right now. target: still reachable but a
+# condition is unmet (3rd star needs the combo gate). locked: no longer reachable.
+func _grade_slot_state(slot_index: int) -> String:
+	match slot_index:
+		0:
+			return GRADE_SLOT_EARNED
+		1:
+			return GRADE_SLOT_EARNED if level_time <= STAR2_TIME else GRADE_SLOT_LOCKED
+		2:
+			if level_time > STAR3_TIME:
+				return GRADE_SLOT_LOCKED
+			return GRADE_SLOT_EARNED if best_combo >= STAR3_COMBO else GRADE_SLOT_TARGET
+	return GRADE_SLOT_LOCKED
+
+
+# Seconds until the next star is lost, or -1 once only the floor star remains.
+func _grade_time_to_downgrade() -> float:
+	if level_time <= STAR3_TIME:
+		return STAR3_TIME - level_time
+	if level_time <= STAR2_TIME:
+		return STAR2_TIME - level_time
+	return -1.0
+
+
+# Star slot (0-based) whose threshold is approaching next, or -1 when none.
+func _grade_at_risk_slot() -> int:
+	if level_time <= STAR3_TIME:
+		return 2
+	if level_time <= STAR2_TIME:
+		return 1
+	return -1
+
+
 func _register_best_time() -> void:
 	var previous_best: float = _best_time_for_level(level_index)
 	is_new_record = previous_best <= 0.0 or level_time < previous_best
@@ -2192,6 +2239,64 @@ func _draw_bomb_button() -> void:
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
 	draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
+
+
+# Live "what grade am I earning right now" tracker. Surfaces the otherwise
+# invisible star criteria (clear speed + the combo gate) so the player has a
+# clear in-the-moment goal and feels the pressure to keep their stars.
+func _draw_grade_tracker() -> void:
+	if completed:
+		return
+	var font: Font = _font()
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var rect := Rect2(14.0, 100.0, 120.0, 56.0)
+	draw_style_box(_style("grade_shadow", Color(0.03, 0.14, 0.2, 0.22), 16.0), Rect2(rect.position + Vector2(0.0, 2.0), rect.size))
+	draw_style_box(_style("grade_chip", Color(0.03, 0.14, 0.2, 0.66), 16.0), rect)
+
+	var time_left := _grade_time_to_downgrade()
+	var at_risk := _grade_at_risk_slot()
+	var warning: bool = time_left >= 0.0 and time_left <= STAR_WARN_SECONDS
+
+	var star_y := rect.position.y + 22.0
+	var risk_beat: float = 0.5 + 0.5 * sin(time_now * 12.0)
+	for slot in range(3):
+		var center := Vector2(rect.position.x + 30.0 + float(slot) * 30.0, star_y)
+		var state := _grade_slot_state(slot)
+		# A star about to be lost pulses a red ring whether it is already earned
+		# or still a reachable target, so the urgency reads the same either way.
+		var at_risk_here: bool = warning and slot == at_risk
+		if at_risk_here:
+			draw_arc(center, 13.0, 0.0, TAU, 20, Color(1.0, 0.42, 0.36, 0.35 + 0.45 * risk_beat), 2.5)
+		if state == GRADE_SLOT_EARNED:
+			var scale: float = 1.0 + (0.16 * risk_beat if at_risk_here else 0.0)
+			_draw_star(center, 10.0 * scale, Color("#ffce3d"), Color("#e0a818"))
+		elif state == GRADE_SLOT_TARGET:
+			var tp: float = 0.5 + 0.5 * sin(time_now * 5.0)
+			var ts: float = 1.0 + (0.12 * risk_beat if at_risk_here else 0.0)
+			_draw_star(center, 10.0 * ts, Color(1.0, 0.81, 0.24, 0.14 + 0.12 * tp), Color(1.0, 0.81, 0.24, 0.5 + 0.4 * tp))
+		else:
+			_draw_star(center, 9.0, Color(0.42, 0.5, 0.55, 0.85), Color(0.3, 0.37, 0.42, 0.9))
+
+	var line_y := rect.position.y + rect.size.y - 9.0
+	var text := ""
+	var col := Color(0.86, 0.93, 0.97)
+	if warning:
+		var blink: float = 0.55 + 0.45 * sin(time_now * 10.0)
+		var secs := int(ceil(time_left))
+		if _grade_slot_state(at_risk) == GRADE_SLOT_TARGET:
+			# Star is reachable but not yet earned: keep nudging the combo gate
+			# (not "유지/keep") so the player races the clock *and* the combo.
+			text = "콤보 x%d! %d초" % [STAR3_COMBO, secs]
+		else:
+			text = "별%d 유지 %d초" % [at_risk + 1, secs]
+		col = Color(1.0, 0.74, 0.36)
+		col.a = blink
+	elif _grade_slot_state(2) == GRADE_SLOT_TARGET:
+		text = "콤보 x%d면 별 3개" % STAR3_COMBO
+		col = Color(1.0, 0.88, 0.55)
+	else:
+		text = "시간 %s" % _format_time(level_time)
+	draw_string(font, Vector2(rect.position.x, line_y), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 12, col)
 
 
 func _draw_combo_badge() -> void:
