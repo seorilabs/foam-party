@@ -145,6 +145,7 @@ var tool_colors := {
 var style_cache: Dictionary = {}
 var _hint_pill_box: StyleBoxFlat
 var _hint_shadow_box: StyleBoxFlat
+var _tool_hint_box: StyleBoxFlat
 var _hint_patch: DirtPatch = null
 var car_shapes: Dictionary = {}
 var tool_audio_streams: Dictionary = {}
@@ -225,6 +226,11 @@ func _process(delta: float) -> void:
 	_update_particles(delta)
 	_update_clean_progress()
 	_update_audio()
+	# Per-frame redraw drives all animation (dirt, particles, combo/tool pulses,
+	# hint fade). The coaching glow pulses via sin(time), so keep redrawing while
+	# a hint is active even if the unconditional redraw below is ever made lazy.
+	if _active_hint_tool() != "":
+		queue_redraw()
 	queue_redraw()
 
 
@@ -763,6 +769,10 @@ func get_patch_hint_time_for_test(patch_index: int) -> float:
 	return (dirt_patches[patch_index] as DirtPatch).hint_time
 
 
+func get_active_hint_tool_for_test() -> String:
+	return _active_hint_tool()
+
+
 func get_recommended_tool_for_test(patch_index: int) -> String:
 	if patch_index < 0 or patch_index >= dirt_patches.size():
 		return ""
@@ -1055,6 +1065,13 @@ func _tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
 			return false
 	return false
+
+
+# The tool currently being coached on screen, or "" when no hint is active.
+func _active_hint_tool() -> String:
+	if _hint_patch != null and is_instance_valid(_hint_patch) and _hint_patch.hint_time > 0.0 and not _is_patch_removed(_hint_patch):
+		return _hint_patch.hint_tool
+	return ""
 
 
 # The tool the player should reach for next on this patch.
@@ -2193,6 +2210,8 @@ func _draw_combo_badge() -> void:
 
 func _draw_toolbar() -> void:
 	var font: Font = _font()
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var hint_tool := _active_hint_tool()
 	draw_style_box(_style("toolbar", Color(0.04, 0.16, 0.22, 0.96), 24.0), Rect2(-24.0, 744.0, DESIGN_SIZE.x + 48.0, 124.0))
 	for index in range(tool_ids.size()):
 		var tool_id: String = tool_ids[index]
@@ -2206,6 +2225,16 @@ func _draw_toolbar() -> void:
 			draw_style_box(_style("tool_selected", Color("#f7fbff"), 16.0), visual_rect)
 			draw_style_box(_style("tool_selected_border_" + tool_id, Color(0.0, 0.0, 0.0, 0.0), 16.0, color, 3), visual_rect)
 		else:
+			# Pulse the coached tool's button so "use this!" leads straight here.
+			if tool_id == hint_tool:
+				if _tool_hint_box == null:
+					_tool_hint_box = StyleBoxFlat.new()
+					_tool_hint_box.set_corner_radius_all(16)
+					_tool_hint_box.set_border_width_all(3)
+				var pulse: float = 0.5 + 0.5 * sin(time_now * 6.0)
+				_tool_hint_box.bg_color = Color(color.r, color.g, color.b, 0.16 + 0.14 * pulse)
+				_tool_hint_box.border_color = Color(color.r, color.g, color.b, 0.55 + 0.45 * pulse)
+				draw_style_box(_tool_hint_box, visual_rect.grow(4.0))
 			draw_style_box(_style("tool_idle", Color("#16384a"), 16.0), visual_rect)
 		_draw_tool_icon(tool_id, visual_rect.position + Vector2(visual_rect.size.x * 0.5, 30.0))
 		draw_string(font, visual_rect.position + Vector2(0.0, visual_rect.size.y - 9.0), tool_labels[tool_id], HORIZONTAL_ALIGNMENT_CENTER, visual_rect.size.x, 14, Color("#123246") if is_selected else Color(0.85, 0.93, 0.97))
