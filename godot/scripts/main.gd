@@ -1064,7 +1064,7 @@ func _tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 
 # The tool currently being coached on screen, or "" when no hint is active.
 func _active_hint_tool() -> String:
-	if _hint_patch != null and _hint_patch.hint_time > 0.0 and not _is_patch_removed(_hint_patch):
+	if _hint_patch != null and is_instance_valid(_hint_patch) and _hint_patch.hint_time > 0.0 and not _is_patch_removed(_hint_patch):
 		return _hint_patch.hint_tool
 	return ""
 
