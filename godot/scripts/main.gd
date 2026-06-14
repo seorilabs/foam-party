@@ -97,6 +97,9 @@ var best_combo := 0
 var level_time := 0.0
 var earned_stars := 0
 var combo_pop_time := -10.0
+var best_times: Dictionary = {}
+var is_new_record := false
+var record_pop_time := -10.0
 var game_state := STATE_TITLE
 var coins := 0
 var total_stars := 0
@@ -169,6 +172,11 @@ func _load_progress() -> void:
 	total_stars = max(0, int(config.get_value("game", "total_stars", 0)))
 	sound_enabled = bool(config.get_value("settings", "sound", true))
 	tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
+	var stored_best: Variant = config.get_value("game", "best_times", {})
+	if stored_best is Dictionary:
+		best_times = {}
+		for key in (stored_best as Dictionary):
+			best_times[int(key)] = float(stored_best[key])
 
 
 func _save_progress() -> void:
@@ -180,6 +188,7 @@ func _save_progress() -> void:
 	config.set_value("game", "total_stars", total_stars)
 	config.set_value("settings", "sound", sound_enabled)
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
+	config.set_value("game", "best_times", best_times)
 	config.save(SAVE_PATH)
 
 
@@ -625,6 +634,8 @@ func reset_game(new_level: int) -> void:
 	level_time = 0.0
 	earned_stars = 0
 	combo_pop_time = -10.0
+	is_new_record = false
+	record_pop_time = -10.0
 	_stop_tool_loop()
 	particles.clear()
 	_set_car_palette()
@@ -675,6 +686,18 @@ func get_coins_for_test() -> int:
 
 func calc_coin_reward_for_test() -> int:
 	return _calc_coin_reward(_calc_stars())
+
+
+func get_best_time_for_test(level: int) -> float:
+	return _best_time_for_level(level)
+
+
+func register_best_time_for_test() -> void:
+	_register_best_time()
+
+
+func is_new_record_for_test() -> bool:
+	return is_new_record
 
 
 func get_patch_index_by_kind_for_test(kind: String) -> int:
@@ -779,6 +802,11 @@ func _handle_key(keycode: Key) -> void:
 		selected_tool = TOOL_SPONGE
 	elif keycode == KEY_SPACE and completed:
 		reset_game(level_index + 1)
+		_save_progress()
+		_play_ui_select()
+	elif keycode == KEY_R and completed:
+		reset_game(level_index)
+		_play_ui_select()
 
 
 func _handle_tap(point: Vector2) -> bool:
@@ -796,9 +824,15 @@ func _handle_tap(point: Vector2) -> bool:
 			show_tutorial = true
 		return true
 
+	if completed and _get_retry_rect().has_point(point):
+		reset_game(level_index)
+		_play_ui_select()
+		return true
+
 	if completed and _get_next_rect().has_point(point):
 		reset_game(level_index + 1)
 		_save_progress()
+		_play_ui_select()
 		return true
 
 	if _get_sound_rect().has_point(point):
@@ -1246,6 +1280,7 @@ func _update_clean_progress() -> void:
 		coin_reward = _calc_coin_reward(earned_stars)
 		coins += coin_reward
 		total_stars += earned_stars
+		_register_best_time()
 		_save_progress()
 		_stop_tool_loop()
 		_play_completion_sound()
@@ -1260,6 +1295,18 @@ func _calc_stars() -> int:
 	return 1
 
 
+func _register_best_time() -> void:
+	var previous_best: float = _best_time_for_level(level_index)
+	is_new_record = previous_best <= 0.0 or level_time < previous_best
+	if is_new_record:
+		best_times[level_index] = level_time
+		record_pop_time = float(Time.get_ticks_msec()) / 1000.0
+
+
+func _best_time_for_level(level: int) -> float:
+	return float(best_times.get(level, 0.0))
+
+
 func _spawn_completion_burst() -> void:
 	if completion_burst_done:
 		return
@@ -1270,6 +1317,19 @@ func _spawn_completion_burst() -> void:
 		var color := Color.from_hsv(rng.randf(), 0.55, 1.0, 0.95)
 		var particle := WashParticle.new(Vector2(rng.randf_range(70.0, 330.0), rng.randf_range(300.0, 620.0)), Vector2.from_angle(angle) * speed, rng.randf_range(0.7, 1.6), rng.randf_range(3.0, 7.0), color, STYLE_CONFETTI)
 		particles.append(particle)
+	if is_new_record:
+		_spawn_record_burst()
+
+
+func _spawn_record_burst() -> void:
+	for index in range(26):
+		var angle := rng.randf_range(-PI * 0.85, -PI * 0.15)
+		var speed := rng.randf_range(150.0, 320.0)
+		var gold := Color.from_hsv(rng.randf_range(0.1, 0.14), 0.7, 1.0, 0.95)
+		particles.append(WashParticle.new(Vector2(195.0, 300.0), Vector2.from_angle(angle) * speed, rng.randf_range(0.8, 1.5), rng.randf_range(4.0, 8.0), gold, STYLE_CONFETTI))
+	for index in range(14):
+		var angle := rng.randf_range(0.0, TAU)
+		particles.append(WashParticle.new(Vector2(195.0, 290.0) + Vector2.from_angle(angle) * rng.randf_range(0.0, 60.0), Vector2(0.0, rng.randf_range(-40.0, -12.0)), rng.randf_range(0.5, 1.0), rng.randf_range(4.0, 7.0), Color(1.0, 0.95, 0.65, 0.95), STYLE_SPARKLE))
 
 
 func _draw_background() -> void:
@@ -1998,23 +2058,31 @@ func _draw_completion_panel() -> void:
 		return
 	var font: Font = _font()
 	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.35))
-	var panel := Rect2(38.0, 210.0, 314.0, 188.0)
+	var panel := Rect2(38.0, 198.0, 314.0, 232.0)
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
 
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
 	for index in range(3):
-		var star_center := Vector2(145.0 + float(index) * 50.0, panel.position.y + 44.0)
+		var star_center := Vector2(145.0 + float(index) * 50.0, panel.position.y + 42.0)
 		if index < earned_stars:
 			var pulse := 1.0 + sin(time_now * 4.0 + float(index) * 0.9) * 0.08
 			_draw_star(star_center, 17.0 * pulse, Color("#ffce3d"), Color("#e0a818"))
 		else:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 88.0), "반짝반짝 완료!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
-	var minutes := int(level_time / 60.0)
-	var seconds := int(level_time) % 60
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 114.0), "%s %02d · %02d:%02d · 최고 콤보 x%d" % [car_type_labels[car_type], level_index, minutes, seconds, best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "반짝반짝 완료!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), "%s %02d · %s · 최고 콤보 x%d" % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
+
+	var record_seconds: float = _best_time_for_level(level_index)
+	if is_new_record:
+		var record_pulse := 1.0 + 0.25 * exp(-(time_now - record_pop_time) * 5.0)
+		var record_color := Color("#e0a818").lerp(Color("#fff3cf"), 0.5 + 0.5 * sin(time_now * 6.0))
+		_draw_star(Vector2(panel.position.x + 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
+		_draw_star(Vector2(panel.position.x + panel.size.x - 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), "신기록! %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
+	elif record_seconds > 0.0:
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), "최고 기록 %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
 
 	var reward_chip := Rect2(panel.position.x + panel.size.x - 106.0, panel.position.y - 14.0, 96.0, 30.0)
 	draw_style_box(_style("reward_chip", Color("#ffce3d"), 15.0), reward_chip)
@@ -2022,10 +2090,22 @@ func _draw_completion_panel() -> void:
 	draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#9a7400"), false, 1.5)
 	draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 21.0), "+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 15, Color("#6b5200"))
 
+	var retry_rect := _get_retry_rect()
+	draw_style_box(_style("retry_shadow", Color("#246076"), 14.0), Rect2(retry_rect.position + Vector2(0.0, 4.0), retry_rect.size))
+	draw_style_box(_style("retry_button", Color("#7fd6e6"), 14.0), retry_rect)
+	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), "↺ 다시 세차", HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, 16, Color("#0d3b55"))
+
 	var next_rect := _get_next_rect()
 	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))
 	draw_style_box(_style("next_button", Color("#39d98a"), 14.0), next_rect)
-	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 31.0), "다음 차 ▶", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 17, Color("#0d3b2a"))
+	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), "다음 차 ▶", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
+
+
+func _format_time(seconds_value: float) -> String:
+	var clamped: float = max(0.0, seconds_value)
+	var minutes := int(clamped / 60.0)
+	var seconds := int(clamped) % 60
+	return "%02d:%02d" % [minutes, seconds]
 
 
 func _draw_star(center: Vector2, radius: float, fill: Color, rim: Color) -> void:
@@ -2045,8 +2125,12 @@ func _get_tool_rect(index: int) -> Rect2:
 	return Rect2(margin + float(index) * (width + gap), 764.0, width, 72.0)
 
 
+func _get_retry_rect() -> Rect2:
+	return Rect2(58.0, 360.0, 131.0, 46.0)
+
+
 func _get_next_rect() -> Rect2:
-	return Rect2(103.0, 340.0, 184.0, 46.0)
+	return Rect2(201.0, 360.0, 131.0, 46.0)
 
 
 func _get_start_rect() -> Rect2:

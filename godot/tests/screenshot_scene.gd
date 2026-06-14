@@ -92,6 +92,16 @@ func _run() -> void:
 		quit(1)
 		return
 
+	node.call("reset_game", node.get("level_index"))
+	node.get("best_times")[int(node.get("level_index"))] = 30.0
+	node.set("level_time", 95.0)
+	for patch in node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	await _settle(12)
+	if not await _capture(out_dir.path_join("shot_complete_record.png")):
+		quit(1)
+		return
+
 	for level in [2, 3]:
 		node.call("reset_game", level)
 		await _settle(10)
