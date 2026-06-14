@@ -134,6 +134,43 @@ func _run_smoke() -> void:
 		_fail("expected 1 star for slow clear")
 		return
 
+	# --- live grade tracker reflects the same criteria during play ---
+	for grade_method in ["get_grade_slot_state_for_test", "get_grade_time_to_downgrade_for_test"]:
+		if not root_node.has_method(grade_method):
+			_fail("grade tracker API missing: " + grade_method)
+			return
+	root_node.set("level_time", 60.0)
+	root_node.set("best_combo", 5)
+	if String(root_node.call("get_grade_slot_state_for_test", 2)) != "earned":
+		_fail("fast clear with combo should light the third star live")
+		return
+	if absf(float(root_node.call("get_grade_time_to_downgrade_for_test")) - 15.0) > 0.001:
+		_fail("countdown should report time left before the third star drops")
+		return
+	root_node.set("best_combo", 2)
+	if String(root_node.call("get_grade_slot_state_for_test", 2)) != "target":
+		_fail("missing the combo gate should mark the third star as a target")
+		return
+	root_node.set("level_time", 100.0)
+	root_node.set("best_combo", 5)
+	if String(root_node.call("get_grade_slot_state_for_test", 2)) != "locked":
+		_fail("slow-but-not-slowest clear should lock the third star")
+		return
+	if String(root_node.call("get_grade_slot_state_for_test", 1)) != "earned":
+		_fail("second star should still be earned before the two-star threshold")
+		return
+	if absf(float(root_node.call("get_grade_time_to_downgrade_for_test")) - 40.0) > 0.001:
+		_fail("countdown should track the two-star threshold once the third is lost")
+		return
+	root_node.set("level_time", 200.0)
+	if String(root_node.call("get_grade_slot_state_for_test", 1)) != "locked":
+		_fail("very slow clear should lock the second star")
+		return
+	if float(root_node.call("get_grade_time_to_downgrade_for_test")) >= 0.0:
+		_fail("no countdown should remain once only the floor star is left")
+		return
+	root_node.set("best_combo", 10)
+
 	if int(root_node.call("calc_coin_reward_for_test")) != 50:
 		_fail("expected 50 coins for 1-star clear with max combo bonus")
 		return
