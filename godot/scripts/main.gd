@@ -781,8 +781,28 @@ func simulate_patch_hint_for_test(tool_id: String, patch_index: int, seconds: fl
 	var steps: int = max(1, int(ceil(seconds * 30.0)))
 	for step_index in range(steps):
 		_update_patch_hint(patch, 1.0 / 30.0)
+		_update_dirt_motion(1.0 / 30.0)
 	selected_tool = old_tool
 	return patch.hint_tool if patch.hint_time > 0.0 else ""
+
+
+# Rub the wrong tool in short bursts with idle gaps; resist should not pile up.
+func simulate_choppy_hint_for_test(tool_id: String, patch_index: int, on_seconds: float, off_seconds: float, cycles: int) -> float:
+	if patch_index < 0 or patch_index >= dirt_patches.size():
+		return -1.0
+	var old_tool := selected_tool
+	selected_tool = tool_id
+	var patch: DirtPatch = dirt_patches[patch_index]
+	var on_steps: int = max(1, int(ceil(on_seconds * 30.0)))
+	var off_steps: int = max(1, int(ceil(off_seconds * 30.0)))
+	for cycle in range(cycles):
+		for step_index in range(on_steps):
+			_update_patch_hint(patch, 1.0 / 30.0)
+			_update_dirt_motion(1.0 / 30.0)
+		for step_index in range(off_steps):
+			_update_dirt_motion(1.0 / 30.0)
+	selected_tool = old_tool
+	return patch.hint_time
 
 
 func _update_canvas_transform() -> void:
@@ -1012,7 +1032,13 @@ func _apply_tool_at(point: Vector2, delta: float) -> void:
 func _tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 	match patch.kind:
 		"mud":
-			return tool_id == TOOL_AIR
+			# Air does nothing; a dry scrub is premature (rinse or soap it first).
+			# Water and soap are both valid mud paths, so they are never flagged.
+			if tool_id == TOOL_AIR:
+				return true
+			if tool_id == TOOL_SPONGE:
+				return patch.wetness < 0.2 and patch.soap < 0.15
+			return false
 		"dust":
 			return tool_id == TOOL_SOAP
 		"leaf":
@@ -1045,7 +1071,9 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 	if patch.health / max(1.0, patch.max_health) < 0.12:
 		return
 	if _tool_misapplied(selected_tool, patch):
-		patch.resist_time += delta
+		# +2*delta here, -delta decay in _update_dirt_motion -> net +delta only
+		# while actively rubbing, so brief stray touches never accumulate.
+		patch.resist_time += delta * 2.0
 		if patch.resist_time >= 0.3:
 			patch.hint_tool = _recommended_tool(patch)
 			patch.hint_time = max(patch.hint_time, 1.4)
@@ -1174,6 +1202,8 @@ func _update_dirt_motion(delta: float) -> void:
 			continue
 
 		patch.hint_time = max(0.0, patch.hint_time - delta)
+		# Decay resist for every patch; the one under the tool re-adds 2*delta.
+		patch.resist_time = max(0.0, patch.resist_time - delta)
 
 		if patch.state == STATE_FLYING:
 			patch.drift += patch.velocity * delta
@@ -1773,26 +1803,24 @@ func _draw_patch_hint(patch: DirtPatch, center: Vector2) -> void:
 	var border_color := Color(tool_color.r, tool_color.g, tool_color.b, 0.95 * alpha)
 	draw_colored_polygon(arrow, border_color)
 
-	_draw_round_rect(Rect2(pill.position + Vector2(0.0, 2.0), pill.size), Color(0.04, 0.16, 0.22, 0.26 * alpha), pill_size.y * 0.5)
-	_draw_round_rect(pill, border_color, pill_size.y * 0.5)
-	_draw_round_rect(pill.grow(-2.0), Color(1.0, 1.0, 1.0, 0.98 * alpha), pill_size.y * 0.5 - 2.0)
+	# Single rounded boxes (no overlapping primitives) so alpha stays flat.
+	var radius: float = pill_size.y * 0.5
+	draw_style_box(_round_box(Color(0.04, 0.16, 0.22, 0.26 * alpha), radius), Rect2(pill.position + Vector2(0.0, 2.0), pill.size))
+	draw_style_box(_round_box(Color(1.0, 1.0, 1.0, 0.98 * alpha), radius, border_color, 2), pill)
 	var dot_center := Vector2(pill.position.x + 16.0, pill_center.y)
 	draw_circle(dot_center, 7.0, Color(tool_color.r, tool_color.g, tool_color.b, alpha))
-	draw_circle(dot_center, 7.0, Color(0.1, 0.22, 0.3, 0.55 * alpha), false, 1.4)
 	draw_string(font, Vector2(pill.position.x + 28.0, pill_center.y + 5.0), label, HORIZONTAL_ALIGNMENT_LEFT, pill_size.x - 32.0, 13, Color(0.07, 0.2, 0.29, alpha))
 
 
-func _draw_round_rect(rect: Rect2, color: Color, radius: float) -> void:
-	radius = min(radius, min(rect.size.x, rect.size.y) * 0.5)
-	if radius <= 0.0:
-		draw_rect(rect, color)
-		return
-	draw_rect(Rect2(rect.position + Vector2(radius, 0.0), Vector2(rect.size.x - radius * 2.0, rect.size.y)), color)
-	draw_rect(Rect2(rect.position + Vector2(0.0, radius), Vector2(rect.size.x, rect.size.y - radius * 2.0)), color)
-	draw_circle(rect.position + Vector2(radius, radius), radius, color)
-	draw_circle(rect.position + Vector2(rect.size.x - radius, radius), radius, color)
-	draw_circle(rect.position + Vector2(radius, rect.size.y - radius), radius, color)
-	draw_circle(rect.position + Vector2(rect.size.x - radius, rect.size.y - radius), radius, color)
+# Fresh (uncached) rounded StyleBoxFlat so fading alpha renders correctly.
+func _round_box(color: Color, radius: float, border_color: Color = Color(0.0, 0.0, 0.0, 0.0), border_width: int = 0) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = color
+	box.set_corner_radius_all(int(radius))
+	if border_width > 0:
+		box.border_color = border_color
+		box.set_border_width_all(border_width)
+	return box
 
 
 func _draw_mud_patch(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
