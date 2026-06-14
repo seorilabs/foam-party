@@ -107,7 +107,6 @@ var show_tutorial := false
 var persistence_enabled := true
 var last_particle_spawn := 0.0
 var guidance_tool := ""
-var guidance_kind := ""
 var guidance_timer := 0.0
 var car_color := Color("#ffcf5a")
 var car_type := "compact"
@@ -631,7 +630,6 @@ func reset_game(new_level: int) -> void:
 	earned_stars = 0
 	combo_pop_time = -10.0
 	guidance_tool = ""
-	guidance_kind = ""
 	guidance_timer = 0.0
 	_stop_tool_loop()
 	particles.clear()
@@ -1388,12 +1386,12 @@ func _recommended_tool_for(patch: DirtPatch) -> String:
 	return TOOL_WATER
 
 
-func _guidance_text(tool_id: String, kind: String) -> String:
+func _guidance_text(tool_id: String) -> String:
 	match tool_id:
 		TOOL_AIR:
 			return "바람으로 날려요"
 		TOOL_WATER:
-			return "고압수로 헹궈요" if (kind == "oil" or kind == "bug") else "고압수로 씻어요"
+			return "고압수로 씻어요"
 		TOOL_SOAP:
 			return "비누로 불려요"
 		TOOL_SPONGE:
@@ -1418,21 +1416,17 @@ func _nearest_patch_under_pointer() -> DirtPatch:
 
 func _update_guidance(delta: float) -> void:
 	var target_tool := ""
-	var target_kind := ""
 	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial:
 		var patch := _nearest_patch_under_pointer()
 		if patch != null and not _tool_is_effective(selected_tool, patch):
 			target_tool = _recommended_tool_for(patch)
-			target_kind = patch.kind
 	if target_tool != "":
 		guidance_tool = target_tool
-		guidance_kind = target_kind
 		guidance_timer = min(guidance_timer + delta, 1.2)
 	else:
 		guidance_timer = max(guidance_timer - delta * 3.0, 0.0)
 		if guidance_timer <= 0.0:
 			guidance_tool = ""
-			guidance_kind = ""
 
 
 func _build_car_shapes() -> void:
@@ -1864,7 +1858,7 @@ func _draw_guidance() -> void:
 	if completed or guidance_tool == "" or guidance_timer < 0.3:
 		return
 	var font: Font = _font()
-	var text := _guidance_text(guidance_tool, guidance_kind)
+	var text := _guidance_text(guidance_tool)
 	if text == "":
 		return
 	var tool_color: Color = tool_colors.get(guidance_tool, Color.WHITE)
