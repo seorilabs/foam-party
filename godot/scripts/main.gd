@@ -143,6 +143,9 @@ var tool_colors := {
 	TOOL_SPONGE: Color("#ff9f5a"),
 }
 var style_cache: Dictionary = {}
+var _hint_pill_box: StyleBoxFlat
+var _hint_shadow_box: StyleBoxFlat
+var _hint_patch: DirtPatch = null
 var car_shapes: Dictionary = {}
 var tool_audio_streams: Dictionary = {}
 var ui_select_stream: AudioStreamWAV
@@ -966,6 +969,7 @@ func _set_car_palette() -> void:
 
 func _spawn_dirt() -> void:
 	dirt_patches.clear()
+	_hint_patch = null
 	rng.seed = 42690 + int(level_index) * 97
 
 	var positions := [
@@ -1068,18 +1072,25 @@ func _recommended_tool(patch: DirtPatch) -> String:
 func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 	if _is_patch_removed(patch) or patch.state == STATE_FLYING:
 		return
-	if patch.health / max(1.0, patch.max_health) < 0.12:
+	# Keep coaching even on a stubborn last sliver; only skip the truly-gone.
+	if patch.health / max(1.0, patch.max_health) < 0.05:
 		return
 	if _tool_misapplied(selected_tool, patch):
 		# +2*delta here, -delta decay in _update_dirt_motion -> net +delta only
 		# while actively rubbing, so brief stray touches never accumulate.
 		patch.resist_time += delta * 2.0
 		if patch.resist_time >= 0.3:
+			# Keep a single active coach so overlapping patches stay readable.
+			if _hint_patch != null and _hint_patch != patch:
+				_hint_patch.hint_time = 0.0
+			_hint_patch = patch
 			patch.hint_tool = _recommended_tool(patch)
 			patch.hint_time = max(patch.hint_time, 1.4)
 	else:
 		patch.resist_time = 0.0
 		patch.hint_time = 0.0
+		if _hint_patch == patch:
+			_hint_patch = null
 
 
 func _apply_tool_to_patch(patch: DirtPatch, delta: float, source_point: Vector2) -> void:
@@ -1270,6 +1281,8 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 	patch.looseness = 1.0
 	patch.hint_time = 0.0
 	patch.resist_time = 0.0
+	if _hint_patch == patch:
+		_hint_patch = null
 	if not completed:
 		combo_count += 1
 		combo_timer = COMBO_WINDOW
@@ -1775,8 +1788,14 @@ func _draw_dirt() -> void:
 			_draw_wet_gloss(center, patch.radius, patch.wetness)
 		if patch.soap > 0.05:
 			_draw_soap_foam(center, patch.radius, patch.soap)
-		if patch.hint_time > 0.0 and patch.hint_tool != "":
-			_draw_patch_hint(patch, center)
+
+	# Coaching hints are drawn last so they stay above any overlapping dirt.
+	for raw_patch in dirt_patches:
+		var hint_patch := raw_patch as DirtPatch
+		if _is_patch_removed(hint_patch):
+			continue
+		if hint_patch.hint_time > 0.0 and hint_patch.hint_tool != "":
+			_draw_patch_hint(hint_patch, _patch_center(hint_patch))
 
 
 func _draw_patch_hint(patch: DirtPatch, center: Vector2) -> void:
@@ -1803,24 +1822,21 @@ func _draw_patch_hint(patch: DirtPatch, center: Vector2) -> void:
 	var border_color := Color(tool_color.r, tool_color.g, tool_color.b, 0.95 * alpha)
 	draw_colored_polygon(arrow, border_color)
 
-	# Single rounded boxes (no overlapping primitives) so alpha stays flat.
-	var radius: float = pill_size.y * 0.5
-	draw_style_box(_round_box(Color(0.04, 0.16, 0.22, 0.26 * alpha), radius), Rect2(pill.position + Vector2(0.0, 2.0), pill.size))
-	draw_style_box(_round_box(Color(1.0, 1.0, 1.0, 0.98 * alpha), radius, border_color, 2), pill)
+	# Reused rounded boxes (no per-frame allocation, no overlapping primitives).
+	if _hint_pill_box == null:
+		_hint_pill_box = StyleBoxFlat.new()
+		_hint_pill_box.set_corner_radius_all(int(pill_size.y * 0.5))
+		_hint_pill_box.set_border_width_all(2)
+		_hint_shadow_box = StyleBoxFlat.new()
+		_hint_shadow_box.set_corner_radius_all(int(pill_size.y * 0.5))
+	_hint_shadow_box.bg_color = Color(0.04, 0.16, 0.22, 0.26 * alpha)
+	_hint_pill_box.bg_color = Color(1.0, 1.0, 1.0, 0.98 * alpha)
+	_hint_pill_box.border_color = border_color
+	draw_style_box(_hint_shadow_box, Rect2(pill.position + Vector2(0.0, 2.0), pill.size))
+	draw_style_box(_hint_pill_box, pill)
 	var dot_center := Vector2(pill.position.x + 16.0, pill_center.y)
 	draw_circle(dot_center, 7.0, Color(tool_color.r, tool_color.g, tool_color.b, alpha))
 	draw_string(font, Vector2(pill.position.x + 28.0, pill_center.y + 5.0), label, HORIZONTAL_ALIGNMENT_LEFT, pill_size.x - 32.0, 13, Color(0.07, 0.2, 0.29, alpha))
-
-
-# Fresh (uncached) rounded StyleBoxFlat so fading alpha renders correctly.
-func _round_box(color: Color, radius: float, border_color: Color = Color(0.0, 0.0, 0.0, 0.0), border_width: int = 0) -> StyleBoxFlat:
-	var box := StyleBoxFlat.new()
-	box.bg_color = color
-	box.set_corner_radius_all(int(radius))
-	if border_width > 0:
-		box.border_color = border_color
-		box.set_border_width_all(border_width)
-	return box
 
 
 func _draw_mud_patch(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
