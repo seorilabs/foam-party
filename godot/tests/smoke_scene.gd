@@ -147,6 +147,32 @@ func _run_smoke() -> void:
 		_fail("level 1 should be a compact car")
 		return
 
+	root_node.call("reset_game", 5)
+	root_node.set("level_time", 90.0)
+	root_node.call("register_best_time_for_test")
+	if not bool(root_node.call("is_new_record_for_test")):
+		_fail("first clear of a level should be a new record")
+		return
+	if absf(float(root_node.call("get_best_time_for_test", 5)) - 90.0) > 0.001:
+		_fail("best time should store the clear time")
+		return
+	root_node.set("level_time", 120.0)
+	root_node.call("register_best_time_for_test")
+	if bool(root_node.call("is_new_record_for_test")):
+		_fail("a slower clear should not count as a new record")
+		return
+	if absf(float(root_node.call("get_best_time_for_test", 5)) - 90.0) > 0.001:
+		_fail("a slower clear should not overwrite the best time")
+		return
+	root_node.set("level_time", 70.0)
+	root_node.call("register_best_time_for_test")
+	if not bool(root_node.call("is_new_record_for_test")):
+		_fail("a faster clear should set a new record")
+		return
+	if absf(float(root_node.call("get_best_time_for_test", 5)) - 70.0) > 0.001:
+		_fail("a faster clear should update the best time")
+		return
+
 	root_node.call("reset_game", 2)
 	if int(root_node.call("get_combo_for_test")) != 0 or float(root_node.call("get_level_time_for_test")) != 0.0:
 		_fail("reset did not clear combo state")
