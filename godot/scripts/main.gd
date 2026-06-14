@@ -2258,19 +2258,22 @@ func _draw_grade_tracker() -> void:
 	var warning: bool = time_left >= 0.0 and time_left <= STAR_WARN_SECONDS
 
 	var star_y := rect.position.y + 22.0
+	var risk_beat: float = 0.5 + 0.5 * sin(time_now * 12.0)
 	for slot in range(3):
 		var center := Vector2(rect.position.x + 30.0 + float(slot) * 30.0, star_y)
 		var state := _grade_slot_state(slot)
+		# A star about to be lost pulses a red ring whether it is already earned
+		# or still a reachable target, so the urgency reads the same either way.
+		var at_risk_here: bool = warning and slot == at_risk
+		if at_risk_here:
+			draw_arc(center, 13.0, 0.0, TAU, 20, Color(1.0, 0.42, 0.36, 0.35 + 0.45 * risk_beat), 2.5)
 		if state == GRADE_SLOT_EARNED:
-			var scale := 1.0
-			if warning and slot == at_risk:
-				var beat: float = 0.5 + 0.5 * sin(time_now * 12.0)
-				scale = 1.0 + 0.16 * beat
-				draw_arc(center, 13.0, 0.0, TAU, 20, Color(1.0, 0.42, 0.36, 0.35 + 0.45 * beat), 2.5)
+			var scale: float = 1.0 + (0.16 * risk_beat if at_risk_here else 0.0)
 			_draw_star(center, 10.0 * scale, Color("#ffce3d"), Color("#e0a818"))
 		elif state == GRADE_SLOT_TARGET:
 			var tp: float = 0.5 + 0.5 * sin(time_now * 5.0)
-			_draw_star(center, 10.0, Color(1.0, 0.81, 0.24, 0.14 + 0.12 * tp), Color(1.0, 0.81, 0.24, 0.5 + 0.4 * tp))
+			var ts: float = 1.0 + (0.12 * risk_beat if at_risk_here else 0.0)
+			_draw_star(center, 10.0 * ts, Color(1.0, 0.81, 0.24, 0.14 + 0.12 * tp), Color(1.0, 0.81, 0.24, 0.5 + 0.4 * tp))
 		else:
 			_draw_star(center, 9.0, Color(0.42, 0.5, 0.55, 0.85), Color(0.3, 0.37, 0.42, 0.9))
 
@@ -2279,7 +2282,13 @@ func _draw_grade_tracker() -> void:
 	var col := Color(0.86, 0.93, 0.97)
 	if warning:
 		var blink: float = 0.55 + 0.45 * sin(time_now * 10.0)
-		text = "별%d 유지 %d초" % [at_risk + 1, int(ceil(time_left))]
+		var secs := int(ceil(time_left))
+		if _grade_slot_state(at_risk) == GRADE_SLOT_TARGET:
+			# Star is reachable but not yet earned: keep nudging the combo gate
+			# (not "유지/keep") so the player races the clock *and* the combo.
+			text = "콤보 x%d! %d초" % [STAR3_COMBO, secs]
+		else:
+			text = "별%d 유지 %d초" % [at_risk + 1, secs]
 		col = Color(1.0, 0.74, 0.36)
 		col.a = blink
 	elif _grade_slot_state(2) == GRADE_SLOT_TARGET:
