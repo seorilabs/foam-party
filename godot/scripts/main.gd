@@ -803,8 +803,10 @@ func _handle_key(keycode: Key) -> void:
 	elif keycode == KEY_SPACE and completed:
 		reset_game(level_index + 1)
 		_save_progress()
+		_play_ui_select()
 	elif keycode == KEY_R and completed:
 		reset_game(level_index)
+		_play_ui_select()
 
 
 func _handle_tap(point: Vector2) -> bool:
@@ -830,6 +832,7 @@ func _handle_tap(point: Vector2) -> bool:
 	if completed and _get_next_rect().has_point(point):
 		reset_game(level_index + 1)
 		_save_progress()
+		_play_ui_select()
 		return true
 
 	if _get_sound_rect().has_point(point):
