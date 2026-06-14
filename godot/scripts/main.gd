@@ -93,6 +93,16 @@ var rng := RandomNumberGenerator.new()
 var sfx_rng := RandomNumberGenerator.new()
 var is_washing := false
 var pointer_position := Vector2.ZERO
+# Velocity-scaled smear left behind the active tool while scrubbing. Gives the
+# core drag gesture a sense of weight: faster sweeps paint a longer, brighter
+# tool-tinted streak, so the player feels the effort of "really scrubbing".
+var wash_trail: Array = []
+var wash_speed := 0.0
+var _trail_last_pos := Vector2.ZERO
+var _trail_has_last := false
+const TRAIL_LIFETIME := 0.4
+const TRAIL_MIN_GAP := 7.0
+const TRAIL_MAX_POINTS := 16
 var clean_progress := 0.0
 var initial_dirt_total := 1.0
 var level_index := 1
@@ -226,6 +236,7 @@ func _process(delta: float) -> void:
 	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial:
 		_apply_tool_at(pointer_position, delta)
 
+	_update_wash_trail(delta)
 	_update_dirt_motion(delta)
 	_update_particles(delta)
 	_update_clean_progress()
@@ -627,6 +638,7 @@ func _draw() -> void:
 	if game_state == STATE_TITLE:
 		_draw_title_screen()
 	else:
+		_draw_wash_trail()
 		_draw_tool_cursor()
 		_draw_grade_tracker()
 		_draw_combo_badge()
@@ -645,6 +657,9 @@ func reset_game(new_level: int) -> void:
 	completed = false
 	completion_burst_done = false
 	is_washing = false
+	wash_trail.clear()
+	wash_speed = 0.0
+	_trail_has_last = false
 	combo_count = 0
 	combo_timer = 0.0
 	best_combo = 0
@@ -707,6 +722,10 @@ func get_car_type_for_test() -> String:
 
 func get_coins_for_test() -> int:
 	return coins
+
+
+func get_wash_trail_count_for_test() -> int:
+	return wash_trail.size()
 
 
 func calc_coin_reward_for_test() -> int:
@@ -1367,6 +1386,65 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 func _is_patch_outside_wash_area(patch: DirtPatch) -> bool:
 	var center := _patch_center(patch)
 	return center.x < -48.0 or center.x > DESIGN_SIZE.x + 48.0 or center.y < 300.0 or center.y > 748.0
+
+
+func _update_wash_trail(delta: float) -> void:
+	# Age every existing point by the frame delta so the streak fades on a fixed
+	# clock, independent of frame rate.
+	for index in range(wash_trail.size() - 1, -1, -1):
+		var point := wash_trail[index] as Dictionary
+		point["age"] = float(point["age"]) + delta
+		if float(point["age"]) > TRAIL_LIFETIME:
+			wash_trail.remove_at(index)
+
+	var active := is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial
+	var in_play_area := pointer_position.y > 120.0 and pointer_position.y < 744.0 and pointer_position != Vector2.ZERO
+	if active and in_play_area:
+		if _trail_has_last:
+			var moved := pointer_position.distance_to(_trail_last_pos)
+			var inst_speed := moved / maxf(delta, 0.0001)
+			wash_speed = lerpf(wash_speed, inst_speed, 0.4)
+			if moved >= TRAIL_MIN_GAP:
+				wash_trail.append({"pos": pointer_position, "age": 0.0})
+				_trail_last_pos = pointer_position
+		else:
+			_trail_has_last = true
+			_trail_last_pos = pointer_position
+			wash_trail.append({"pos": pointer_position, "age": 0.0})
+	else:
+		wash_speed = lerpf(wash_speed, 0.0, 0.25)
+		_trail_has_last = false
+
+	while wash_trail.size() > TRAIL_MAX_POINTS:
+		wash_trail.remove_at(0)
+
+
+func _draw_wash_trail() -> void:
+	if completed or wash_trail.size() < 2:
+		return
+	var base_color: Color = tool_colors[selected_tool]
+	var radius := _tool_radius(selected_tool)
+	# Faster sweeps read as more effort: scale the streak's reach and brightness
+	# with the smoothed pointer speed.
+	var intensity := clampf(wash_speed / 900.0, 0.18, 1.0)
+	var count := wash_trail.size()
+	var has_prev := false
+	var prev_pos := Vector2.ZERO
+	for index in range(count):
+		var point := wash_trail[index] as Dictionary
+		var life := clampf(1.0 - float(point["age"]) / TRAIL_LIFETIME, 0.0, 1.0)
+		var seq := float(index + 1) / float(count)
+		var pos := point["pos"] as Vector2
+		var blob_r := radius * (0.3 + 0.5 * seq) * (0.6 + 0.4 * intensity)
+		if has_prev:
+			var line_color := base_color
+			line_color.a = (0.07 + 0.2 * seq) * life * intensity
+			draw_line(prev_pos, pos, line_color, blob_r * 0.9)
+		var blob_color := base_color
+		blob_color.a = (0.1 + 0.3 * seq) * life * intensity
+		draw_circle(pos, blob_r, blob_color)
+		prev_pos = pos
+		has_prev = true
 
 
 func _tool_radius(tool_id: String) -> float:
