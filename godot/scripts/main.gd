@@ -1326,16 +1326,42 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 
 
 func _spawn_removal_burst(center: Vector2, radius: float) -> void:
-	for index in range(4):
+	# Burst escalates with the active combo so each successive removal feels
+	# bigger than the last: more particles, faster spread, and a colour shift
+	# from clean white/blue toward a celebratory gold once the combo runs hot.
+	var combo: int = max(combo_count, 1)
+	var intensity: float = clampf(float(combo - 1) / 8.0, 0.0, 1.0)
+	var hot: bool = combo >= STAR3_COMBO
+	var cool_tint := Color(1.0, 1.0, 1.0, 0.95)
+	var hot_tint := Color(1.0, 0.84, 0.36, 0.98)
+	var sparkle_tint := cool_tint.lerp(hot_tint, intensity)
+
+	var sparkle_count: int = 4 + min(combo, 10)
+	for index in range(sparkle_count):
 		var angle := rng.randf_range(0.0, TAU)
 		var offset := Vector2.from_angle(angle) * radius * rng.randf_range(0.2, 0.9)
-		var sparkle := WashParticle.new(center + offset, Vector2(0.0, rng.randf_range(-26.0, -8.0)), rng.randf_range(0.4, 0.75), rng.randf_range(3.5, 6.5), Color(1.0, 1.0, 1.0, 0.95), STYLE_SPARKLE)
+		var lift := rng.randf_range(-26.0, -8.0) * (1.0 + intensity * 0.6)
+		var sparkle := WashParticle.new(center + offset, Vector2(0.0, lift), rng.randf_range(0.4, 0.75) + intensity * 0.2, rng.randf_range(3.5, 6.5) + intensity * 2.0, sparkle_tint, STYLE_SPARKLE)
 		particles.append(sparkle)
-	for index in range(5):
+
+	var bubble_count: int = 5 + min(int(round(float(combo) * 0.7)), 8)
+	for index in range(bubble_count):
 		var angle := rng.randf_range(0.0, TAU)
-		var speed := rng.randf_range(40.0, 120.0)
+		var speed := rng.randf_range(40.0, 120.0) * (1.0 + intensity * 0.5)
 		var bubble := WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.3, 0.6), rng.randf_range(2.5, 5.5), Color(0.85, 0.96, 1.0, 0.85), STYLE_BUBBLE)
 		particles.append(bubble)
+
+	# Expanding shockwave ring grows with the combo to punctuate the pop.
+	particles.append(WashParticle.new(center, Vector2.ZERO, 0.3 + intensity * 0.2, 4.0 + radius * (0.5 + intensity * 0.6), sparkle_tint, STYLE_RING))
+
+	# Hot combos throw celebratory gold confetti so a streak reads as a payoff.
+	if hot:
+		var confetti_count: int = min(combo - STAR3_COMBO + 2, 7)
+		for index in range(confetti_count):
+			var angle := rng.randf_range(-PI, 0.0)
+			var speed := rng.randf_range(120.0, 230.0)
+			var color := Color.from_hsv(rng.randf_range(0.09, 0.14), 0.75, 1.0, 0.95)
+			particles.append(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.6, 1.1), rng.randf_range(3.5, 6.5), color, STYLE_CONFETTI))
 
 
 func _is_patch_outside_wash_area(patch: DirtPatch) -> bool:
@@ -2303,12 +2329,20 @@ func _draw_combo_badge() -> void:
 	if completed or combo_count < 2:
 		return
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
-	var pop: float = 1.0 + 0.35 * exp(-(time_now - combo_pop_time) * 6.0)
+	# Pop amplitude grows with the combo so a longer streak punches harder.
+	var pop_amp: float = 0.35 + 0.05 * float(min(combo_count - 2, 8))
+	var pop: float = 1.0 + pop_amp * exp(-(time_now - combo_pop_time) * 6.0)
 	var badge_size := Vector2(118.0, 36.0) * pop
 	var badge := Rect2(Vector2(195.0, 134.0) - badge_size * 0.5, badge_size)
 	var is_hot := combo_count >= STAR3_COMBO
 	var style_key := "combo_hot" if is_hot else "combo_cool"
 	var bg := Color("#ffce3d") if is_hot else Color(0.97, 0.99, 1.0, 0.95)
+	# Hot streaks gain a soft pulsing halo so momentum is unmistakable.
+	if is_hot:
+		var halo: float = 0.18 + 0.12 * sin(time_now * 9.0)
+		var halo_size := badge_size + Vector2(18.0, 18.0)
+		var halo_rect := Rect2(Vector2(195.0, 134.0) - halo_size * 0.5, halo_size)
+		draw_style_box(_style("combo_halo", Color(1.0, 0.78, 0.22, halo), 24.0), halo_rect)
 	draw_style_box(_style(style_key, bg, 18.0), badge)
 	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "콤보 x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
 
