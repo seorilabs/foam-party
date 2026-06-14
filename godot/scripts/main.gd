@@ -802,6 +802,7 @@ func _handle_key(keycode: Key) -> void:
 		selected_tool = TOOL_SPONGE
 	elif keycode == KEY_SPACE and completed:
 		reset_game(level_index + 1)
+		_save_progress()
 	elif keycode == KEY_R and completed:
 		reset_game(level_index)
 
