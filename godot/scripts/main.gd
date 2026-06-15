@@ -327,8 +327,9 @@ func _save_daily() -> Error:
 func _flush_daily_if_dirty() -> void:
 	if not _daily_progress_dirty:
 		return
-	var err := _save_daily()
-	if err == OK:
+	var daily_err := _save_daily()
+	var prog_err := _save_progress()
+	if daily_err == OK and prog_err == OK:
 		_daily_progress_dirty = false
 
 
@@ -394,9 +395,9 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		queue_redraw()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
-		_save_progress()
-		var err := _save_daily()
-		if err == OK:
+		var prog_err := _save_progress()
+		var daily_err := _save_daily()
+		if prog_err == OK and daily_err == OK:
 			_daily_progress_dirty = false
 
 
@@ -1849,8 +1850,9 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				daily_mission_claimed = true
 				coins += DAILY_MISSION_REWARD
 				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
-				var err := _save_daily()
-				if err != OK:
+				var daily_err := _save_daily()
+				var prog_err := _save_progress()
+				if daily_err != OK or prog_err != OK:
 					_daily_progress_dirty = true
 				if OS.has_feature("mobile"):
 					Input.vibrate_handheld(60)
