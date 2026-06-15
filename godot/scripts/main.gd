@@ -196,6 +196,7 @@ var _hint_sfx_player: AudioStreamPlayer = null
 var _milestone_stream: AudioStreamWAV = null
 var _milestone_sfx_player: AudioStreamPlayer = null
 var _record_sfx: AudioStreamPlayer = null
+var _combo_milestone_player: AudioStreamPlayer = null
 var _bar_fill_style := StyleBoxFlat.new()
 
 
@@ -362,6 +363,10 @@ func _setup_audio() -> void:
 		_record_sfx.stream = _make_record_stream()
 		_record_sfx.volume_db = -6.0
 		add_child(_record_sfx)
+		_combo_milestone_player = AudioStreamPlayer.new()
+		_combo_milestone_player.stream = _make_combo_milestone_stream()
+		_combo_milestone_player.volume_db = -5.0
+		add_child(_combo_milestone_player)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -591,6 +596,21 @@ func _make_record_stream() -> AudioStreamWAV:
 			var env := exp(-t * 14.0) * clampf(t / 0.003, 0.0, 1.0)
 			var tail := clampf(float(NOTE_SAMPLES - 1 - i) / float(int(AUDIO_MIX_RATE * 0.010)), 0.0, 1.0)
 			_append_i16_sample(data, sin(phase) * 0.36 * env * tail)
+	return _make_wav(data)
+
+
+func _make_combo_milestone_stream() -> AudioStreamWAV:
+	const NOTE_SAMPLES: int = int(0.08 * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var freqs := [659.25, 783.99, 987.77]  # E5, G5, B5 ascending arpeggio
+	for note in 3:
+		var phase := 0.0
+		for i in range(NOTE_SAMPLES):
+			var t: float = float(i) / float(AUDIO_MIX_RATE)
+			phase += TAU * freqs[note] / float(AUDIO_MIX_RATE)
+			var env := exp(-t * 12.0) * clampf(t / 0.003, 0.0, 1.0)
+			var tail := clampf(float(NOTE_SAMPLES - 1 - i) / float(int(AUDIO_MIX_RATE * 0.012)), 0.0, 1.0)
+			_append_i16_sample(data, sin(phase) * 0.38 * env * tail)
 	return _make_wav(data)
 
 
@@ -1570,6 +1590,9 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 			_combo_bonus_amount = _bonus
 			_combo_bonus_time = float(Time.get_ticks_msec()) / 1000.0
 		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
+		if combo_count % 5 == 0 and audio_playback_enabled and is_instance_valid(_combo_milestone_player):
+			_combo_milestone_player.stop()
+			_combo_milestone_player.play()
 	_spawn_removal_burst(burst_center, burst_radius)
 	if not completed:
 		_play_removal_sound()
