@@ -103,6 +103,7 @@ var _trail_has_last := false
 const TRAIL_LIFETIME := 0.4
 const TRAIL_MIN_GAP := 7.0
 const TRAIL_MAX_POINTS := 16
+const COMBO_BONUS_AMOUNTS := {5: 5, 10: 10, 15: 15, 20: 20}
 var clean_progress := 0.0
 var initial_dirt_total := 1.0
 var level_index := 1
@@ -111,6 +112,8 @@ var completion_burst_done := false
 var combo_count := 0
 var combo_timer := 0.0
 var best_combo := 0
+var _combo_bonus_time := -10.0
+var _combo_bonus_amount := 0
 var level_time := 0.0
 var earned_stars := 0
 var combo_pop_time := -10.0
@@ -1338,6 +1341,11 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		combo_count += 1
 		combo_timer = COMBO_WINDOW
 		best_combo = max(best_combo, combo_count)
+		if COMBO_BONUS_AMOUNTS.has(combo_count):
+			var _bonus: int = COMBO_BONUS_AMOUNTS[combo_count]
+			coins += _bonus
+			_combo_bonus_amount = _bonus
+			_combo_bonus_time = float(Time.get_ticks_msec()) / 1000.0
 		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
 	_spawn_removal_burst(burst_center, burst_radius)
 	if not completed:
@@ -2427,6 +2435,14 @@ func _draw_combo_badge() -> void:
 		draw_style_box(_style("combo_halo", Color(1.0, 0.78, 0.22, halo), 24.0), halo_rect)
 	draw_style_box(_style(style_key, bg, 18.0), badge)
 	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "콤보 x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
+	if _combo_bonus_time >= 0.0:
+		var _age := float(Time.get_ticks_msec()) / 1000.0 - _combo_bonus_time
+		if _age < 1.2:
+			var _alpha := 1.0 - _age / 1.2
+			var _rise := _age * 38.0
+			draw_string(_font(), Vector2(badge.position.x + 4.0, badge.position.y - _rise - 14.0),
+				"+%d 코인!" % _combo_bonus_amount, HORIZONTAL_ALIGNMENT_LEFT,
+				-1, 16, Color(1.0, 0.85, 0.2, _alpha))
 
 
 func _draw_toolbar() -> void:
@@ -2586,3 +2602,4 @@ func _get_help_rect() -> Rect2:
 
 func _get_bomb_rect() -> Rect2:
 	return Rect2(276.0, 688.0, 92.0, 46.0)
+
