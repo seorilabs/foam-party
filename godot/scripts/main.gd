@@ -760,16 +760,21 @@ func _make_star3_gate_stream() -> AudioStreamWAV:
 
 
 func _play_star_earn_sfx(stars: int) -> void:
-	if not audio_playback_enabled or not is_instance_valid(_star_earn_sfx) or stars <= 0:
+	if not audio_playback_enabled or not is_instance_valid(_star_earn_sfx):
 		return
-	_star_earn_sfx.stream = _make_star_earn_stream(stars)
+	var stream := _make_star_earn_stream(stars)
+	if stream == null:
+		return
+	_star_earn_sfx.stream = stream
 	_star_earn_sfx.play()
 
 
 func _make_star_earn_stream(stars: int) -> AudioStreamWAV:
-	var note_samples := int(0.09 * float(AUDIO_MIX_RATE))
 	var freqs := [523.25, 659.26, 783.99]  # C5 E5 G5
 	var count := clampi(stars, 0, freqs.size())
+	if count <= 0:
+		return null
+	var note_samples := int(0.09 * float(AUDIO_MIX_RATE))
 	var data := PackedByteArray()
 	for n in range(count):
 		var freq: float = freqs[n]
