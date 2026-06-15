@@ -205,6 +205,7 @@ var _star3_combo_unlocked := false
 var _star_warn_sfx: AudioStreamPlayer = null
 var _prev_in_warn_zone := false
 var _bomb_sfx: AudioStreamPlayer = null
+var _bomb_deny_sfx: AudioStreamPlayer = null
 var _bar_fill_style := StyleBoxFlat.new()
 
 
@@ -402,6 +403,10 @@ func _setup_audio() -> void:
 		_bomb_sfx.stream = _make_bomb_stream()
 		_bomb_sfx.volume_db = -3.0
 		add_child(_bomb_sfx)
+		_bomb_deny_sfx = AudioStreamPlayer.new()
+		_bomb_deny_sfx.stream = _make_bomb_deny_stream()
+		_bomb_deny_sfx.volume_db = -9.0
+		add_child(_bomb_deny_sfx)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -697,6 +702,19 @@ func _make_bomb_stream() -> AudioStreamWAV:
 		var fizz := noise * fizz_env * 0.13
 		var fade := clampf(float(total_samples - 1 - sample_index) / float(fade_len), 0.0, 1.0)
 		_append_i16_sample(data, clampf((thump + fizz) * fade, -1.0, 1.0))
+	return _make_wav(data)
+
+
+func _make_bomb_deny_stream() -> AudioStreamWAV:
+	var total_samples: int = int(0.055 * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var phase := 0.0
+	for i in range(total_samples):
+		var t: float = float(i) / float(AUDIO_MIX_RATE)
+		var freq := 120.0 * exp(-t * 12.0) + 72.0
+		phase += TAU * freq / float(AUDIO_MIX_RATE)
+		var env := exp(-t * 35.0) * clampf(t / 0.002, 0.0, 1.0)
+		_append_i16_sample(data, clampf(sin(phase) * 0.28 * env, -1.0, 1.0))
 	return _make_wav(data)
 
 
@@ -1282,7 +1300,12 @@ func _handle_tap(point: Vector2) -> bool:
 		return true
 
 	if not completed and _get_bomb_rect().has_point(point):
-		apply_foam_bomb()
+		if coins < BOMB_COST:
+			if audio_playback_enabled and is_instance_valid(_bomb_deny_sfx):
+				_bomb_deny_sfx.stop()
+				_bomb_deny_sfx.play()
+		else:
+			apply_foam_bomb()
 		return true
 
 	for index in range(tool_ids.size()):
