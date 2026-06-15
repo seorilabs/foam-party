@@ -1972,7 +1972,9 @@ func _draw_status() -> void:
 	draw_style_box(_style("bar_bg", Color("#d7e8ef"), 12.0), bar_rect)
 	var fill_width: float = bar_rect.size.x * clean_progress
 	if fill_width >= 8.0:
-		draw_style_box(_style("bar_fill", Color("#39d98a"), 12.0), Rect2(bar_rect.position, Vector2(fill_width, bar_rect.size.y)))
+		var bar_fill_style := _style("bar_fill", Color("#39d98a"), 12.0)
+		bar_fill_style.bg_color = Color("#49a7ff").lerp(Color("#39d98a"), clean_progress)
+		draw_style_box(bar_fill_style, Rect2(bar_rect.position, Vector2(fill_width, bar_rect.size.y)))
 	draw_string(font, Vector2(294.0, bar_rect.position.y + 18.0), "%.0f%%" % (clean_progress * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 66.0, 15, Color("#0d3b55"))
 
 	if _progress_milestone_time >= 0.0:
