@@ -306,6 +306,30 @@ func _run_smoke() -> void:
 		_fail("sustained wrong rubbing should still surface the hint")
 		return
 
+	# --- scrub drag trail builds while washing and fades once the pointer lifts ---
+	if not root_node.has_method("get_wash_trail_count_for_test"):
+		_fail("wash trail API missing")
+		return
+	root_node.call("reset_game", 1)
+	root_node.set("game_state", "playing")
+	root_node.set("show_tutorial", false)
+	root_node.set("completed", false)
+	root_node.set("is_washing", true)
+	# Sweep the pointer across the play area; each frame feeds _update_wash_trail.
+	for step in range(8):
+		root_node.set("pointer_position", Vector2(120.0 + float(step) * 40.0, 400.0))
+		root_node.call("_update_wash_trail", 0.016)
+	if int(root_node.call("get_wash_trail_count_for_test")) < 2:
+		_fail("scrubbing should build a drag trail")
+		return
+	# Lift the pointer and let time pass; the streak should age out completely.
+	root_node.set("is_washing", false)
+	for _i in range(40):
+		root_node.call("_update_wash_trail", 0.05)
+	if int(root_node.call("get_wash_trail_count_for_test")) != 0:
+		_fail("drag trail should fade out after the pointer lifts")
+		return
+
 	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])
 	get_root().remove_child(root_node)
 	root_node.free()
