@@ -685,6 +685,7 @@ func _make_bomb_stream() -> AudioStreamWAV:
 	var bomb_rng := RandomNumberGenerator.new()
 	bomb_rng.seed = 5577
 	var phase := 0.0
+	var fade_len := max(1, int(AUDIO_MIX_RATE * 0.05))
 	for sample_index in range(total_samples):
 		var t: float = float(sample_index) / float(AUDIO_MIX_RATE)
 		var thump_freq := 195.0 * exp(-t * 9.0) + 70.0
@@ -694,8 +695,8 @@ func _make_bomb_stream() -> AudioStreamWAV:
 		var noise := bomb_rng.randf_range(-1.0, 1.0)
 		var fizz_env := t * exp(-t * 8.0) * 3.2
 		var fizz := noise * fizz_env * 0.13
-		var fade := clampf(float(total_samples - 1 - sample_index) / float(int(AUDIO_MIX_RATE * 0.05)), 0.0, 1.0)
-		_append_i16_sample(data, (thump + fizz) * fade)
+		var fade := clampf(float(total_samples - 1 - sample_index) / float(fade_len), 0.0, 1.0)
+		_append_i16_sample(data, clampf((thump + fizz) * fade, -1.0, 1.0))
 	return _make_wav(data)
 
 
