@@ -1946,7 +1946,7 @@ func _spawn_completion_burst() -> void:
 
 
 func _spawn_speedrun_burst() -> void:
-	var center := Vector2(DESIGN_SIZE.x * 0.5, DESIGN_SIZE.y * 0.38)
+	var center := DESIGN_SIZE * 0.5
 	for i in range(32):
 		var angle := TAU * float(i) / 32.0
 		var speed := rng.randf_range(190.0, 360.0)
