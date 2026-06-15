@@ -193,6 +193,7 @@ var _hint_stream: AudioStreamWAV = null
 var _hint_sfx_player: AudioStreamPlayer = null
 var _milestone_stream: AudioStreamWAV = null
 var _milestone_sfx_player: AudioStreamPlayer = null
+var _record_sfx: AudioStreamPlayer = null
 
 
 func _ready() -> void:
@@ -351,6 +352,10 @@ func _setup_audio() -> void:
 		_milestone_sfx_player.stream = _milestone_stream
 		_milestone_sfx_player.volume_db = -8.0
 		add_child(_milestone_sfx_player)
+		_record_sfx = AudioStreamPlayer.new()
+		_record_sfx.stream = _make_record_stream()
+		_record_sfx.volume_db = -6.0
+		add_child(_record_sfx)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -565,6 +570,21 @@ func _make_milestone_stream() -> AudioStreamWAV:
 		phase += TAU * 659.0 / float(AUDIO_MIX_RATE)
 		var env := exp(-t * 16.0) * clampf(t / 0.004, 0.0, 1.0)
 		_append_i16_sample(data, sin(phase) * 0.30 * env)
+	return _make_wav(data)
+
+
+func _make_record_stream() -> AudioStreamWAV:
+	const NOTE_SAMPLES: int = int(0.06 * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var freqs := [880.0, 1047.0]
+	for note in 2:
+		var phase := 0.0
+		for i in range(NOTE_SAMPLES):
+			var t: float = float(i) / float(AUDIO_MIX_RATE)
+			phase += TAU * freqs[note] / float(AUDIO_MIX_RATE)
+			var env := exp(-t * 14.0) * clampf(t / 0.003, 0.0, 1.0)
+			var tail := clampf(float(NOTE_SAMPLES - 1 - i) / float(int(AUDIO_MIX_RATE * 0.010)), 0.0, 1.0)
+			_append_i16_sample(data, sin(phase) * 0.36 * env * tail)
 	return _make_wav(data)
 
 
@@ -1835,6 +1855,8 @@ func _register_best_time() -> void:
 	if is_new_record:
 		best_times[level_index] = level_time
 		record_pop_time = float(Time.get_ticks_msec()) / 1000.0
+		if is_instance_valid(_record_sfx):
+			_record_sfx.play()
 
 
 func _best_time_for_level(level: int) -> float:
