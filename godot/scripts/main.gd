@@ -202,6 +202,8 @@ var _prev_star3_time_ok := true
 var _prev_star2_time_ok := true
 var _star3_gate_sfx: AudioStreamPlayer = null
 var _star3_combo_unlocked := false
+var _star_warn_sfx: AudioStreamPlayer = null
+var _prev_in_warn_zone := false
 var _bar_fill_style := StyleBoxFlat.new()
 
 
@@ -267,6 +269,13 @@ func _process(delta: float) -> void:
 	if game_state == STATE_PLAYING and not completed and not show_tutorial:
 		level_time += delta
 		_check_star_time_loss()
+		var _warn_time := _grade_time_to_downgrade()
+		var _in_warn := _warn_time >= 0.0 and _warn_time <= STAR_WARN_SECONDS
+		if _in_warn and not _prev_in_warn_zone:
+			if audio_playback_enabled and is_instance_valid(_star_warn_sfx):
+				_star_warn_sfx.stop()
+				_star_warn_sfx.play()
+		_prev_in_warn_zone = _in_warn
 		if combo_timer > 0.0:
 			combo_timer -= delta
 			if combo_timer <= 0.0:
@@ -381,6 +390,10 @@ func _setup_audio() -> void:
 		_star3_gate_sfx.stream = _make_star3_gate_stream()
 		_star3_gate_sfx.volume_db = -4.0
 		add_child(_star3_gate_sfx)
+		_star_warn_sfx = AudioStreamPlayer.new()
+		_star_warn_sfx.stream = _make_star_warn_stream()
+		_star_warn_sfx.volume_db = -6.0
+		add_child(_star_warn_sfx)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -642,6 +655,21 @@ func _make_star_lost_stream() -> AudioStreamWAV:
 	return _make_wav(data)
 
 
+func _make_star_warn_stream() -> AudioStreamWAV:
+	var note_samples: int = int(0.050 * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var freqs := [587.33, 440.0]  # D5, A4 — 하행 단5도 경보
+	for note in 2:
+		var phase := 0.0
+		for i in range(note_samples):
+			var t: float = float(i) / float(AUDIO_MIX_RATE)
+			phase += TAU * freqs[note] / float(AUDIO_MIX_RATE)
+			var env := exp(-t * 8.0) * clampf(t / 0.003, 0.0, 1.0)
+			var tail := clampf(float(note_samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.010)), 0.0, 1.0)
+			_append_i16_sample(data, sin(phase) * 0.38 * env * tail)
+	return _make_wav(data)
+
+
 func _make_star3_gate_stream() -> AudioStreamWAV:
 	var note_samples: int = int(0.055 * float(AUDIO_MIX_RATE))
 	var data := PackedByteArray()
@@ -887,6 +915,7 @@ func reset_game(new_level: int) -> void:
 	_prev_star3_time_ok = true
 	_prev_star2_time_ok = true
 	_star3_combo_unlocked = false
+	_prev_in_warn_zone = false
 	earned_stars = 0
 	combo_pop_time = -10.0
 	is_new_record = false
