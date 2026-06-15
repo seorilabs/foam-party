@@ -1942,16 +1942,16 @@ func _spawn_completion_burst() -> void:
 	if is_new_record:
 		_spawn_record_burst()
 	if level_time > 0.0 and level_time < 60.0:
-		_spawn_speedrun_burst()
+		_spawn_speedrun_burst(particles)
 
 
-func _spawn_speedrun_burst() -> void:
+func _spawn_speedrun_burst(p: Array) -> void:
 	var center := DESIGN_SIZE * 0.5
 	for i in range(32):
 		var angle := TAU * float(i) / 32.0
 		var speed := rng.randf_range(190.0, 360.0)
 		var hue := rng.randf_range(0.10, 0.15)  # gold
-		particles.append(WashParticle.new(
+		p.append(WashParticle.new(
 			center,
 			Vector2.from_angle(angle) * speed,
 			rng.randf_range(0.55, 1.1),
