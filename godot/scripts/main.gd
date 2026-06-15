@@ -1319,8 +1319,8 @@ func _handle_tap(point: Vector2) -> bool:
 				_bomb_deny_sfx.stop()
 				_bomb_deny_sfx.play()
 		else:
-			_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
-			apply_foam_bomb()
+			if apply_foam_bomb():
+				_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
 		return true
 
 	for index in range(tool_ids.size()):
@@ -1354,9 +1354,9 @@ func _toggle_sound() -> void:
 	_save_progress()
 
 
-func apply_foam_bomb() -> void:
+func apply_foam_bomb() -> bool:
 	if completed or coins < BOMB_COST:
-		return
+		return false
 	coins -= BOMB_COST
 	for raw_patch in dirt_patches:
 		var patch := raw_patch as DirtPatch
@@ -1376,6 +1376,7 @@ func apply_foam_bomb() -> void:
 	if audio_playback_enabled and is_instance_valid(_bomb_sfx):
 		_bomb_sfx.play(0.0)
 	_save_progress()
+	return true
 
 
 func _calc_coin_reward(stars: int) -> int:
