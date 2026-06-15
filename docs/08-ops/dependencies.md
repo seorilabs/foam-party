@@ -9,6 +9,9 @@
 
 - `actions/checkout@v6`
 - `actions/setup-node@v6`
+- `actions/configure-pages@v6`
+- `actions/upload-pages-artifact@v5`
+- `actions/deploy-pages@v5`
 
 GitHub Actions 버전을 바꿀 때는 GitHub 공식 release page/API를 source of truth로 확인한다.
 

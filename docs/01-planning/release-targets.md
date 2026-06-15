@@ -20,6 +20,7 @@
 
 - AppsInToss appName: 확정 필요
 - Delivery shape: Godot Web export wrapper 후보
+- Godot Web preset: `Web`
 - Sandbox QA status: 확정 필요
 - Current status: 미구현.
 

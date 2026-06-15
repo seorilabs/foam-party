@@ -6,6 +6,7 @@
 - [ ] `npm run check:architecture`
 - [ ] `npm run test:godot`
 - [ ] `npm run check:docs`
+- [ ] `npm run build:godot:web`
 - [ ] `npm run check:release`
 - [ ] Privacy/policy answers confirmed
 - [ ] Release notes confirmed
@@ -33,3 +34,9 @@
 - [ ] `.ait` artifact generated
 - [ ] Sandbox QA completed
 - [ ] Registration images ready
+
+## GitHub Pages
+
+- [x] GitHub Pages source is Actions workflow
+- [ ] `Deploy Godot Web Pages` succeeds on `main`
+- [ ] Published URL smoke-tested
