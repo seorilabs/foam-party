@@ -1043,14 +1043,37 @@ func _spawn_dirt() -> void:
 		pool[index] = pool[swap_index]
 		pool[swap_index] = swap_value
 
+	# 차종별 오염 패턴: 스포츠카는 기름·먼지 중심(배기 잔류물),
+	# 트럭은 진흙·벌레 중심(야외 주행). 시티카는 균등 분포.
+	var type_pool: Array
+	var radius_min := 13.0
+	var radius_max := 24.0
+	var health_base_min := 70.0
+	var health_base_max := 120.0
+	match car_type:
+		"sports":
+			type_pool = ["oil", "dust", "oil", "dust", "oil", "leaf", "dust", "bug", "mud"]
+			radius_min = 11.0
+			radius_max = 20.0
+			health_base_min = 80.0
+			health_base_max = 135.0
+		"truck":
+			type_pool = ["mud", "mud", "bug", "leaf", "mud", "bug", "dust", "oil", "leaf"]
+			radius_min = 15.0
+			radius_max = 28.0
+			health_base_min = 85.0
+			health_base_max = 145.0
+		_:
+			type_pool = DIRT_TYPES.duplicate()
+
 	var spawn_count: int = min(pool.size(), 18 + level_index * 2)
 	var health_scale := 1.0 + minf(0.5, float(level_index - 1) * 0.06)
 	for index in range(spawn_count):
-		var kind: String = DIRT_TYPES[index % DIRT_TYPES.size()]
+		var kind: String = type_pool[index % type_pool.size()]
 		var base_position: Vector2 = _gameplay_point(pool[index])
 		var jitter := Vector2(rng.randf_range(-10.0, 10.0), rng.randf_range(-8.0, 8.0)) * GAMEPLAY_SCALE
-		var radius := _gameplay_length(rng.randf_range(13.0, 24.0))
-		var health := rng.randf_range(70.0, 120.0) * health_scale
+		var radius := _gameplay_length(rng.randf_range(radius_min, radius_max))
+		var health := rng.randf_range(health_base_min, health_base_max) * health_scale
 		if kind == "oil" or kind == "bug":
 			health += 25.0 * health_scale
 		var patch := DirtPatch.new(kind, base_position + jitter, radius, health, rng.randf_range(0.0, 10.0))
