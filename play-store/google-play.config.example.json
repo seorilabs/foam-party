@@ -1,0 +1,14 @@
+{
+  "app": {
+    "appId": "foam-party",
+    "name": "Foam Party",
+    "packageName": "com.seorilabs.foamparty",
+    "supportEmail": "cs@seorilabs.com",
+    "privacyPolicyUrl": "확정 필요"
+  },
+  "release": {
+    "track": "internal",
+    "aabPath": "확정 필요",
+    "signing": "확정 필요"
+  }
+}

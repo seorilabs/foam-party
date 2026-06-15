@@ -1,0 +1,12 @@
+{
+  "app": {
+    "appName": "확정 필요",
+    "displayName": "Foam Party",
+    "deliveryShape": "Godot Web export wrapper"
+  },
+  "release": {
+    "aitPath": "확정 필요",
+    "sandboxQa": "확정 필요",
+    "registrationImages": "확정 필요"
+  }
+}

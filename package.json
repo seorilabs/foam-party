@@ -1,0 +1,18 @@
+{
+  "name": "foam-party",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Foam Party Godot game repository checks.",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "test": "npm run test:core && npm run check:architecture && npm run test:godot && npm run check:docs",
+    "test:core": "bash scripts/test_core.sh",
+    "test:godot": "bash scripts/godot_quality_gate.sh --project godot --smoke-scene res://tests/smoke_scene.gd",
+    "check:architecture": "bash scripts/check_architecture.sh",
+    "check:docs": "bash scripts/check_docs.sh",
+    "check:release": "bash scripts/check_release_readiness.sh",
+    "check:app-store": "tools/check_app_store_readiness.py"
+  }
+}

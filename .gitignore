@@ -6,3 +6,6 @@ build/
 tmp/
 *.tmp
 app-store/**/*.import
+node_modules/
+AGENTS.local.md
+AGENT.local.md
