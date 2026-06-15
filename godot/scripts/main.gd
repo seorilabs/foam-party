@@ -2516,7 +2516,8 @@ func _draw_combo_badge() -> void:
 	var bg := Color("#ffce3d") if is_hot else Color(0.97, 0.99, 1.0, 0.95)
 	# Hot streaks gain a soft pulsing halo so momentum is unmistakable.
 	if is_hot:
-		var halo: float = 0.18 + 0.12 * sin(time_now * 9.0)
+		var urgency := clampf(1.0 - combo_timer / COMBO_WINDOW, 0.0, 1.0)
+		var halo: float = 0.18 + 0.12 * sin(time_now * (9.0 + urgency * 6.0))
 		var halo_size := badge_size + Vector2(18.0, 18.0)
 		var halo_rect := Rect2(Vector2(195.0, 134.0) - halo_size * 0.5, halo_size)
 		draw_style_box(_style("combo_halo", Color(1.0, 0.78, 0.22, halo), 24.0), halo_rect)
