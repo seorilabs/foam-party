@@ -1806,9 +1806,9 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				daily_mission_claimed = true
 				coins += DAILY_MISSION_REWARD
 				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
-				_save_progress()
 				if OS.has_feature("mobile"):
 					Input.vibrate_handheld(60)
+			_save_progress()
 	_spawn_removal_burst(burst_center, burst_radius)
 	if not completed:
 		_play_removal_sound()
