@@ -1487,6 +1487,17 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 			var color := Color.from_hsv(rng.randf_range(0.09, 0.14), 0.75, 1.0, 0.95)
 			particles.append(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.6, 1.1), rng.randf_range(3.5, 6.5), color, STYLE_CONFETTI))
 
+	# Outward sparkle burst: a small ring of fast sparks gives the scrubbing loop
+	# a satisfying "pop" at the exact moment a patch disappears.
+	var base_tool_color: Color = tool_colors.get(selected_tool, Color(0.95, 0.95, 1.0, 0.85)) as Color
+	var pop_color := base_tool_color.lightened(0.3)
+	pop_color.a = 0.9
+	var pop_count: int = rng.randi_range(6, 8)
+	for index in range(pop_count):
+		var angle := rng.randf_range(0.0, TAU)
+		var speed := rng.randf_range(60.0, 130.0)
+		particles.append(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.35, 0.55), rng.randf_range(3.5, 6.0), pop_color, STYLE_SPARKLE))
+
 
 func _is_patch_outside_wash_area(patch: DirtPatch) -> bool:
 	var center := _patch_center(patch)
