@@ -685,7 +685,7 @@ func _make_bomb_stream() -> AudioStreamWAV:
 	var bomb_rng := RandomNumberGenerator.new()
 	bomb_rng.seed = 5577
 	var phase := 0.0
-	var fade_len := max(1, int(AUDIO_MIX_RATE * 0.05))
+	var fade_len: int = maxi(1, int(AUDIO_MIX_RATE * 0.05))
 	for sample_index in range(total_samples):
 		var t: float = float(sample_index) / float(AUDIO_MIX_RATE)
 		var thump_freq := 195.0 * exp(-t * 9.0) + 70.0
