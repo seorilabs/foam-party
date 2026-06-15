@@ -1065,7 +1065,11 @@ func reset_game(new_level: int) -> void:
 	_star3_combo_unlocked = false
 	_last_milestone_haptic_combo = -1
 	_prev_in_warn_zone = false
-	_prev_patience_zone = 3
+	if STAR2_TIME > 0.0:
+		var _patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
+		_prev_patience_zone = 3 if _patience > 0.65 else (2 if _patience > 0.35 else (1 if _patience > 0.1 else 0))
+	else:
+		_prev_patience_zone = 3
 	earned_stars = 0
 	combo_pop_time = -10.0
 	is_new_record = false
