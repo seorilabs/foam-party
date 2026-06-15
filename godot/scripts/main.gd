@@ -684,12 +684,13 @@ func _make_bomb_stream() -> AudioStreamWAV:
 	var data := PackedByteArray()
 	var bomb_rng := RandomNumberGenerator.new()
 	bomb_rng.seed = 5577
+	var phase := 0.0
 	for sample_index in range(total_samples):
 		var t: float = float(sample_index) / float(AUDIO_MIX_RATE)
 		var thump_freq := 195.0 * exp(-t * 9.0) + 70.0
-		var thump_phase := TAU * thump_freq * t
+		phase += TAU * thump_freq / float(AUDIO_MIX_RATE)
 		var thump_env := exp(-t * 11.0) * clampf(t / 0.004, 0.0, 1.0)
-		var thump := sin(thump_phase) * 0.38 * thump_env
+		var thump := sin(phase) * 0.38 * thump_env
 		var noise := bomb_rng.randf_range(-1.0, 1.0)
 		var fizz_env := t * exp(-t * 8.0) * 3.2
 		var fizz := noise * fizz_env * 0.13
