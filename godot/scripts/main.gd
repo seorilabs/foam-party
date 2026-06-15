@@ -2448,8 +2448,10 @@ func _draw_combo_badge() -> void:
 	var bar_x := badge.position.x + 4.0
 	var bar_y := badge.position.y + badge_size.y + 3.0
 	var fill_frac := clampf(combo_timer / COMBO_WINDOW, 0.0, 1.0)
-	draw_rect(Rect2(bar_x, bar_y, bar_w, 4.0), Color(0.0, 0.0, 0.0, 0.28))
-	draw_rect(Rect2(bar_x, bar_y, bar_w * fill_frac, 4.0), Color(1.0, 0.87, 0.25) if is_hot else Color(0.49, 0.89, 0.82))
+	var bar_alpha := clampf(fill_frac / 0.3, 0.0, 1.0)
+	var bar_col := Color(1.0, 0.87, 0.25, bar_alpha) if is_hot else Color(0.49, 0.89, 0.82, bar_alpha)
+	draw_rect(Rect2(bar_x, bar_y, bar_w, 4.0), Color(0.0, 0.0, 0.0, 0.28 * bar_alpha))
+	draw_rect(Rect2(bar_x, bar_y, bar_w * fill_frac, 4.0), bar_col)
 
 
 func _draw_toolbar() -> void:
