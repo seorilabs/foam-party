@@ -2340,7 +2340,7 @@ func _draw_sparkle(center: Vector2, radius: float, color: Color) -> void:
 
 
 func _draw_gleam() -> void:
-	if _gleam_time < 0.0 or game_state != STATE_PLAYING:
+	if _gleam_time < 0.0 or game_state != STATE_PLAYING or not completed:
 		return
 	var sweep_x := lerp(-80.0, float(DESIGN_SIZE.x) + 80.0, _gleam_time)
 	var alpha := sin(PI * _gleam_time) * 0.55
