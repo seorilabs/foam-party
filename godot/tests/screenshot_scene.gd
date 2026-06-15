@@ -1,8 +1,8 @@
 extends SceneTree
 
-## 개발용 스크린샷 캡처 스크립트.
+## Development screenshot capture script.
 ## xvfb-run -a godot --path godot --script res://tests/screenshot_scene.gd --audio-driver Dummy
-## 로 실행하면 FOAM_SHOT_DIR(기본 /tmp)에 기본 화면과 도구별 세차 장면, 완료 화면 PNG를 저장합니다.
+## Saves title, tool-specific wash scenes, and completion PNGs to FOAM_SHOT_DIR (default /tmp).
 
 func _initialize() -> void:
 	_run.call_deferred()

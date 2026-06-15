@@ -1103,8 +1103,8 @@ func _spawn_dirt() -> void:
 		pool[index] = pool[swap_index]
 		pool[swap_index] = swap_value
 
-	# 차종별 오염 패턴: 스포츠카는 기름·먼지 중심(배기 잔류물),
-	# 트럭은 진흙·벌레 중심(야외 주행). 시티카는 균등 분포.
+	# Per-car dirt patterns: sports cars skew toward oil and dust,
+	# trucks skew toward mud and bugs, and city cars stay balanced.
 	var type_pool: Array
 	var radius_min := 13.0
 	var radius_max := 24.0
@@ -1724,7 +1724,7 @@ func _best_time_for_level(level: int) -> float:
 
 func _check_progress_milestone() -> void:
 	const THRESHOLDS := [0.25, 0.50, 0.75]
-	const MESSAGES := ["25%! 시작이 좋아요!", "절반 완료!", "거의 다 됐어요!"]
+	const MESSAGES := ["25%! Great start!", "Halfway clean!", "Almost done!"]
 	const HUES := [0.55, 0.35, 0.08]
 	const TEXT_COLORS := [Color(0.08, 0.72, 0.72), Color(0.14, 0.70, 0.28), Color(0.85, 0.48, 0.08)]
 	if _progress_milestone_hit >= THRESHOLDS.size() or completed:
@@ -2550,17 +2550,17 @@ func _draw_grade_tracker() -> void:
 		var secs := int(ceil(time_left))
 		if _grade_slot_state(at_risk) == GRADE_SLOT_TARGET:
 			# Star is reachable but not yet earned: keep nudging the combo gate
-			# (not "유지/keep") so the player races the clock *and* the combo.
-			text = "콤보 x%d! %d초" % [STAR3_COMBO, secs]
+			# so the player races the clock and the combo.
+			text = "Combo x%d! %ds" % [STAR3_COMBO, secs]
 		else:
-			text = "별%d 유지 %d초" % [at_risk + 1, secs]
+			text = "Keep star %d: %ds" % [at_risk + 1, secs]
 		col = Color(1.0, 0.74, 0.36)
 		col.a = blink
 	elif _grade_slot_state(2) == GRADE_SLOT_TARGET:
-		text = "콤보 x%d면 별 3개" % STAR3_COMBO
+		text = "Combo x%d for 3 stars" % STAR3_COMBO
 		col = Color(1.0, 0.88, 0.55)
 	else:
-		text = "시간 %s" % _format_time(level_time)
+		text = "Time %s" % _format_time(level_time)
 	draw_string(font, Vector2(rect.position.x, line_y), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 12, col)
 
 
@@ -2584,16 +2584,16 @@ func _draw_combo_badge() -> void:
 		var halo_rect := Rect2(Vector2(195.0, 134.0) - halo_size * 0.5, halo_size)
 		draw_style_box(_style("combo_halo", Color(1.0, 0.78, 0.22, halo), 24.0), halo_rect)
 	draw_style_box(_style(style_key, bg, 18.0), badge)
-	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "콤보 x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
+	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "Combo x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
 	if _combo_bonus_time >= 0.0:
 		var _age := float(Time.get_ticks_msec()) / 1000.0 - _combo_bonus_time
 		if _age < 1.2:
 			var _alpha := 1.0 - _age / 1.2
 			var _rise := _age * 38.0
 			draw_string(_font(), Vector2(badge.position.x + 4.0, badge.position.y - _rise - 14.0),
-				"+%d 코인!" % _combo_bonus_amount, HORIZONTAL_ALIGNMENT_LEFT,
+				"+%d coins!" % _combo_bonus_amount, HORIZONTAL_ALIGNMENT_LEFT,
 				-1, 16, Color(1.0, 0.85, 0.2, _alpha))
-	# 콤보 유지 시간 잔량 바: 얼마나 빨리 다음 패치를 제거해야 하는지 시각화한다.
+	# Combo timer bar: shows how quickly the next patch must be removed.
 	var bar_w := badge_size.x - 8.0
 	var bar_x := badge.position.x + 4.0
 	var bar_y := badge.position.y + badge_size.y + 3.0
@@ -2686,8 +2686,8 @@ func _draw_completion_panel() -> void:
 		else:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "반짝반짝 완료!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), "%s %02d · %s · 최고 콤보 x%d" % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "All Clean!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), "%s %02d · %s · Best x%d" % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
 
 	var record_seconds: float = _best_time_for_level(level_index)
 	if is_new_record:
@@ -2695,9 +2695,9 @@ func _draw_completion_panel() -> void:
 		var record_color := Color("#e0a818").lerp(Color("#fff3cf"), 0.5 + 0.5 * sin(time_now * 6.0))
 		_draw_star(Vector2(panel.position.x + 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
 		_draw_star(Vector2(panel.position.x + panel.size.x - 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
-		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), "신기록! %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), "New record! %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
 	elif record_seconds > 0.0:
-		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), "최고 기록 %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), "Best time %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
 
 	var reward_chip := Rect2(panel.position.x + panel.size.x - 106.0, panel.position.y - 14.0, 96.0, 30.0)
 	draw_style_box(_style("reward_chip", Color("#ffce3d"), 15.0), reward_chip)
@@ -2708,12 +2708,12 @@ func _draw_completion_panel() -> void:
 	var retry_rect := _get_retry_rect()
 	draw_style_box(_style("retry_shadow", Color("#246076"), 14.0), Rect2(retry_rect.position + Vector2(0.0, 4.0), retry_rect.size))
 	draw_style_box(_style("retry_button", Color("#7fd6e6"), 14.0), retry_rect)
-	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), "↺ 다시 세차", HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, 16, Color("#0d3b55"))
+	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), "↺ Wash Again", HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, 16, Color("#0d3b55"))
 
 	var next_rect := _get_next_rect()
 	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))
 	draw_style_box(_style("next_button", Color("#39d98a"), 14.0), next_rect)
-	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), "다음 차 ▶", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
+	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), "Next Car ▶", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
 
 
 func _format_time(seconds_value: float) -> String:
