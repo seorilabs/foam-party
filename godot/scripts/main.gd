@@ -307,7 +307,7 @@ func _load_progress() -> void:
 	daily_mission_target = loaded_target
 	daily_mission_progress = clampi(int(daily_config.get_value("daily", "progress", 0)), 0, daily_mission_target)
 	daily_mission_claimed = bool(daily_config.get_value("daily", "claimed", false))
-	if daily_mission_progress >= daily_mission_target or main_claimed_date == today:
+	if daily_mission_claimed or daily_mission_progress >= daily_mission_target or main_claimed_date == today:
 		daily_mission_claimed = true
 		if daily_mission_progress < daily_mission_target:
 			daily_mission_progress = daily_mission_target
@@ -1875,6 +1875,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		if not daily_mission_claimed and patch.kind == daily_mission_type:
 			daily_mission_progress += 1
 			if daily_mission_progress >= daily_mission_target:
+				daily_mission_progress = daily_mission_target
 				daily_mission_claimed = true
 				coins += DAILY_MISSION_REWARD
 				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
