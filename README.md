@@ -52,11 +52,47 @@ adb shell monkey -p com.seorilabs.foamparty -c android.intent.category.LAUNCHER 
 Android export에는 ETC2/ASTC texture import 설정이 필요합니다. `godot/project.godot`의
 `textures/vram_compression/import_etc2_astc=true`를 유지해야 합니다.
 
+## Apple App Store 준비
+
+App Store 준비 상태의 repo-local 원본은 다음 파일이다.
+
+- `app-store/app-store.config.json`
+- `docs/app-store-registration.md`
+- `docs/app-store-release.md`
+- `tools/build_ios_app_store.sh`
+- `tools/check_app_store_readiness.py`
+
+Xcode project만 생성:
+
+```bash
+tools/build_ios_app_store.sh --project-only
+```
+
+서명 없이 Release compile 경로 확인:
+
+```bash
+tools/build_ios_app_store.sh --unsigned-build
+```
+
+현재 서명된 `.ipa` 생성은 `com.seorilabs.foamparty`용 App Store provisioning profile 확정 후 진행한다.
+
+```bash
+export FOAM_PARTY_IOS_PROFILE_SPECIFIER="<profile name or uuid>"
+tools/build_ios_app_store.sh
+```
+
+남은 App Store Connect/manual gate는 아래 명령으로 확인한다.
+
+```bash
+tools/check_app_store_readiness.py
+```
+
 ## 범위 메모
 
 - MVP는 로컬-only 게임플레이입니다.
 - 효과음과 배경음악은 외부 에셋이 아니라 런타임 합성 WAV입니다.
-- Firebase, Google Play, App Store, AppsInToss release setup은 아직 추가하지 않았습니다.
+- App Store release setup은 repo-local config와 iOS export path만 추가되어 있으며, App Store Connect 등록/서명/스크린샷은 아직 남아 있습니다.
+- Firebase, Google Play, AppsInToss release setup은 아직 추가하지 않았습니다.
 - 이후 플랫폼 서비스는 gameplay script에 직접 섞지 말고 adapter 뒤에 둡니다.
 
 ## 스크린샷 캡처

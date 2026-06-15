@@ -1,0 +1,123 @@
+{
+  "app": {
+    "appId": "foam-party",
+    "koreanName": "폼 파티",
+    "englishName": "Foam Party",
+    "sku": "foam-party",
+    "bundleId": "com.seorilabs.foamparty",
+    "bundleIdStatus": "로컬 iOS export 후보값. App Store Connect App ID 생성 전 최종 확인 필요",
+    "primaryLocale": "en-US",
+    "primaryLocaleStatus": "확정: 초기 App Store 등록은 영어 primary locale로 진행",
+    "primaryCategory": "Games",
+    "secondaryCategory": "Casual",
+    "categoryStatus": "후보값. App Store Connect에서 최종 선택 필요",
+    "supportEmail": "cs@seorilabs.com",
+    "supportUrl": "확정 필요",
+    "marketingUrl": "선택 사항",
+    "dsaTraderStatus": "확정 필요: worldwide availability는 EU 배포를 포함하므로 App Store Connect DSA trader 여부 확인 필요"
+  },
+  "availability": {
+    "distribution": "worldwide",
+    "status": "확정: 초기 App Store 출시는 전세계 배포로 진행",
+    "excludedCountriesOrRegions": [],
+    "notes": "게임 규칙 이해에 긴 문장이 필요하지 않은 캐주얼 게임이므로 영어 metadata와 영어 UI로 전세계 출시한다."
+  },
+  "localizations": {
+    "en-US": {
+      "name": "Foam Party",
+      "subtitle": "A bubbly car wash game",
+      "promotionalText": "Switch between air, pressure water, soap, and sponge tools to make messy cars shine.",
+      "description": "Foam Party is a light cartoon car wash game built for mobile play.\n\nDirty cars arrive covered in mud, dust, leaves, bug marks, and oil stains. Pick the right tool for each mess, drag across the car, and watch the dirt blow away, wash down, soften with soap, or wipe clean with a sponge.\n\nCity cars, sports cars, and trucks rotate through the levels, with more durable dirt appearing as you progress. Clear dirt quickly to build combos, earn star ratings from your finish time and best combo, and collect coins. Coins can trigger a foam bomb that soaps up every remaining mess at once.\n\nThe game includes a first-run guide, sound toggle, local progress saving, and instant play without an account.",
+      "keywords": "car wash,casual game,cars,foam,cleaning,mobile game,coins",
+      "whatsNew": "First App Store release candidate. Includes cartoon car washing, tool-based cleaning, combos, star ratings, coins, and foam bomb."
+    }
+  },
+  "deferredLocalizations": {
+    "ko-KR": {
+      "status": "후속 현지화 후보. 초기 전세계 출시는 en-US 단일 메타데이터로 진행",
+      "name": "폼 파티",
+      "subtitle": "거품으로 즐기는 세차 게임",
+      "promotionalText": "바람, 고압수, 비누, 스펀지를 바꿔 쓰며 더러워진 차를 반짝이게 닦아 보세요.",
+      "description": "폼 파티는 모바일에서 가볍게 즐기는 카툰풍 세차 게임입니다.\n\n흙탕물, 먼지, 낙엽, 벌레 자국, 오일 얼룩이 붙은 차가 들어오면 상황에 맞는 도구를 골라 차 위를 문질러 주세요. 바람으로 가벼운 오물을 날리고, 고압수로 흘려보내고, 비누와 스펀지로 단단한 얼룩을 불리고 닦아냅니다.\n\n차량은 시티카, 스포츠카, 트럭이 번갈아 등장하며 레벨이 오를수록 오물 수와 체력이 조금씩 늘어납니다. 빠르게 연속 제거하면 콤보가 쌓이고, 완료 시간과 최고 콤보에 따라 별점과 코인을 받습니다. 코인으로 거품 폭탄을 사용해 남은 오물을 한 번에 비누칠할 수 있습니다.\n\n첫 실행 가이드, 사운드 토글, 로컬 진행 저장을 제공하며 별도 계정 없이 바로 플레이할 수 있습니다.",
+      "keywords": "세차,캐주얼게임,자동차,거품,청소,모바일게임,코인",
+      "whatsNew": "첫 App Store 출시 후보입니다. 카툰풍 세차, 도구별 오물 제거, 콤보, 별점, 코인, 거품 폭탄을 제공합니다."
+    }
+  },
+  "build": {
+    "godotPreset": "iOS",
+    "godotVersion": "4.6.3.stable",
+    "marketingVersion": "0.1.0",
+    "buildNumber": "1",
+    "teamId": "HCDUXX4Z3X",
+    "teamIdStatus": "로컬 Apple Distribution 인증서에서 확인됨",
+    "signingIdentity": "Apple Distribution: Seori Labs (HCDUXX4Z3X)",
+    "exportMethod": "app-store-connect",
+    "targetedDeviceFamily": "iPhone only",
+    "godotExportProjectOnly": true,
+    "archivePath": "build/ios/foam-party.xcarchive",
+    "ipaDirectory": "build/ios",
+    "command": "tools/build_ios_app_store.sh"
+  },
+  "assets": {
+    "appStoreIcon": "app-store/assets/icon-1024.png",
+    "appStoreIconStatus": "godot/assets/AppIcon.png 600x600 원본에서 1024x1024로 생성. 최종 제출 전 고해상도 원본 교체 권장",
+    "screenshotsStatus": "확정 필요: en-US primary locale 기준 실제 iOS/Simulator 화면에서 iPhone 6.9-inch 세트 우선 캡처",
+    "screenshots": {
+      "en-US": {
+        "iphone69": []
+      }
+    }
+  },
+  "currentBinaryPrivacy": {
+    "firebase": false,
+    "ads": false,
+    "analytics": false,
+    "iap": false,
+    "account": false,
+    "networkCallsObservedInSource": false,
+    "localSaveOnly": true,
+    "appPrivacyCandidate": "현재 소스 기준 데이터 수집 없음 후보. App Store Connect 입력 전 SDK/네트워크 변경 여부 재검증 필요",
+    "trackingCandidate": "아니오",
+    "attRequiredCandidate": "아니오"
+  },
+  "complianceCandidates": {
+    "ageRating": "4+ 후보. 실제 App Store Connect 설문 입력 전 완료 아님",
+    "contentRights": "현재 바이너리는 자체 제작/코드 생성 에셋만 사용 후보. 광고 SDK 도입 시 재검토 필요",
+    "exportCompliance": "ITSAppUsesNonExemptEncryption=false 후보. 현재 custom cryptography 없음",
+    "gameCenter": false,
+    "lootBoxes": false,
+    "gambling": false,
+    "userGeneratedContent": false,
+    "unrestrictedWebAccess": false,
+    "chat": false
+  },
+  "releaseGates": {
+    "appStoreConnectAppShell": "확정 필요",
+    "appIdBundleId": "확정 필요: com.seorilabs.foamparty 사용 여부 확인",
+    "provisioningProfile": "확정 필요: FOAM_PARTY_IOS_PROFILE_SPECIFIER",
+    "supportUrl": "확정 필요",
+    "privacyPolicyUrl": "확정 필요",
+    "appPrivacy": "확정 필요",
+    "ageRating": "확정 필요",
+    "dsaTraderStatus": "확정 필요",
+    "reviewContactPhone": "확정 필요",
+    "contentRights": "확정 필요",
+    "exportCompliance": "확정 필요",
+    "screenshots": "확정 필요",
+    "testFlightUpload": "미진행",
+    "buildSelection": "미진행",
+    "submitForReview": "미진행"
+  },
+  "lastLocalVerification": {
+    "date": "2026-06-12",
+    "projectOnlyExport": "passed: build/ios/foam-party.xcodeproj generated",
+    "unsignedReleaseCompile": "passed: xcodebuild Release iphoneos CODE_SIGNING_ALLOWED=NO after en-US/worldwide update",
+    "signedAppStoreIpa": "blocked: App Store provisioning profile required"
+  },
+  "notes": [
+    "현재 MVP는 local-only 게임이며 Firebase, AdMob, IAP, 계정 기능이 없다.",
+    "초기 App Store 등록은 en-US primary locale과 worldwide availability로 진행한다. 한국어 현지화는 후속 후보로 보관한다.",
+    "광고 adapter나 Firebase를 추가하면 App Privacy, ATT/IDFA, age rating, review notes를 반드시 다시 갱신한다.",
+    "App Store Connect 수동 항목은 checker에서 blocker inventory로 남긴다."
+  ]
+}

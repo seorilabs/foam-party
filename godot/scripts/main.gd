@@ -25,6 +25,15 @@ const STATE_PLAYING := "playing"
 const GAMEPLAY_SCALE := 1.16
 const GAMEPLAY_PIVOT := Vector2(195.0, 545.0)
 const GAMEPLAY_OFFSET := Vector2(0.0, 0.0)
+const HUD_TOP_Y := 12.0
+const HUD_SAFE_PADDING := 8.0
+const TOP_BUTTON_Y := 104.0
+const TOP_BUTTON_SAFE_PADDING := 12.0
+const TOOLBAR_Y := 744.0
+const TOOL_BUTTON_Y := 764.0
+const TOOL_BUTTON_HEIGHT := 72.0
+const TOOL_BUTTON_BOTTOM_PADDING := 12.0
+const TOOLBAR_TOP_GAP := 20.0
 const STATE_STUCK := "stuck"
 const STATE_WET := "wet"
 const STATE_SOAPED := "soaped"
@@ -138,9 +147,9 @@ var last_particle_spawn := 0.0
 var car_color := Color("#ffcf5a")
 var car_type := "compact"
 var car_type_labels := {
-	"compact": "시티카",
-	"sports": "스포츠카",
-	"truck": "트럭",
+	"compact": "City",
+	"sports": "Sport",
+	"truck": "Truck",
 }
 var canvas_origin := Vector2.ZERO
 var canvas_scale := 1.0
@@ -154,10 +163,10 @@ var audio_playback_enabled := true
 
 var tool_ids := [TOOL_AIR, TOOL_WATER, TOOL_SOAP, TOOL_SPONGE]
 var tool_labels := {
-	TOOL_AIR: "바람",
-	TOOL_WATER: "고압수",
-	TOOL_SOAP: "비누",
-	TOOL_SPONGE: "스펀지",
+	TOOL_AIR: "Air",
+	TOOL_WATER: "Water",
+	TOOL_SOAP: "Soap",
+	TOOL_SPONGE: "Sponge",
 }
 var tool_colors := {
 	TOOL_AIR: Color("#b7f0ff"),
@@ -313,7 +322,7 @@ func _setup_audio() -> void:
 	removal_stream = _make_removal_stream()
 
 	bgm_player = AudioStreamPlayer.new()
-	bgm_player.name = "배경음악"
+	bgm_player.name = "BackgroundMusic"
 	bgm_player.stream = _make_bgm_stream()
 	bgm_player.volume_db = -23.0
 	bgm_player.finished.connect(_on_bgm_finished)
@@ -322,23 +331,23 @@ func _setup_audio() -> void:
 		bgm_player.play()
 
 	tool_loop_player = AudioStreamPlayer.new()
-	tool_loop_player.name = "청소도구소리"
+	tool_loop_player.name = "ToolLoopSound"
 	tool_loop_player.volume_db = -7.0
 	tool_loop_player.finished.connect(_on_tool_loop_finished)
 	add_child(tool_loop_player)
 
 	ui_sfx_player = AudioStreamPlayer.new()
-	ui_sfx_player.name = "선택효과음"
+	ui_sfx_player.name = "SelectSfx"
 	ui_sfx_player.volume_db = -8.0
 	add_child(ui_sfx_player)
 
 	completion_sfx_player = AudioStreamPlayer.new()
-	completion_sfx_player.name = "완료효과음"
+	completion_sfx_player.name = "CompletionSfx"
 	completion_sfx_player.volume_db = -5.0
 	add_child(completion_sfx_player)
 
 	removal_sfx_player = AudioStreamPlayer.new()
-	removal_sfx_player.name = "제거효과음"
+	removal_sfx_player.name = "RemovalSfx"
 	removal_sfx_player.volume_db = -9.0
 	add_child(removal_sfx_player)
 
@@ -874,6 +883,57 @@ func _update_canvas_transform() -> void:
 	canvas_origin = (available_size - DESIGN_SIZE * canvas_scale) * 0.5
 
 
+func _safe_area_design_insets() -> Vector4:
+	var debug_insets := OS.get_environment("FOAM_SAFE_AREA_DESIGN_INSETS")
+	if debug_insets != "":
+		var parts := debug_insets.split(",", false)
+		if parts.size() == 4:
+			return Vector4(parts[0].to_float(), parts[1].to_float(), parts[2].to_float(), parts[3].to_float())
+	_update_canvas_transform()
+	if canvas_scale <= 0.0:
+		return Vector4(0.0, 0.0, 0.0, 0.0)
+	var window_size := Vector2(DisplayServer.window_get_size())
+	var canvas_size := get_viewport_rect().size
+	if window_size.x <= 0.0 or window_size.y <= 0.0 or canvas_size.x <= 0.0 or canvas_size.y <= 0.0:
+		return Vector4(0.0, 0.0, 0.0, 0.0)
+	var safe := DisplayServer.get_display_safe_area()
+	if safe.size.x <= 0 or safe.size.y <= 0:
+		return Vector4(0.0, 0.0, 0.0, 0.0)
+	var scale_x := canvas_size.x / window_size.x
+	var scale_y := canvas_size.y / window_size.y
+	var safe_canvas := Rect2(
+		Vector2(float(safe.position.x) * scale_x, float(safe.position.y) * scale_y),
+		Vector2(float(safe.size.x) * scale_x, float(safe.size.y) * scale_y)
+	)
+	var design_max := canvas_origin + DESIGN_SIZE * canvas_scale
+	var inset_left := maxf(0.0, (safe_canvas.position.x - canvas_origin.x) / canvas_scale)
+	var inset_top := maxf(0.0, (safe_canvas.position.y - canvas_origin.y) / canvas_scale)
+	var inset_right := maxf(0.0, (design_max.x - (safe_canvas.position.x + safe_canvas.size.x)) / canvas_scale)
+	var inset_bottom := maxf(0.0, (design_max.y - (safe_canvas.position.y + safe_canvas.size.y)) / canvas_scale)
+	return Vector4(inset_left, inset_top, inset_right, inset_bottom)
+
+
+func _hud_top_y() -> float:
+	return maxf(HUD_TOP_Y, _safe_area_design_insets().y + HUD_SAFE_PADDING)
+
+
+func _top_button_y() -> float:
+	if game_state == STATE_PLAYING:
+		return _hud_top_y() + 96.0
+	return maxf(TOP_BUTTON_Y, _safe_area_design_insets().y + TOP_BUTTON_SAFE_PADDING)
+
+
+func _tool_button_y() -> float:
+	var bottom_inset := _safe_area_design_insets().w
+	if bottom_inset <= 0.0:
+		return TOOL_BUTTON_Y
+	return minf(TOOL_BUTTON_Y, DESIGN_SIZE.y - bottom_inset - TOOL_BUTTON_HEIGHT - TOOL_BUTTON_BOTTOM_PADDING)
+
+
+func _toolbar_y() -> float:
+	return minf(TOOLBAR_Y, _tool_button_y() - TOOLBAR_TOP_GAP)
+
+
 func _to_design(screen_point: Vector2) -> Vector2:
 	_update_canvas_transform()
 	if canvas_scale <= 0.0:
@@ -1047,8 +1107,8 @@ func _spawn_dirt() -> void:
 		pool[index] = pool[swap_index]
 		pool[swap_index] = swap_value
 
-	# 차종별 오염 패턴: 스포츠카는 기름·먼지 중심(배기 잔류물),
-	# 트럭은 진흙·벌레 중심(야외 주행). 시티카는 균등 분포.
+	# Per-car dirt patterns: sports cars skew toward oil and dust,
+	# trucks skew toward mud and bugs, and city cars stay balanced.
 	var type_pool: Array
 	var radius_min := 13.0
 	var radius_max := 24.0
@@ -1609,7 +1669,7 @@ func _update_clean_progress() -> void:
 # This ensures experienced players face a gradually rising skill ceiling.
 func _star_time_threshold(tier: int) -> float:
 	var base := STAR3_TIME if tier == 3 else STAR2_TIME
-	return base * maxf(0.6, 1.0 - float(level_index) * 0.015)
+	return base * maxf(0.6, 1.0 - float(max(0, level_index - 1)) * 0.015)
 
 
 func _calc_stars() -> int:
@@ -1668,7 +1728,7 @@ func _best_time_for_level(level: int) -> float:
 
 func _check_progress_milestone() -> void:
 	const THRESHOLDS := [0.25, 0.50, 0.75]
-	const MESSAGES := ["25%! 시작이 좋아요!", "절반 완료!", "거의 다 됐어요!"]
+	const MESSAGES := ["25%! Great start!", "Halfway clean!", "Almost done!"]
 	const HUES := [0.55, 0.35, 0.08]
 	const TEXT_COLORS := [Color(0.08, 0.72, 0.72), Color(0.14, 0.70, 0.28), Color(0.85, 0.48, 0.08)]
 	if _progress_milestone_hit >= THRESHOLDS.size() or completed:
@@ -1686,7 +1746,7 @@ func _check_progress_milestone() -> void:
 	_progress_milestone_time = float(Time.get_ticks_msec()) / 1000.0
 	_progress_milestone_text = MESSAGES[stage]
 	_progress_milestone_color = TEXT_COLORS[stage]
-	var hue := HUES[stage]
+	var hue: float = float(HUES[stage])
 	for index in range(22):
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(50.0, 130.0)
@@ -1745,21 +1805,30 @@ func _draw_background() -> void:
 
 func _draw_status() -> void:
 	var font: Font = _font()
-	var card := Rect2(14.0, 12.0, 362.0, 84.0)
+	var card := Rect2(14.0, _hud_top_y(), 362.0, 84.0)
 	draw_style_box(_style("hud_shadow", Color(0.05, 0.23, 0.33, 0.25), 20.0), Rect2(card.position + Vector2(0.0, 3.0), card.size))
 	draw_style_box(_style("hud_card", Color(0.97, 0.99, 1.0, 0.94), 20.0), card)
 
-	draw_string(font, Vector2(32.0, 44.0), "폼 파티", HORIZONTAL_ALIGNMENT_LEFT, 110.0, 20, Color("#0d3b55"))
-	var coin_chip := Rect2(142.0, 22.0, 98.0, 28.0)
+	var coin_chip := Rect2(150.0, card.position.y + 10.0, 90.0, 28.0)
+	var title_width := coin_chip.position.x - 32.0 - 8.0
+	var title_size := 19
+	while title_size > 15 and font.get_string_size("Foam Party", HORIZONTAL_ALIGNMENT_LEFT, -1.0, title_size).x > title_width:
+		title_size -= 1
+	draw_string(font, Vector2(32.0, card.position.y + 32.0), "Foam Party", HORIZONTAL_ALIGNMENT_LEFT, title_width, title_size, Color("#0d3b55"))
 	draw_style_box(_style("coin_chip", Color("#fff3cf"), 14.0), coin_chip)
 	draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#ffce3d"))
 	draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#9a7400"), false, 1.5)
-	draw_string(font, Vector2(coin_chip.position.x + 30.0, coin_chip.position.y + 20.0), "%d" % coins, HORIZONTAL_ALIGNMENT_LEFT, 62.0, 14, Color("#6b5200"))
-	var badge := Rect2(248.0, 22.0, 112.0, 28.0)
+	var coin_text := "%d" % coins
+	var coin_text_width := coin_chip.size.x - 38.0
+	var coin_font_size := 14
+	while coin_font_size > 10 and font.get_string_size(coin_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, coin_font_size).x > coin_text_width:
+		coin_font_size -= 1
+	draw_string(font, Vector2(coin_chip.position.x + 30.0, coin_chip.position.y + 20.0), coin_text, HORIZONTAL_ALIGNMENT_LEFT, coin_text_width, coin_font_size, Color("#6b5200"))
+	var badge := Rect2(248.0, card.position.y + 10.0, 112.0, 28.0)
 	draw_style_box(_style("level_badge", Color("#49a7ff"), 14.0), badge)
 	draw_string(font, Vector2(badge.position.x, badge.position.y + 20.0), "%s %02d" % [car_type_labels[car_type], level_index], HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 13, Color.WHITE)
 
-	var bar_rect := Rect2(32.0, 58.0, 254.0, 24.0)
+	var bar_rect := Rect2(32.0, card.position.y + 46.0, 254.0, 24.0)
 	draw_style_box(_style("bar_bg", Color("#d7e8ef"), 12.0), bar_rect)
 	var fill_width: float = bar_rect.size.x * clean_progress
 	if fill_width >= 8.0:
@@ -1774,20 +1843,20 @@ func _draw_status() -> void:
 			var mc := _progress_milestone_color
 			draw_string(font, Vector2(32.0, bar_rect.position.y - rise), _progress_milestone_text, HORIZONTAL_ALIGNMENT_CENTER, 254.0, 17, Color(mc.r, mc.g, mc.b, alpha))
 
-	var hint_rect := Rect2(22.0, 696.0, 244.0, 30.0)
+	var hint_rect := Rect2(22.0, minf(696.0, _tool_button_y() - 46.0), 244.0, 30.0)
 	draw_style_box(_style("hint_bubble", Color(0.03, 0.14, 0.2, 0.78), 15.0), hint_rect)
 	draw_string(font, Vector2(hint_rect.position.x, hint_rect.position.y + 21.0), "%s · %s" % [tool_labels[selected_tool], _tool_hint()], HORIZONTAL_ALIGNMENT_CENTER, hint_rect.size.x, 13, Color(0.93, 0.99, 1.0))
 
 
 func _tool_hint() -> String:
 	if selected_tool == TOOL_AIR:
-		return "낙엽·먼지 날림"
+		return "blow leaves"
 	if selected_tool == TOOL_WATER:
-		return "흘려보내기·헹굼"
+		return "rinse dirt"
 	if selected_tool == TOOL_SOAP:
-		return "기름·벌레 불림"
+		return "loosen stains"
 	if selected_tool == TOOL_SPONGE:
-		return "불린 자국 닦기"
+		return "wipe clean"
 	return ""
 
 
@@ -1915,7 +1984,7 @@ func _draw_car() -> void:
 	var plate := Rect2(159.0, 582.0, 72.0, 22.0)
 	draw_rect(plate, Color("#f7fbff"))
 	draw_rect(plate, outline, false, 2.5)
-	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), "폼 파티", HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
+	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), "FOAM", HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
 
 
 func _draw_compact_details(outline: Color) -> void:
@@ -2370,20 +2439,21 @@ func _draw_title_screen() -> void:
 	draw_circle(Vector2(130.0, 268.0), 44.0, Color(1.0, 1.0, 1.0, 0.35))
 	draw_circle(Vector2(258.0, 252.0), 30.0, Color(1.0, 1.0, 1.0, 0.3))
 	draw_circle(Vector2(220.0, 296.0), 20.0, Color(1.0, 1.0, 1.0, 0.28))
-	draw_string(font, Vector2(2.0, 332.0), "폼 파티", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color("#0d3b55"))
-	draw_string(font, Vector2(0.0, 328.0), "폼 파티", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color.WHITE)
-	draw_string(font, Vector2(0.0, 368.0), "반짝반짝 세차 게임", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 18, Color("#0d3b55"))
+	draw_string(font, Vector2(2.0, 332.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color("#0d3b55"))
+	draw_string(font, Vector2(0.0, 328.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color.WHITE)
+	draw_string(font, Vector2(0.0, 368.0), "A bubbly car wash game", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 18, Color("#0d3b55"))
 
 	var start_rect := _get_start_rect()
 	draw_style_box(_style("start_shadow", Color("#1f8a55"), 16.0), Rect2(start_rect.position + Vector2(0.0, 5.0), start_rect.size))
 	draw_style_box(_style("start_button", Color("#39d98a"), 16.0), start_rect)
-	var start_label := "세차 시작"
+	var start_label := "Start Wash"
 	if level_index > 1:
-		start_label = "이어하기 · %s %02d" % [car_type_labels[car_type], level_index]
+		start_label = "Continue · %s %02d" % [car_type_labels[car_type], level_index]
 	draw_string(font, Vector2(start_rect.position.x, start_rect.position.y + 38.0), start_label, HORIZONTAL_ALIGNMENT_CENTER, start_rect.size.x, 19, Color("#0d3b2a"))
 
-	draw_string(font, Vector2(0.0, 588.0), "코인 %d · 모은 별 %d" % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
-	draw_string(font, Vector2(0.0, 826.0), "v0.1", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 12, Color(1.0, 1.0, 1.0, 0.5))
+	draw_string(font, Vector2(0.0, 588.0), "Coins %d · Stars %d" % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
+	var version_y := minf(826.0, DESIGN_SIZE.y - _safe_area_design_insets().w - 12.0)
+	draw_string(font, Vector2(0.0, version_y), "v0.1", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 12, Color(1.0, 1.0, 1.0, 0.5))
 
 
 func _draw_top_buttons() -> void:
@@ -2411,13 +2481,13 @@ func _draw_tutorial() -> void:
 	var panel := Rect2(30.0, 176.0, 330.0, 452.0)
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 44.0), "세차 가이드", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 44.0), "Wash Guide", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
 
 	var rows := [
-		[TOOL_AIR, "바람", "낙엽과 먼지를 차 밖으로 날려요"],
-		[TOOL_WATER, "고압수", "흙탕물을 씻고 비누 거품을 헹궈요"],
-		[TOOL_SOAP, "비누", "기름·벌레 자국을 먼저 불려요"],
-		[TOOL_SPONGE, "스펀지", "불린 자국을 문질러 닦아요"],
+		[TOOL_AIR, "Air", "Blow off leaves and dust"],
+		[TOOL_WATER, "Water", "Rinse mud and soap away"],
+		[TOOL_SOAP, "Soap", "Soften oil and bug marks"],
+		[TOOL_SPONGE, "Sponge", "Wipe loosened stains"],
 	]
 	for row_index in range(rows.size()):
 		var row: Array = rows[row_index]
@@ -2427,8 +2497,8 @@ func _draw_tutorial() -> void:
 		draw_string(font, Vector2(panel.position.x + 92.0, row_y - 2.0), row[1], HORIZONTAL_ALIGNMENT_LEFT, 200.0, 17, Color("#123246"))
 		draw_string(font, Vector2(panel.position.x + 92.0, row_y + 20.0), row[2], HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 116.0, 13, Color("#2c6b78"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 410.0), "콤보를 이어가면 별 3개! 거품 폭탄은 코인 %d개" % BOMB_COST, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#2c6b78"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 436.0), "화면을 탭하면 시작!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 16, Color("#1f8a55"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 410.0), "Chain combos for 3 stars. Foam Bomb: %d coins" % BOMB_COST, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 436.0), "Tap to start!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 16, Color("#1f8a55"))
 
 
 func _draw_bomb_button() -> void:
@@ -2442,7 +2512,7 @@ func _draw_bomb_button() -> void:
 	draw_circle(rect.position + Vector2(22.0, 17.0), 9.0, Color(1.0, 1.0, 1.0, 0.95))
 	draw_circle(rect.position + Vector2(32.0, 12.0), 6.0, Color(1.0, 1.0, 1.0, 0.8))
 	draw_circle(rect.position + Vector2(30.0, 22.0), 4.5, Color(1.0, 1.0, 1.0, 0.8))
-	draw_string(font, Vector2(rect.position.x + 42.0, rect.position.y + 20.0), "거품폭탄", HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 11, Color("#123246"))
+	draw_string(font, Vector2(rect.position.x + 42.0, rect.position.y + 20.0), "Foam", HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 11, Color("#123246"))
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
 	draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
@@ -2492,17 +2562,17 @@ func _draw_grade_tracker() -> void:
 		var secs := int(ceil(time_left))
 		if _grade_slot_state(at_risk) == GRADE_SLOT_TARGET:
 			# Star is reachable but not yet earned: keep nudging the combo gate
-			# (not "유지/keep") so the player races the clock *and* the combo.
-			text = "콤보 x%d! %d초" % [STAR3_COMBO, secs]
+			# so the player races the clock and the combo.
+			text = "Combo x%d! %ds" % [STAR3_COMBO, secs]
 		else:
-			text = "별%d 유지 %d초" % [at_risk + 1, secs]
+			text = "Keep star %d: %ds" % [at_risk + 1, secs]
 		col = Color(1.0, 0.74, 0.36)
 		col.a = blink
 	elif _grade_slot_state(2) == GRADE_SLOT_TARGET:
-		text = "콤보 x%d면 별 3개" % STAR3_COMBO
+		text = "Combo x%d for 3 stars" % STAR3_COMBO
 		col = Color(1.0, 0.88, 0.55)
 	else:
-		text = "시간 %s" % _format_time(level_time)
+		text = "Time %s" % _format_time(level_time)
 	draw_string(font, Vector2(rect.position.x, line_y), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 12, col)
 
 
@@ -2514,7 +2584,8 @@ func _draw_combo_badge() -> void:
 	var pop_amp: float = 0.35 + 0.05 * float(min(combo_count - 2, 8))
 	var pop: float = 1.0 + pop_amp * exp(-(time_now - combo_pop_time) * 6.0)
 	var badge_size := Vector2(118.0, 36.0) * pop
-	var badge := Rect2(Vector2(195.0, 134.0) - badge_size * 0.5, badge_size)
+	var badge_center_y := maxf(134.0, _hud_top_y() + 112.0)
+	var badge := Rect2(Vector2(195.0, badge_center_y) - badge_size * 0.5, badge_size)
 	var is_hot := combo_count >= STAR3_COMBO
 	var style_key := "combo_hot" if is_hot else "combo_cool"
 	var bg := Color("#ffce3d") if is_hot else Color(0.97, 0.99, 1.0, 0.95)
@@ -2522,19 +2593,19 @@ func _draw_combo_badge() -> void:
 	if is_hot:
 		var halo: float = 0.18 + 0.12 * sin(_halo_phase)
 		var halo_size := badge_size + Vector2(18.0, 18.0)
-		var halo_rect := Rect2(Vector2(195.0, 134.0) - halo_size * 0.5, halo_size)
+		var halo_rect := Rect2(Vector2(195.0, badge_center_y) - halo_size * 0.5, halo_size)
 		draw_style_box(_style("combo_halo", Color(1.0, 0.78, 0.22, halo), 24.0), halo_rect)
 	draw_style_box(_style(style_key, bg, 18.0), badge)
-	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "콤보 x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
+	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "Combo x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
 	if _combo_bonus_time >= 0.0:
 		var _age := float(Time.get_ticks_msec()) / 1000.0 - _combo_bonus_time
 		if _age < 1.2:
 			var _alpha := 1.0 - _age / 1.2
 			var _rise := _age * 38.0
 			draw_string(_font(), Vector2(badge.position.x + 4.0, badge.position.y - _rise - 14.0),
-				"+%d 코인!" % _combo_bonus_amount, HORIZONTAL_ALIGNMENT_LEFT,
+				"+%d coins!" % _combo_bonus_amount, HORIZONTAL_ALIGNMENT_LEFT,
 				-1, 16, Color(1.0, 0.85, 0.2, _alpha))
-	# 콤보 유지 시간 잔량 바: 얼마나 빨리 다음 패치를 제거해야 하는지 시각화한다.
+	# Combo timer bar: shows how quickly the next patch must be removed.
 	var bar_w := badge_size.x - 8.0
 	var bar_x := badge.position.x + 4.0
 	var bar_y := badge.position.y + badge_size.y + 3.0
@@ -2549,7 +2620,8 @@ func _draw_toolbar() -> void:
 	var font: Font = _font()
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
 	var hint_tool := _active_hint_tool()
-	draw_style_box(_style("toolbar", Color(0.04, 0.16, 0.22, 0.96), 24.0), Rect2(-24.0, 744.0, DESIGN_SIZE.x + 48.0, 124.0))
+	var toolbar_y := _toolbar_y()
+	draw_style_box(_style("toolbar", Color(0.04, 0.16, 0.22, 0.96), 24.0), Rect2(-24.0, toolbar_y, DESIGN_SIZE.x + 48.0, DESIGN_SIZE.y - toolbar_y + 24.0))
 	for index in range(tool_ids.size()):
 		var tool_id: String = tool_ids[index]
 		var rect := _get_tool_rect(index)
@@ -2626,8 +2698,8 @@ func _draw_completion_panel() -> void:
 		else:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "반짝반짝 완료!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), "%s %02d · %s · 최고 콤보 x%d" % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "All Clean!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), "%s %02d · %s · Best x%d" % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
 
 	var record_seconds: float = _best_time_for_level(level_index)
 	if is_new_record:
@@ -2635,9 +2707,9 @@ func _draw_completion_panel() -> void:
 		var record_color := Color("#e0a818").lerp(Color("#fff3cf"), 0.5 + 0.5 * sin(time_now * 6.0))
 		_draw_star(Vector2(panel.position.x + 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
 		_draw_star(Vector2(panel.position.x + panel.size.x - 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
-		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), "신기록! %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), "New record! %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
 	elif record_seconds > 0.0:
-		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), "최고 기록 %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), "Best time %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
 
 	var reward_chip := Rect2(panel.position.x + panel.size.x - 106.0, panel.position.y - 14.0, 96.0, 30.0)
 	draw_style_box(_style("reward_chip", Color("#ffce3d"), 15.0), reward_chip)
@@ -2648,12 +2720,12 @@ func _draw_completion_panel() -> void:
 	var retry_rect := _get_retry_rect()
 	draw_style_box(_style("retry_shadow", Color("#246076"), 14.0), Rect2(retry_rect.position + Vector2(0.0, 4.0), retry_rect.size))
 	draw_style_box(_style("retry_button", Color("#7fd6e6"), 14.0), retry_rect)
-	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), "↺ 다시 세차", HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, 16, Color("#0d3b55"))
+	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), "↺ Wash Again", HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, 16, Color("#0d3b55"))
 
 	var next_rect := _get_next_rect()
 	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))
 	draw_style_box(_style("next_button", Color("#39d98a"), 14.0), next_rect)
-	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), "다음 차 ▶", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
+	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), "Next Car ▶", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
 
 
 func _format_time(seconds_value: float) -> String:
@@ -2677,7 +2749,7 @@ func _get_tool_rect(index: int) -> Rect2:
 	var gap := 8.0
 	var margin := 18.0
 	var width := (DESIGN_SIZE.x - margin * 2.0 - gap * 3.0) / 4.0
-	return Rect2(margin + float(index) * (width + gap), 764.0, width, 72.0)
+	return Rect2(margin + float(index) * (width + gap), _tool_button_y(), width, TOOL_BUTTON_HEIGHT)
 
 
 func _get_retry_rect() -> Rect2:
@@ -2693,13 +2765,12 @@ func _get_start_rect() -> Rect2:
 
 
 func _get_sound_rect() -> Rect2:
-	return Rect2(306.0, 104.0, 36.0, 36.0)
+	return Rect2(306.0, _top_button_y(), 36.0, 36.0)
 
 
 func _get_help_rect() -> Rect2:
-	return Rect2(344.0, 104.0, 36.0, 36.0)
+	return Rect2(344.0, _top_button_y(), 36.0, 36.0)
 
 
 func _get_bomb_rect() -> Rect2:
-	return Rect2(276.0, 688.0, 92.0, 46.0)
-
+	return Rect2(276.0, minf(688.0, _tool_button_y() - 58.0), 92.0, 46.0)

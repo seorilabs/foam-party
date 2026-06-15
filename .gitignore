@@ -5,3 +5,4 @@ godot/build/
 build/
 tmp/
 *.tmp
+app-store/**/*.import
