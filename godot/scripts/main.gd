@@ -187,6 +187,8 @@ var ui_select_stream: AudioStreamWAV
 var completion_stream: AudioStreamWAV
 var removal_stream: AudioStreamWAV
 var removal_sfx_player: AudioStreamPlayer
+var combo_break_stream: AudioStreamWAV
+var combo_break_player: AudioStreamPlayer
 
 
 func _ready() -> void:
@@ -251,6 +253,8 @@ func _process(delta: float) -> void:
 			combo_timer -= delta
 			if combo_timer <= 0.0:
 				combo_timer = 0.0
+				if combo_count >= 2:
+					_spawn_combo_break_burst()
 				combo_count = 0
 			elif combo_count >= STAR3_COMBO:
 				var urgency := clampf(1.0 - combo_timer / maxf(COMBO_WINDOW, 0.001), 0.0, 1.0)
@@ -327,6 +331,11 @@ func _setup_audio() -> void:
 	ui_select_stream = _make_select_stream()
 	completion_stream = _make_completion_stream()
 	removal_stream = _make_removal_stream()
+	combo_break_stream = _make_combo_break_stream()
+	combo_break_player = AudioStreamPlayer.new()
+	combo_break_player.stream = combo_break_stream
+	combo_break_player.volume_db = -7.0
+	add_child(combo_break_player)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -530,6 +539,48 @@ func _make_removal_stream() -> AudioStreamWAV:
 		var chime: float = sin(TAU * 1318.5 * t) * chime_env * 0.10
 		_append_i16_sample(data, pop + fizz + chime)
 	return _make_wav(data)
+
+
+func _make_combo_break_stream() -> AudioStreamWAV:
+	var duration := 0.20
+	var total_samples: int = int(duration * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var break_rng := RandomNumberGenerator.new()
+	break_rng.seed = 7713
+	var phase1 := 0.0
+	var phase2 := 0.0
+	for i in range(total_samples):
+		var t: float = float(i) / float(AUDIO_MIX_RATE)
+		var f1 := 740.0 * pow(0.35, t * 3.2)
+		var f2 := 555.0 * pow(0.35, t * 2.8)
+		var env: float = exp(-t * 18.0) * clampf(t / 0.008, 0.0, 1.0)
+		phase1 += TAU * f1 / float(AUDIO_MIX_RATE)
+		phase2 += TAU * f2 / float(AUDIO_MIX_RATE)
+		var noise: float = break_rng.randf_range(-1.0, 1.0) * exp(-t * 40.0) * 0.06
+		var sample: float = (sin(phase1) * 0.30 + sin(phase2) * 0.22 + noise) * env
+		_append_i16_sample(data, sample)
+	return _make_wav(data)
+
+
+func _spawn_combo_break_burst() -> void:
+	var badge_center := Vector2(195.0, maxf(134.0, _hud_top_y() + 112.0))
+	var fizzle_col := Color(0.68, 0.82, 1.0, 0.88)
+	var count: int = rng.randi_range(4, 6)
+	for _i in range(count):
+		var angle: float = rng.randf_range(0.0, TAU)
+		var speed: float = rng.randf_range(40.0, 85.0)
+		var offset := Vector2(rng.randf_range(-7.0, 7.0), rng.randf_range(-5.0, 5.0))
+		particles.append(WashParticle.new(
+			badge_center + offset,
+			Vector2.from_angle(angle) * speed,
+			rng.randf_range(0.28, 0.46),
+			rng.randf_range(4.0, 7.5),
+			fizzle_col,
+			STYLE_SPARKLE
+		))
+	if audio_playback_enabled and is_instance_valid(combo_break_player):
+		combo_break_player.stop()
+		combo_break_player.play()
 
 
 func _make_completion_stream() -> AudioStreamWAV:
