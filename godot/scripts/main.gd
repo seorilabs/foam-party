@@ -2609,7 +2609,7 @@ func _draw_combo_badge() -> void:
 	var fill_frac := clampf(combo_timer / COMBO_WINDOW, 0.0, 1.0)
 	var is_urgent := fill_frac > 0.0 and fill_frac <= 0.35
 	var ring_alpha := clampf(fill_frac / 0.3, 0.65 if is_urgent else 0.0, 1.0)
-	var ring_r := badge_size.x * 0.5 + 8.0
+	var ring_r := maxf(badge_size.x, badge_size.y) * 0.5 + 8.0
 	var ring_center := Vector2(badge.position.x + badge_size.x * 0.5, badge.position.y + badge_size.y * 0.5)
 	var ring_col: Color
 	if is_urgent:
