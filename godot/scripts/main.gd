@@ -658,7 +658,7 @@ func _make_star_lost_stream() -> AudioStreamWAV:
 func _make_star_warn_stream() -> AudioStreamWAV:
 	var note_samples: int = int(0.050 * float(AUDIO_MIX_RATE))
 	var data := PackedByteArray()
-	var freqs := [587.33, 440.0]  # D5, A4 — 하행 단5도 경보
+	var freqs := [587.33, 440.0]  # D5, A4 — 하행 완전4도 경보
 	for note in 2:
 		var phase := 0.0
 		for i in range(note_samples):
