@@ -287,6 +287,8 @@ func _process(delta: float) -> void:
 		if STAR2_TIME > 0.0:
 			var _patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
 			var _pzone := 3 if _patience > 0.65 else (2 if _patience > 0.35 else (1 if _patience > 0.1 else 0))
+			# One sound per downgrade event; if multiple zones are skipped in a
+			# single frame (e.g. large delta), only one alert plays intentionally.
 			if _pzone < _prev_patience_zone:
 				if audio_playback_enabled and is_instance_valid(_patience_warn_sfx):
 					_patience_warn_sfx.stop()
@@ -1060,16 +1062,19 @@ func reset_game(new_level: int) -> void:
 	combo_timer = 0.0
 	best_combo = 0
 	level_time = 0.0
+	# Sync _prev_patience_zone immediately after level_time reset so there is
+	# no gap between the two values that could produce a false downgrade on
+	# the first playing frame. With level_time=0 this always evaluates to 3.
+	if STAR2_TIME > 0.0:
+		var _p0 := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
+		_prev_patience_zone = 3 if _p0 > 0.65 else (2 if _p0 > 0.35 else (1 if _p0 > 0.1 else 0))
+	else:
+		_prev_patience_zone = 3
 	_prev_star3_time_ok = true
 	_prev_star2_time_ok = true
 	_star3_combo_unlocked = false
 	_last_milestone_haptic_combo = -1
 	_prev_in_warn_zone = false
-	if STAR2_TIME > 0.0:
-		var _patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
-		_prev_patience_zone = 3 if _patience > 0.65 else (2 if _patience > 0.35 else (1 if _patience > 0.1 else 0))
-	else:
-		_prev_patience_zone = 3
 	earned_stars = 0
 	combo_pop_time = -10.0
 	is_new_record = false
