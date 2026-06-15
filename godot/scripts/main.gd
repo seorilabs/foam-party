@@ -2445,7 +2445,7 @@ func _draw_combo_badge() -> void:
 				-1, 16, Color(1.0, 0.85, 0.2, _alpha))
 	# 콤보 유지 시간 잔량 바: 얼마나 빨리 다음 패치를 제거해야 하는지 시각화한다.
 	var bar_w := badge_size.x - 8.0
-	var bar_x := 195.0 - bar_w * 0.5
+	var bar_x := badge.position.x + 4.0
 	var bar_y := badge.position.y + badge_size.y + 3.0
 	var fill_frac := clampf(combo_timer / COMBO_WINDOW, 0.0, 1.0)
 	draw_rect(Rect2(bar_x, bar_y, bar_w, 4.0), Color(0.0, 0.0, 0.0, 0.28))
