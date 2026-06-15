@@ -2618,11 +2618,10 @@ func _draw_combo_badge() -> void:
 		ring_col = Color(1.0, 0.87, 0.25, ring_alpha)
 	else:
 		ring_col = Color(0.49, 0.89, 0.82, ring_alpha)
-	if fill_frac <= 0.0:
-		return
-	var ring_points := clampi(int(ring_r * TAU), 32, 128)
-	draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU, ring_points, Color(0.0, 0.0, 0.0, 0.22 * ring_alpha), 5.0, true)
-	draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU * fill_frac, ring_points, ring_col, 3.5, true)
+	if fill_frac > 0.0:
+		var ring_points := clampi(int(ring_r * TAU), 32, 128)
+		draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU, ring_points, Color(0.0, 0.0, 0.0, 0.22 * ring_alpha), 5.0, true)
+		draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU * fill_frac, ring_points, ring_col, 3.5, true)
 
 
 func _draw_toolbar() -> void:
