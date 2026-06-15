@@ -1044,7 +1044,7 @@ func _spawn_dirt() -> void:
 		pool[swap_index] = swap_value
 
 	var spawn_count: int = min(pool.size(), 18 + level_index * 2)
-	var health_scale := 1.0 + minf(0.5, float(level_index - 1) * 0.06)
+	var health_scale := 1.0 + float(level_index - 1) * 0.06
 	for index in range(spawn_count):
 		var kind: String = DIRT_TYPES[index % DIRT_TYPES.size()]
 		var base_position: Vector2 = _gameplay_point(pool[index])
@@ -1578,10 +1578,17 @@ func _update_clean_progress() -> void:
 		_spawn_completion_burst()
 
 
+# Star time threshold tightens 1.5% per level after the first (floor at 60% of base).
+# This ensures experienced players face a gradually rising skill ceiling.
+func _star_time_threshold(tier: int) -> float:
+	var base := STAR3_TIME if tier == 3 else STAR2_TIME
+	return base * maxf(0.6, 1.0 - float(level_index) * 0.015)
+
+
 func _calc_stars() -> int:
-	if level_time <= STAR3_TIME and best_combo >= STAR3_COMBO:
+	if level_time <= _star_time_threshold(3) and best_combo >= STAR3_COMBO:
 		return 3
-	if level_time <= STAR2_TIME:
+	if level_time <= _star_time_threshold(2):
 		return 2
 	return 1
 
@@ -1594,9 +1601,9 @@ func _grade_slot_state(slot_index: int) -> String:
 		0:
 			return GRADE_SLOT_EARNED
 		1:
-			return GRADE_SLOT_EARNED if level_time <= STAR2_TIME else GRADE_SLOT_LOCKED
+			return GRADE_SLOT_EARNED if level_time <= _star_time_threshold(2) else GRADE_SLOT_LOCKED
 		2:
-			if level_time > STAR3_TIME:
+			if level_time > _star_time_threshold(3):
 				return GRADE_SLOT_LOCKED
 			return GRADE_SLOT_EARNED if best_combo >= STAR3_COMBO else GRADE_SLOT_TARGET
 	return GRADE_SLOT_LOCKED
@@ -1604,18 +1611,18 @@ func _grade_slot_state(slot_index: int) -> String:
 
 # Seconds until the next star is lost, or -1 once only the floor star remains.
 func _grade_time_to_downgrade() -> float:
-	if level_time <= STAR3_TIME:
-		return STAR3_TIME - level_time
-	if level_time <= STAR2_TIME:
-		return STAR2_TIME - level_time
+	if level_time <= _star_time_threshold(3):
+		return _star_time_threshold(3) - level_time
+	if level_time <= _star_time_threshold(2):
+		return _star_time_threshold(2) - level_time
 	return -1.0
 
 
 # Star slot (0-based) whose threshold is approaching next, or -1 when none.
 func _grade_at_risk_slot() -> int:
-	if level_time <= STAR3_TIME:
+	if level_time <= _star_time_threshold(3):
 		return 2
-	if level_time <= STAR2_TIME:
+	if level_time <= _star_time_threshold(2):
 		return 1
 	return -1
 
