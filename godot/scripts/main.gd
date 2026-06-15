@@ -109,6 +109,10 @@ var initial_dirt_total := 1.0
 var level_index := 1
 var completed := false
 var completion_burst_done := false
+var _progress_milestone_hit := 0
+var _progress_milestone_time := -1.0
+var _progress_milestone_text := ""
+var _progress_milestone_color := Color.WHITE
 var combo_count := 0
 var combo_timer := 0.0
 var best_combo := 0
@@ -672,6 +676,10 @@ func reset_game(new_level: int) -> void:
 	combo_pop_time = -10.0
 	is_new_record = false
 	record_pop_time = -10.0
+	_progress_milestone_hit = 0
+	_progress_milestone_time = -1.0
+	_progress_milestone_text = ""
+	_progress_milestone_color = Color.WHITE
 	_stop_tool_loop()
 	particles.clear()
 	_set_car_palette()
@@ -1554,6 +1562,7 @@ func _update_clean_progress() -> void:
 		var patch := raw_patch as DirtPatch
 		dirt_left += patch.health
 	clean_progress = clamp(1.0 - dirt_left / initial_dirt_total, 0.0, 1.0)
+	_check_progress_milestone()
 
 	if clean_progress >= 0.985 and not completed:
 		completed = true
@@ -1623,6 +1632,40 @@ func _best_time_for_level(level: int) -> float:
 	return float(best_times.get(level, 0.0))
 
 
+func _check_progress_milestone() -> void:
+	const THRESHOLDS := [0.25, 0.50, 0.75]
+	const MESSAGES := ["25%! 시작이 좋아요!", "절반 완료!", "거의 다 됐어요!"]
+	const HUES := [0.55, 0.35, 0.08]
+	const TEXT_COLORS := [Color(0.08, 0.72, 0.72), Color(0.14, 0.70, 0.28), Color(0.85, 0.48, 0.08)]
+	if _progress_milestone_hit >= THRESHOLDS.size() or completed:
+		return
+	# Batch-advance through all crossed thresholds in one call so a progress
+	# jump (e.g. 20%→60%) shows the highest milestone reached, not a rapid
+	# cascade that overwrites before the player can read any of them.
+	var new_hit := _progress_milestone_hit
+	while new_hit < THRESHOLDS.size() and clean_progress >= THRESHOLDS[new_hit]:
+		new_hit += 1
+	if new_hit == _progress_milestone_hit:
+		return
+	var stage := new_hit - 1
+	_progress_milestone_hit = new_hit
+	_progress_milestone_time = float(Time.get_ticks_msec()) / 1000.0
+	_progress_milestone_text = MESSAGES[stage]
+	_progress_milestone_color = TEXT_COLORS[stage]
+	var hue := HUES[stage]
+	for index in range(22):
+		var angle := rng.randf_range(0.0, TAU)
+		var speed := rng.randf_range(50.0, 130.0)
+		particles.append(WashParticle.new(
+			Vector2(rng.randf_range(40.0, 280.0), 72.0),
+			Vector2.from_angle(angle) * speed + Vector2(0.0, -28.0),
+			rng.randf_range(0.55, 1.1),
+			rng.randf_range(3.0, 6.5),
+			Color.from_hsv(hue + rng.randf_range(-0.06, 0.06), 0.65, 1.0, 0.9),
+			STYLE_SPARKLE
+		))
+
+
 func _spawn_completion_burst() -> void:
 	if completion_burst_done:
 		return
@@ -1688,6 +1731,14 @@ func _draw_status() -> void:
 	if fill_width >= 8.0:
 		draw_style_box(_style("bar_fill", Color("#39d98a"), 12.0), Rect2(bar_rect.position, Vector2(fill_width, bar_rect.size.y)))
 	draw_string(font, Vector2(294.0, bar_rect.position.y + 18.0), "%.0f%%" % (clean_progress * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 66.0, 15, Color("#0d3b55"))
+
+	if _progress_milestone_time >= 0.0:
+		var age := float(Time.get_ticks_msec()) / 1000.0 - _progress_milestone_time
+		if age < 1.4:
+			var alpha := 1.0 - age / 1.4
+			var rise := age * 42.0
+			var mc := _progress_milestone_color
+			draw_string(font, Vector2(32.0, bar_rect.position.y - rise), _progress_milestone_text, HORIZONTAL_ALIGNMENT_CENTER, 254.0, 17, Color(mc.r, mc.g, mc.b, alpha))
 
 	var hint_rect := Rect2(22.0, 696.0, 244.0, 30.0)
 	draw_style_box(_style("hint_bubble", Color(0.03, 0.14, 0.2, 0.78), 15.0), hint_rect)
