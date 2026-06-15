@@ -189,6 +189,8 @@ var removal_stream: AudioStreamWAV
 var removal_sfx_player: AudioStreamPlayer
 var combo_break_stream: AudioStreamWAV
 var combo_break_player: AudioStreamPlayer
+var _hint_stream: AudioStreamWAV = null
+var _hint_sfx_player: AudioStreamPlayer = null
 
 
 func _ready() -> void:
@@ -337,6 +339,11 @@ func _setup_audio() -> void:
 		combo_break_player.stream = combo_break_stream
 		combo_break_player.volume_db = -7.0
 		add_child(combo_break_player)
+		_hint_stream = _make_hint_stream()
+		_hint_sfx_player = AudioStreamPlayer.new()
+		_hint_sfx_player.stream = _hint_stream
+		_hint_sfx_player.volume_db = -11.0
+		add_child(_hint_sfx_player)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -539,6 +546,18 @@ func _make_removal_stream() -> AudioStreamWAV:
 		var chime_env: float = exp(-max(0.0, t - 0.05) * 16.0) * clamp((t - 0.05) / 0.02, 0.0, 1.0)
 		var chime: float = sin(TAU * 1318.5 * t) * chime_env * 0.10
 		_append_i16_sample(data, pop + fizz + chime)
+	return _make_wav(data)
+
+
+func _make_hint_stream() -> AudioStreamWAV:
+	var total_samples: int = int(0.09 * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var phase := 0.0
+	for i in range(total_samples):
+		var t: float = float(i) / float(AUDIO_MIX_RATE)
+		phase += TAU * 440.0 / float(AUDIO_MIX_RATE)
+		var env := exp(-t * 24.0) * clampf(t / 0.003, 0.0, 1.0)
+		_append_i16_sample(data, sin(phase) * 0.32 * env)
 	return _make_wav(data)
 
 
@@ -1295,7 +1314,10 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 				_hint_patch.hint_time = 0.0
 			_hint_patch = patch
 			patch.hint_tool = _recommended_tool(patch)
+			var hint_was_inactive := patch.hint_time <= 0.0
 			patch.hint_time = max(patch.hint_time, 1.4)
+			if hint_was_inactive and _hint_sfx_player != null:
+				_hint_sfx_player.play()
 	else:
 		patch.resist_time = 0.0
 		patch.hint_time = 0.0
