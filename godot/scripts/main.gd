@@ -181,6 +181,7 @@ var daily_mission_claimed := false
 var daily_mission_date := ""
 var _daily_mission_pop_time := -10.0
 var _daily_progress_dirty := false
+var _daily_save_timer: Timer = null
 
 var tool_ids := [TOOL_AIR, TOOL_WATER, TOOL_SOAP, TOOL_SPONGE]
 var tool_labels := {
@@ -237,6 +238,12 @@ func _ready() -> void:
 	_load_progress()
 	if daily_mission_type.is_empty():
 		_generate_daily_mission(_today_string())
+	if persistence_enabled:
+		_daily_save_timer = Timer.new()
+		_daily_save_timer.wait_time = 2.0
+		_daily_save_timer.timeout.connect(_flush_daily_if_dirty)
+		add_child(_daily_save_timer)
+		_daily_save_timer.start()
 	_setup_audio()
 	_bar_fill_style = StyleBoxFlat.new()
 	_bar_fill_style.bg_color = BAR_COL_START
@@ -272,14 +279,16 @@ func _load_progress() -> void:
 		if daily_mission_target <= 0:
 			_generate_daily_mission(today)
 			return
-		daily_mission_progress = config.get_value("daily", "progress", 0)
-		daily_mission_claimed = config.get_value("daily", "claimed", false)
+		daily_mission_progress = clampi(int(config.get_value("daily", "progress", 0)), 0, daily_mission_target)
+		daily_mission_claimed = bool(config.get_value("daily", "claimed", false))
+		if daily_mission_progress >= daily_mission_target:
+			daily_mission_claimed = true
 		daily_mission_date = saved_date
 
 
-func _save_progress() -> void:
+func _save_progress() -> Error:
 	if not persistence_enabled:
-		return
+		return OK
 	var config := ConfigFile.new()
 	config.set_value("game", "level", level_index)
 	config.set_value("game", "coins", coins)
@@ -293,7 +302,15 @@ func _save_progress() -> void:
 	config.set_value("daily", "progress", daily_mission_progress)
 	config.set_value("daily", "claimed", daily_mission_claimed)
 	config.set_value("daily", "date", daily_mission_date)
-	config.save(SAVE_PATH)
+	return config.save(SAVE_PATH)
+
+
+func _flush_daily_if_dirty() -> void:
+	if not _daily_progress_dirty:
+		return
+	var err := _save_progress()
+	if err == OK:
+		_daily_progress_dirty = false
 
 
 func _apply_sound_setting() -> void:
@@ -358,8 +375,9 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		queue_redraw()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
-		_save_progress()
-		_daily_progress_dirty = false
+		var err := _save_progress()
+		if err == OK:
+			_daily_progress_dirty = false
 
 
 func _setup_font() -> void:
@@ -1811,8 +1829,9 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				daily_mission_claimed = true
 				coins += DAILY_MISSION_REWARD
 				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
-				_save_progress()
-				_daily_progress_dirty = false
+				var err := _save_progress()
+				if err == OK:
+					_daily_progress_dirty = false
 				if OS.has_feature("mobile"):
 					Input.vibrate_handheld(60)
 			else:
