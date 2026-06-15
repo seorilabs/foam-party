@@ -21,6 +21,7 @@ const GRADE_SLOT_LOCKED := "locked"
 const BAR_COL_START := Color(0.286, 0.655, 1.0)   # #49a7ff
 const BAR_COL_END   := Color(0.224, 0.851, 0.541)  # #39d98a
 const SAVE_PATH := "user://foam_party_save.cfg"
+const DAILY_SAVE_PATH := "user://foam_party_daily.cfg"
 const BOMB_COST := 40
 const STATE_TITLE := "title"
 const STATE_PLAYING := "playing"
@@ -256,34 +257,45 @@ func _load_progress() -> void:
 	if not persistence_enabled:
 		return
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) != OK:
-		return
-	level_index = max(1, int(config.get_value("game", "level", 1)))
-	coins = max(0, int(config.get_value("game", "coins", 0)))
-	total_stars = max(0, int(config.get_value("game", "total_stars", 0)))
-	sound_enabled = bool(config.get_value("settings", "sound", true))
-	tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
-	var stored_best: Variant = config.get_value("game", "best_times", {})
-	if stored_best is Dictionary:
-		best_times = {}
-		for key in (stored_best as Dictionary):
-			best_times[int(key)] = float(stored_best[key])
+	if config.load(SAVE_PATH) == OK:
+		level_index = max(1, int(config.get_value("game", "level", 1)))
+		coins = max(0, int(config.get_value("game", "coins", 0)))
+		total_stars = max(0, int(config.get_value("game", "total_stars", 0)))
+		sound_enabled = bool(config.get_value("settings", "sound", true))
+		tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
+		var stored_best: Variant = config.get_value("game", "best_times", {})
+		if stored_best is Dictionary:
+			best_times = {}
+			for key in (stored_best as Dictionary):
+				best_times[int(key)] = float(stored_best[key])
 	var today := _today_string()
-	var saved_date: String = config.get_value("daily", "date", "")
+	var daily_config := ConfigFile.new()
+	if daily_config.load(DAILY_SAVE_PATH) != OK:
+		_generate_daily_mission(today)
+		return
+	var saved_date: String = daily_config.get_value("daily", "date", "")
 	if saved_date != today:
 		_generate_daily_mission(today)
-	else:
-		daily_mission_type = config.get_value("daily", "type", "")
-		daily_mission_label = config.get_value("daily", "label", "")
-		daily_mission_target = config.get_value("daily", "target", 0)
-		if daily_mission_target <= 0:
-			_generate_daily_mission(today)
-			return
-		daily_mission_progress = clampi(int(config.get_value("daily", "progress", 0)), 0, daily_mission_target)
-		daily_mission_claimed = bool(config.get_value("daily", "claimed", false))
-		if daily_mission_progress >= daily_mission_target:
-			daily_mission_claimed = true
-		daily_mission_date = saved_date
+		return
+	var loaded_type: String = daily_config.get_value("daily", "type", "")
+	var loaded_label: String = daily_config.get_value("daily", "label", "")
+	var loaded_target: int = int(daily_config.get_value("daily", "target", 0))
+	var type_valid := false
+	for m in DAILY_MISSION_POOL:
+		if m["type"] == loaded_type:
+			type_valid = true
+			break
+	if loaded_target <= 0 or not type_valid or loaded_label.is_empty():
+		_generate_daily_mission(today)
+		return
+	daily_mission_type = loaded_type
+	daily_mission_label = loaded_label
+	daily_mission_target = loaded_target
+	daily_mission_progress = clampi(int(daily_config.get_value("daily", "progress", 0)), 0, daily_mission_target)
+	daily_mission_claimed = bool(daily_config.get_value("daily", "claimed", false))
+	if daily_mission_progress >= daily_mission_target:
+		daily_mission_claimed = true
+	daily_mission_date = saved_date
 
 
 func _save_progress() -> Error:
@@ -296,19 +308,26 @@ func _save_progress() -> Error:
 	config.set_value("settings", "sound", sound_enabled)
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
 	config.set_value("game", "best_times", best_times)
+	return config.save(SAVE_PATH)
+
+
+func _save_daily() -> Error:
+	if not persistence_enabled:
+		return OK
+	var config := ConfigFile.new()
 	config.set_value("daily", "type", daily_mission_type)
 	config.set_value("daily", "label", daily_mission_label)
 	config.set_value("daily", "target", daily_mission_target)
 	config.set_value("daily", "progress", daily_mission_progress)
 	config.set_value("daily", "claimed", daily_mission_claimed)
 	config.set_value("daily", "date", daily_mission_date)
-	return config.save(SAVE_PATH)
+	return config.save(DAILY_SAVE_PATH)
 
 
 func _flush_daily_if_dirty() -> void:
 	if not _daily_progress_dirty:
 		return
-	var err := _save_progress()
+	var err := _save_daily()
 	if err == OK:
 		_daily_progress_dirty = false
 
@@ -375,7 +394,8 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		queue_redraw()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
-		var err := _save_progress()
+		_save_progress()
+		var err := _save_daily()
 		if err == OK:
 			_daily_progress_dirty = false
 
@@ -1829,9 +1849,9 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				daily_mission_claimed = true
 				coins += DAILY_MISSION_REWARD
 				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
-				var err := _save_progress()
-				if err == OK:
-					_daily_progress_dirty = false
+				var err := _save_daily()
+				if err != OK:
+					_daily_progress_dirty = true
 				if OS.has_feature("mobile"):
 					Input.vibrate_handheld(60)
 			else:
