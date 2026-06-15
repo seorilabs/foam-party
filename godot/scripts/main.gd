@@ -553,7 +553,7 @@ func _make_hint_stream() -> AudioStreamWAV:
 	var total_samples: int = int(0.09 * float(AUDIO_MIX_RATE))
 	var data := PackedByteArray()
 	var phase := 0.0
-	for i in total_samples:
+	for i in range(total_samples):
 		var t: float = float(i) / float(AUDIO_MIX_RATE)
 		phase += TAU * 440.0 / float(AUDIO_MIX_RATE)
 		var env := exp(-t * 24.0) * clampf(t / 0.003, 0.0, 1.0)
