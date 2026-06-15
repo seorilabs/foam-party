@@ -1976,12 +1976,12 @@ func _draw_status() -> void:
 
 	var bar_rect := Rect2(32.0, card.position.y + 46.0, 254.0, 24.0)
 	draw_style_box(_style("bar_bg", Color("#d7e8ef"), 12.0), bar_rect)
-	var fill_width: float = bar_rect.size.x * clean_progress
 	var cp := clampf(clean_progress, 0.0, 1.0)
+	var fill_width: float = bar_rect.size.x * cp
 	_bar_fill_style.bg_color = BAR_COL_START.lerp(BAR_COL_END, cp)
 	if fill_width >= 8.0:
 		draw_style_box(_bar_fill_style, Rect2(bar_rect.position, Vector2(fill_width, bar_rect.size.y)))
-	draw_string(font, Vector2(294.0, bar_rect.position.y + 18.0), "%.0f%%" % (clean_progress * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 66.0, 15, Color("#0d3b55"))
+	draw_string(font, Vector2(294.0, bar_rect.position.y + 18.0), "%.0f%%" % (cp * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 66.0, 15, Color("#0d3b55"))
 
 	if _progress_milestone_time >= 0.0:
 		var age := float(Time.get_ticks_msec()) / 1000.0 - _progress_milestone_time
