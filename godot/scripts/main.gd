@@ -191,6 +191,8 @@ var combo_break_stream: AudioStreamWAV
 var combo_break_player: AudioStreamPlayer
 var _hint_stream: AudioStreamWAV = null
 var _hint_sfx_player: AudioStreamPlayer = null
+var _milestone_stream: AudioStreamWAV = null
+var _milestone_sfx_player: AudioStreamPlayer = null
 
 
 func _ready() -> void:
@@ -344,6 +346,11 @@ func _setup_audio() -> void:
 		_hint_sfx_player.stream = _hint_stream
 		_hint_sfx_player.volume_db = -11.0
 		add_child(_hint_sfx_player)
+		_milestone_stream = _make_milestone_stream()
+		_milestone_sfx_player = AudioStreamPlayer.new()
+		_milestone_sfx_player.stream = _milestone_stream
+		_milestone_sfx_player.volume_db = -8.0
+		add_child(_milestone_sfx_player)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -546,6 +553,18 @@ func _make_removal_stream() -> AudioStreamWAV:
 		var chime_env: float = exp(-max(0.0, t - 0.05) * 16.0) * clamp((t - 0.05) / 0.02, 0.0, 1.0)
 		var chime: float = sin(TAU * 1318.5 * t) * chime_env * 0.10
 		_append_i16_sample(data, pop + fizz + chime)
+	return _make_wav(data)
+
+
+func _make_milestone_stream() -> AudioStreamWAV:
+	var total_samples: int = int(0.10 * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var phase := 0.0
+	for i in range(total_samples):
+		var t: float = float(i) / float(AUDIO_MIX_RATE)
+		phase += TAU * 659.0 / float(AUDIO_MIX_RATE)
+		var env := exp(-t * 16.0) * clampf(t / 0.004, 0.0, 1.0)
+		_append_i16_sample(data, sin(phase) * 0.30 * env)
 	return _make_wav(data)
 
 
@@ -1842,6 +1861,9 @@ func _check_progress_milestone() -> void:
 	_progress_milestone_time = float(Time.get_ticks_msec()) / 1000.0
 	_progress_milestone_text = MESSAGES[stage]
 	_progress_milestone_color = TEXT_COLORS[stage]
+	if _milestone_sfx_player != null:
+		_milestone_sfx_player.pitch_scale = 0.85 + float(stage) * 0.18
+		_milestone_sfx_player.play()
 	var hue: float = float(HUES[stage])
 	for index in range(22):
 		var angle := rng.randf_range(0.0, TAU)
