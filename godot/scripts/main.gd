@@ -257,6 +257,7 @@ func _load_progress() -> void:
 	if not persistence_enabled:
 		return
 	var config := ConfigFile.new()
+	var main_claimed_date := ""
 	if config.load(SAVE_PATH) == OK:
 		level_index = max(1, int(config.get_value("game", "level", 1)))
 		coins = max(0, int(config.get_value("game", "coins", 0)))
@@ -268,10 +269,14 @@ func _load_progress() -> void:
 			best_times = {}
 			for key in (stored_best as Dictionary):
 				best_times[int(key)] = float(stored_best[key])
+		main_claimed_date = String(config.get_value("daily", "claimed_date", ""))
 	var today := _today_string()
 	var daily_config := ConfigFile.new()
 	if daily_config.load(DAILY_SAVE_PATH) != OK:
 		_generate_daily_mission(today)
+		if main_claimed_date == today:
+			daily_mission_claimed = true
+			daily_mission_progress = daily_mission_target
 		return
 	var saved_date: String = daily_config.get_value("daily", "date", "")
 	if saved_date != today:
@@ -287,14 +292,19 @@ func _load_progress() -> void:
 			break
 	if loaded_target <= 0 or not type_valid or loaded_label.is_empty():
 		_generate_daily_mission(today)
+		if main_claimed_date == today:
+			daily_mission_claimed = true
+			daily_mission_progress = daily_mission_target
 		return
 	daily_mission_type = loaded_type
 	daily_mission_label = loaded_label
 	daily_mission_target = loaded_target
 	daily_mission_progress = clampi(int(daily_config.get_value("daily", "progress", 0)), 0, daily_mission_target)
 	daily_mission_claimed = bool(daily_config.get_value("daily", "claimed", false))
-	if daily_mission_progress >= daily_mission_target:
+	if daily_mission_progress >= daily_mission_target or main_claimed_date == today:
 		daily_mission_claimed = true
+		if daily_mission_progress < daily_mission_target:
+			daily_mission_progress = daily_mission_target
 	daily_mission_date = saved_date
 	var daily_coins := int(daily_config.get_value("daily", "coins", -1))
 	if daily_coins > coins:
@@ -311,6 +321,7 @@ func _save_progress() -> Error:
 	config.set_value("settings", "sound", sound_enabled)
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
 	config.set_value("game", "best_times", best_times)
+	config.set_value("daily", "claimed_date", daily_mission_date if daily_mission_claimed else "")
 	return config.save(SAVE_PATH)
 
 
