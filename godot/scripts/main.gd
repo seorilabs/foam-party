@@ -204,6 +204,7 @@ var _star3_gate_sfx: AudioStreamPlayer = null
 var _star3_combo_unlocked := false
 var _star_warn_sfx: AudioStreamPlayer = null
 var _prev_in_warn_zone := false
+var _bomb_sfx: AudioStreamPlayer = null
 var _bar_fill_style := StyleBoxFlat.new()
 
 
@@ -397,6 +398,10 @@ func _setup_audio() -> void:
 		_star_warn_sfx.stream = _make_star_warn_stream()
 		_star_warn_sfx.volume_db = -6.0
 		add_child(_star_warn_sfx)
+		_bomb_sfx = AudioStreamPlayer.new()
+		_bomb_sfx.stream = _make_bomb_stream()
+		_bomb_sfx.volume_db = -3.0
+		add_child(_bomb_sfx)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -670,6 +675,26 @@ func _make_star_warn_stream() -> AudioStreamWAV:
 			var env := exp(-t * 8.0) * clampf(t / 0.003, 0.0, 1.0)
 			var tail := clampf(float(note_samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.010)), 0.0, 1.0)
 			_append_i16_sample(data, sin(phase) * 0.38 * env * tail)
+	return _make_wav(data)
+
+
+func _make_bomb_stream() -> AudioStreamWAV:
+	var duration := 0.38
+	var total_samples: int = int(duration * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var bomb_rng := RandomNumberGenerator.new()
+	bomb_rng.seed = 5577
+	for sample_index in range(total_samples):
+		var t: float = float(sample_index) / float(AUDIO_MIX_RATE)
+		var thump_freq := 195.0 * exp(-t * 9.0) + 70.0
+		var thump_phase := TAU * thump_freq * t
+		var thump_env := exp(-t * 11.0) * clampf(t / 0.004, 0.0, 1.0)
+		var thump := sin(thump_phase) * 0.38 * thump_env
+		var noise := bomb_rng.randf_range(-1.0, 1.0)
+		var fizz_env := t * exp(-t * 8.0) * 3.2
+		var fizz := noise * fizz_env * 0.13
+		var fade := clampf(float(total_samples - 1 - sample_index) / float(int(AUDIO_MIX_RATE * 0.05)), 0.0, 1.0)
+		_append_i16_sample(data, (thump + fizz) * fade)
 	return _make_wav(data)
 
 
@@ -1302,7 +1327,9 @@ func apply_foam_bomb() -> void:
 		for bubble_index in range(3):
 			var offset := Vector2(rng.randf_range(-patch.radius, patch.radius), rng.randf_range(-patch.radius, patch.radius))
 			particles.append(WashParticle.new(center + offset, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-40.0, -16.0)), rng.randf_range(0.6, 1.1), rng.randf_range(4.0, 9.0), Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85), STYLE_BUBBLE))
-	_play_ui_select()
+	if audio_playback_enabled and is_instance_valid(_bomb_sfx):
+		_bomb_sfx.stop()
+		_bomb_sfx.play()
 	_save_progress()
 
 
