@@ -117,6 +117,7 @@ var combo_pop_time := -10.0
 var best_times: Dictionary = {}
 var is_new_record := false
 var record_pop_time := -10.0
+var _tool_select_time := -10.0
 var game_state := STATE_TITLE
 var coins := 0
 var total_stars := 0
@@ -950,6 +951,7 @@ func _handle_tap(point: Vector2) -> bool:
 	for index in range(tool_ids.size()):
 		if _get_tool_rect(index).has_point(point):
 			selected_tool = tool_ids[index]
+			_tool_select_time = float(Time.get_ticks_msec()) / 1000.0
 			_play_ui_select()
 			is_washing = false
 			return true
@@ -2440,6 +2442,10 @@ func _draw_toolbar() -> void:
 		var visual_rect := rect
 		if is_selected:
 			visual_rect = Rect2(rect.position - Vector2(0.0, 8.0), rect.size + Vector2(0.0, 8.0))
+			var pop: float = 1.0 + 0.15 * exp(-(time_now - _tool_select_time) * 9.0)
+			if pop > 1.001:
+				var center := visual_rect.get_center()
+				visual_rect = Rect2(center - visual_rect.size * pop * 0.5, visual_rect.size * pop)
 			draw_style_box(_style("tool_glow_" + tool_id, Color(color.r, color.g, color.b, 0.35), 18.0), visual_rect.grow(4.0))
 			draw_style_box(_style("tool_selected", Color("#f7fbff"), 16.0), visual_rect)
 			draw_style_box(_style("tool_selected_border_" + tool_id, Color(0.0, 0.0, 0.0, 0.0), 16.0, color, 3), visual_rect)
