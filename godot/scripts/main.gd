@@ -18,6 +18,8 @@ const STAR_WARN_SECONDS := 15.0
 const GRADE_SLOT_EARNED := "earned"
 const GRADE_SLOT_TARGET := "target"
 const GRADE_SLOT_LOCKED := "locked"
+const BAR_COL_START := Color(0.286, 0.655, 1.0)   # #49a7ff
+const BAR_COL_END   := Color(0.224, 0.851, 0.541)  # #39d98a
 const SAVE_PATH := "user://foam_party_save.cfg"
 const BOMB_COST := 40
 const STATE_TITLE := "title"
@@ -194,6 +196,7 @@ var _hint_sfx_player: AudioStreamPlayer = null
 var _milestone_stream: AudioStreamWAV = null
 var _milestone_sfx_player: AudioStreamPlayer = null
 var _record_sfx: AudioStreamPlayer = null
+var _bar_fill_style := StyleBoxFlat.new()
 
 
 func _ready() -> void:
@@ -205,6 +208,9 @@ func _ready() -> void:
 	_build_car_shapes()
 	_load_progress()
 	_setup_audio()
+	_bar_fill_style = StyleBoxFlat.new()
+	_bar_fill_style.bg_color = BAR_COL_START
+	_bar_fill_style.set_corner_radius_all(12)
 	_apply_sound_setting()
 	reset_game(level_index)
 
@@ -1970,10 +1976,14 @@ func _draw_status() -> void:
 
 	var bar_rect := Rect2(32.0, card.position.y + 46.0, 254.0, 24.0)
 	draw_style_box(_style("bar_bg", Color("#d7e8ef"), 12.0), bar_rect)
-	var fill_width: float = bar_rect.size.x * clean_progress
-	if fill_width >= 8.0:
-		draw_style_box(_style("bar_fill", Color("#39d98a"), 12.0), Rect2(bar_rect.position, Vector2(fill_width, bar_rect.size.y)))
-	draw_string(font, Vector2(294.0, bar_rect.position.y + 18.0), "%.0f%%" % (clean_progress * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 66.0, 15, Color("#0d3b55"))
+	var cp := clampf(clean_progress, 0.0, 1.0)
+	var fill_width: float = bar_rect.size.x * cp
+	_bar_fill_style.bg_color = BAR_COL_START.lerp(BAR_COL_END, cp)
+	if cp > 0.0:
+		var draw_w := maxf(fill_width, 2.0)
+		_bar_fill_style.set_corner_radius_all(mini(6, int(draw_w * 0.5)))
+		draw_style_box(_bar_fill_style, Rect2(bar_rect.position, Vector2(draw_w, bar_rect.size.y)))
+	draw_string(font, Vector2(294.0, bar_rect.position.y + 18.0), "%.0f%%" % (cp * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 66.0, 15, Color("#0d3b55"))
 
 	if _progress_milestone_time >= 0.0:
 		var age := float(Time.get_ticks_msec()) / 1000.0 - _progress_milestone_time
