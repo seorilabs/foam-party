@@ -2342,8 +2342,8 @@ func _draw_sparkle(center: Vector2, radius: float, color: Color) -> void:
 func _draw_gleam() -> void:
 	if _gleam_time < 0.0 or game_state != STATE_PLAYING or not completed:
 		return
-	var sweep_x := lerp(-80.0, float(DESIGN_SIZE.x) + 80.0, _gleam_time)
-	var alpha := sin(PI * _gleam_time) * 0.55
+	var sweep_x: float = lerp(-80.0, float(DESIGN_SIZE.x) + 80.0, _gleam_time)
+	var alpha: float = sin(PI * _gleam_time) * 0.55
 	var h: float = DESIGN_SIZE.y
 	# Wide soft outer band (parallelogram leaning top-left to bottom-right)
 	var outer_points := PackedVector2Array([
