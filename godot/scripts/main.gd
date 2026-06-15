@@ -1316,6 +1316,9 @@ func _handle_tap(point: Vector2) -> bool:
 				_bomb_deny_sfx.play()
 		else:
 			apply_foam_bomb()
+			if audio_playback_enabled and is_instance_valid(_bomb_sfx):
+				_bomb_sfx.stop()
+				_bomb_sfx.play()
 		return true
 
 	for index in range(tool_ids.size()):
