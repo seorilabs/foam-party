@@ -1641,7 +1641,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		combo_count += 1
 		combo_timer = COMBO_WINDOW
 		best_combo = max(best_combo, combo_count)
-		if best_combo >= STAR3_COMBO and not _star3_combo_unlocked:
+		if combo_count == STAR3_COMBO and not _star3_combo_unlocked:
 			_star3_combo_unlocked = true
 			if audio_playback_enabled and is_instance_valid(_star3_gate_sfx):
 				_star3_gate_sfx.stop()
