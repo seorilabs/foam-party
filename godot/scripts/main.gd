@@ -306,7 +306,9 @@ func _process(delta: float) -> void:
 	else:
 		var _wt := _grade_time_to_downgrade()
 		_prev_in_warn_zone = _wt >= 0.0 and _wt <= STAR_WARN_SECONDS
-		_prev_patience_zone = 3
+		if STAR2_TIME > 0.0:
+			var _patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
+			_prev_patience_zone = 3 if _patience > 0.65 else (2 if _patience > 0.35 else (1 if _patience > 0.1 else 0))
 
 	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial:
 		_apply_tool_at(pointer_position, delta)
