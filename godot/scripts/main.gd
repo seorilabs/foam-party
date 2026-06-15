@@ -259,7 +259,8 @@ func _load_progress() -> void:
 		return
 	var config := ConfigFile.new()
 	var main_claimed_date := ""
-	if config.load(SAVE_PATH) == OK:
+	var main_save_ok := config.load(SAVE_PATH) == OK
+	if main_save_ok:
 		level_index = max(1, int(config.get_value("game", "level", 1)))
 		coins = max(0, int(config.get_value("game", "coins", 0)))
 		total_stars = max(0, int(config.get_value("game", "total_stars", 0)))
@@ -311,7 +312,7 @@ func _load_progress() -> void:
 		if daily_mission_progress < daily_mission_target:
 			daily_mission_progress = daily_mission_target
 	daily_mission_date = saved_date
-	if daily_mission_claimed and main_claimed_date != today:
+	if main_save_ok and daily_mission_claimed and main_claimed_date != today:
 		coins += DAILY_MISSION_REWARD
 		_main_save_dirty = true
 
@@ -420,8 +421,12 @@ func _notification(what: int) -> void:
 		var daily_err := _save_daily()
 		if prog_err == OK:
 			_main_save_dirty = false
+		else:
+			_main_save_dirty = true
 		if daily_err == OK:
 			_daily_progress_dirty = false
+		else:
+			_daily_progress_dirty = true
 
 
 func _setup_font() -> void:
