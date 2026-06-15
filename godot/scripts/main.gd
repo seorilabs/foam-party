@@ -242,7 +242,7 @@ func _ready() -> void:
 		_generate_daily_mission(_today_string())
 	if persistence_enabled:
 		_daily_save_timer = Timer.new()
-		_daily_save_timer.wait_time = 2.0
+		_daily_save_timer.wait_time = 1.0
 		_daily_save_timer.timeout.connect(_flush_daily_if_dirty)
 		add_child(_daily_save_timer)
 		_daily_save_timer.start()
@@ -311,6 +311,9 @@ func _load_progress() -> void:
 		if daily_mission_progress < daily_mission_target:
 			daily_mission_progress = daily_mission_target
 	daily_mission_date = saved_date
+	if daily_mission_claimed and main_claimed_date != today:
+		coins += DAILY_MISSION_REWARD
+		_main_save_dirty = true
 
 
 func _save_progress() -> Error:
