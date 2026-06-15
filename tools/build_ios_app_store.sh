@@ -65,7 +65,6 @@ xcodebuild \
   -configuration Release \
   -destination 'generic/platform=iOS' \
   archive \
-  -allowProvisioningUpdates \
   -archivePath "$archive_path" \
   DEVELOPMENT_TEAM="$team_id" \
   PRODUCT_BUNDLE_IDENTIFIER="$bundle_id" \
@@ -106,7 +105,6 @@ xcodebuild \
   -exportArchive \
   -archivePath "$archive_path" \
   -exportOptionsPlist "$export_options" \
-  -allowProvisioningUpdates \
   -exportPath "$build_dir"
 
 find "$build_dir" -maxdepth 1 \( -name "*.ipa" -o -name "*.xcarchive" -o -name "*.xcodeproj" \) -print
