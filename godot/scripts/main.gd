@@ -286,6 +286,9 @@ func _process(delta: float) -> void:
 			elif combo_count >= STAR3_COMBO:
 				var urgency := clampf(1.0 - combo_timer / maxf(COMBO_WINDOW, 0.001), 0.0, 1.0)
 				_halo_phase = fmod(_halo_phase + delta * (9.0 + urgency * 6.0) * TAU, TAU)
+	else:
+		var _wt := _grade_time_to_downgrade()
+		_prev_in_warn_zone = _wt >= 0.0 and _wt <= STAR_WARN_SECONDS
 
 	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial:
 		_apply_tool_at(pointer_position, delta)
