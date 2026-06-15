@@ -202,6 +202,7 @@ var _prev_star3_time_ok := true
 var _prev_star2_time_ok := true
 var _star3_gate_sfx: AudioStreamPlayer = null
 var _star3_combo_unlocked := false
+var _last_milestone_haptic_combo := -1
 var _star_warn_sfx: AudioStreamPlayer = null
 var _prev_in_warn_zone := false
 var _bomb_sfx: AudioStreamPlayer = null
@@ -285,6 +286,7 @@ func _process(delta: float) -> void:
 				if combo_count >= 2:
 					_spawn_combo_break_burst()
 				combo_count = 0
+				_last_milestone_haptic_combo = -1
 			elif combo_count >= STAR3_COMBO:
 				var urgency := clampf(1.0 - combo_timer / maxf(COMBO_WINDOW, 0.001), 0.0, 1.0)
 				_halo_phase = fmod(_halo_phase + delta * (9.0 + urgency * 6.0) * TAU, TAU)
@@ -964,6 +966,7 @@ func reset_game(new_level: int) -> void:
 	_prev_star3_time_ok = true
 	_prev_star2_time_ok = true
 	_star3_combo_unlocked = false
+	_last_milestone_haptic_combo = -1
 	_prev_in_warn_zone = false
 	earned_stars = 0
 	combo_pop_time = -10.0
@@ -1737,19 +1740,25 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		combo_timer = COMBO_WINDOW
 		best_combo = max(best_combo, combo_count)
 		if combo_count == STAR3_COMBO and not _star3_combo_unlocked:
+			_star3_combo_unlocked = true
 			if audio_playback_enabled and is_instance_valid(_star3_gate_sfx):
 				_star3_gate_sfx.stop()
 				_star3_gate_sfx.play()
-				_star3_combo_unlocked = true
+			if OS.has_feature("mobile"):
+				Input.vibrate_handheld(50)
 		if COMBO_BONUS_AMOUNTS.has(combo_count):
 			var _bonus: int = COMBO_BONUS_AMOUNTS[combo_count]
 			coins += _bonus
 			_combo_bonus_amount = _bonus
 			_combo_bonus_time = float(Time.get_ticks_msec()) / 1000.0
 		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
-		if combo_count % 5 == 0 and audio_playback_enabled and is_instance_valid(_combo_milestone_player):
-			_combo_milestone_player.stop()
-			_combo_milestone_player.play()
+		if combo_count % 5 == 0 and combo_count != _last_milestone_haptic_combo:
+			_last_milestone_haptic_combo = combo_count
+			if audio_playback_enabled and is_instance_valid(_combo_milestone_player):
+				_combo_milestone_player.stop()
+				_combo_milestone_player.play()
+			if OS.has_feature("mobile"):
+				Input.vibrate_handheld(38)
 	_spawn_removal_burst(burst_center, burst_radius)
 	if not completed:
 		_play_removal_sound()
@@ -1984,6 +1993,8 @@ func _update_clean_progress() -> void:
 		_stop_tool_loop()
 		_play_completion_sound()
 		_spawn_completion_burst()
+		if OS.has_feature("mobile"):
+			Input.vibrate_handheld(80)
 
 
 # Star time threshold tightens 1.5% per level after the first (floor at 60% of base).
