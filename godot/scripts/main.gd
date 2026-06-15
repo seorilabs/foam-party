@@ -1741,15 +1741,20 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				_star3_gate_sfx.stop()
 				_star3_gate_sfx.play()
 				_star3_combo_unlocked = true
+			if OS.has_feature("mobile"):
+				Input.vibrate_handheld(50)
 		if COMBO_BONUS_AMOUNTS.has(combo_count):
 			var _bonus: int = COMBO_BONUS_AMOUNTS[combo_count]
 			coins += _bonus
 			_combo_bonus_amount = _bonus
 			_combo_bonus_time = float(Time.get_ticks_msec()) / 1000.0
 		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
-		if combo_count % 5 == 0 and audio_playback_enabled and is_instance_valid(_combo_milestone_player):
-			_combo_milestone_player.stop()
-			_combo_milestone_player.play()
+		if combo_count % 5 == 0:
+			if audio_playback_enabled and is_instance_valid(_combo_milestone_player):
+				_combo_milestone_player.stop()
+				_combo_milestone_player.play()
+			if OS.has_feature("mobile"):
+				Input.vibrate_handheld(38)
 	_spawn_removal_burst(burst_center, burst_radius)
 	if not completed:
 		_play_removal_sound()
@@ -1984,6 +1989,8 @@ func _update_clean_progress() -> void:
 		_stop_tool_loop()
 		_play_completion_sound()
 		_spawn_completion_burst()
+		if OS.has_feature("mobile"):
+			Input.vibrate_handheld(80)
 
 
 # Star time threshold tightens 1.5% per level after the first (floor at 60% of base).
