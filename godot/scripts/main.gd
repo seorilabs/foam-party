@@ -1497,7 +1497,7 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 	for index in range(pop_count):
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(60.0, 130.0)
-		particles.append(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.35, 0.55), rng.randf_range(3.5, 6.0), Color(pop_color), STYLE_SPARKLE))
+		particles.append(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.35, 0.55), rng.randf_range(3.5, 6.0), pop_color, STYLE_SPARKLE))
 
 
 func _is_patch_outside_wash_area(patch: DirtPatch) -> bool:
