@@ -206,6 +206,8 @@ var _star3_combo_unlocked := false
 var _last_milestone_haptic_combo := -1
 var _star_warn_sfx: AudioStreamPlayer = null
 var _prev_in_warn_zone := false
+var _patience_warn_sfx: AudioStreamPlayer = null
+var _prev_patience_zone := 3
 var _bomb_sfx: AudioStreamPlayer = null
 var _bomb_deny_sfx: AudioStreamPlayer = null
 var _coin_bonus_sfx: AudioStreamPlayer = null
@@ -282,6 +284,14 @@ func _process(delta: float) -> void:
 				_star_warn_sfx.stop()
 				_star_warn_sfx.play()
 		_prev_in_warn_zone = _in_warn
+		if STAR2_TIME > 0.0:
+			var _patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
+			var _pzone := 3 if _patience > 0.65 else (2 if _patience > 0.35 else (1 if _patience > 0.1 else 0))
+			if _pzone < _prev_patience_zone:
+				if audio_playback_enabled and is_instance_valid(_patience_warn_sfx):
+					_patience_warn_sfx.stop()
+					_patience_warn_sfx.play()
+			_prev_patience_zone = _pzone
 		if combo_timer > 0.0:
 			combo_timer -= delta
 			if combo_timer <= 0.0:
@@ -296,6 +306,7 @@ func _process(delta: float) -> void:
 	else:
 		var _wt := _grade_time_to_downgrade()
 		_prev_in_warn_zone = _wt >= 0.0 and _wt <= STAR_WARN_SECONDS
+		_prev_patience_zone = 3
 
 	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial:
 		_apply_tool_at(pointer_position, delta)
@@ -404,6 +415,10 @@ func _setup_audio() -> void:
 		_star_warn_sfx.stream = _make_star_warn_stream()
 		_star_warn_sfx.volume_db = -6.0
 		add_child(_star_warn_sfx)
+		_patience_warn_sfx = AudioStreamPlayer.new()
+		_patience_warn_sfx.stream = _make_patience_warn_stream()
+		_patience_warn_sfx.volume_db = -9.0
+		add_child(_patience_warn_sfx)
 		_bomb_sfx = AudioStreamPlayer.new()
 		_bomb_sfx.stream = _make_bomb_stream()
 		_bomb_sfx.volume_db = -3.0
@@ -692,6 +707,22 @@ func _make_star_warn_stream() -> AudioStreamWAV:
 			var env := exp(-t * 8.0) * clampf(t / 0.003, 0.0, 1.0)
 			var tail := clampf(float(note_samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.010)), 0.0, 1.0)
 			_append_i16_sample(data, sin(phase) * 0.38 * env * tail)
+	return _make_wav(data)
+
+
+func _make_patience_warn_stream() -> AudioStreamWAV:
+	var note_samples: int = int(0.055 * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var freqs := [392.0, 293.66]  # G4→D4 하행 완전5도 — 부드러운 경고
+	for note in 2:
+		var freq: float = freqs[note]
+		var phase := 0.0
+		for i in range(note_samples):
+			var t: float = float(i) / float(AUDIO_MIX_RATE)
+			phase += TAU * freq / float(AUDIO_MIX_RATE)
+			var env := exp(-t * 10.0) * clampf(t / 0.004, 0.0, 1.0)
+			var tail := clampf(float(note_samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.012)), 0.0, 1.0)
+			_append_i16_sample(data, sin(phase) * 0.32 * env * tail)
 	return _make_wav(data)
 
 
@@ -1032,6 +1063,7 @@ func reset_game(new_level: int) -> void:
 	_star3_combo_unlocked = false
 	_last_milestone_haptic_combo = -1
 	_prev_in_warn_zone = false
+	_prev_patience_zone = 3
 	earned_stars = 0
 	combo_pop_time = -10.0
 	is_new_record = false
