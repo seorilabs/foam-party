@@ -296,6 +296,9 @@ func _load_progress() -> void:
 	if daily_mission_progress >= daily_mission_target:
 		daily_mission_claimed = true
 	daily_mission_date = saved_date
+	var daily_coins := int(daily_config.get_value("daily", "coins", -1))
+	if daily_coins > coins:
+		coins = daily_coins
 
 
 func _save_progress() -> Error:
@@ -321,15 +324,15 @@ func _save_daily() -> Error:
 	config.set_value("daily", "progress", daily_mission_progress)
 	config.set_value("daily", "claimed", daily_mission_claimed)
 	config.set_value("daily", "date", daily_mission_date)
+	config.set_value("daily", "coins", coins)
 	return config.save(DAILY_SAVE_PATH)
 
 
 func _flush_daily_if_dirty() -> void:
 	if not _daily_progress_dirty:
 		return
-	var daily_err := _save_daily()
-	var prog_err := _save_progress()
-	if daily_err == OK and prog_err == OK:
+	var err := _save_daily()
+	if err == OK:
 		_daily_progress_dirty = false
 
 
@@ -1850,9 +1853,8 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				daily_mission_claimed = true
 				coins += DAILY_MISSION_REWARD
 				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
-				var daily_err := _save_daily()
-				var prog_err := _save_progress()
-				if daily_err != OK or prog_err != OK:
+				var err := _save_daily()
+				if err != OK:
 					_daily_progress_dirty = true
 				if OS.has_feature("mobile"):
 					Input.vibrate_handheld(60)
