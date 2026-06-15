@@ -139,6 +139,7 @@ var best_times: Dictionary = {}
 var is_new_record := false
 var record_pop_time := -10.0
 var _tool_select_time := -10.0
+var _bomb_press_time := -10.0
 var game_state := STATE_TITLE
 var coins := 0
 var total_stars := 0
@@ -1318,6 +1319,7 @@ func _handle_tap(point: Vector2) -> bool:
 				_bomb_deny_sfx.stop()
 				_bomb_deny_sfx.play()
 		else:
+			_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
 			apply_foam_bomb()
 		return true
 
@@ -2894,6 +2896,11 @@ func _draw_bomb_button() -> void:
 		return
 	var font: Font = _font()
 	var rect := _get_bomb_rect()
+	var t := float(Time.get_ticks_msec()) / 1000.0
+	var pop := 1.0 + 0.14 * exp(-(t - _bomb_press_time) * 9.0)
+	if pop > 1.001:
+		var center := rect.get_center()
+		rect = Rect2(center - rect.size * pop * 0.5, rect.size * pop)
 	var can_afford := coins >= BOMB_COST
 	var bg := Color("#f8f4a6") if can_afford else Color(0.55, 0.6, 0.63, 0.85)
 	draw_style_box(_style("bomb_on" if can_afford else "bomb_off", bg, 14.0), rect)
