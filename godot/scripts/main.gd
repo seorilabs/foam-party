@@ -860,6 +860,7 @@ func _draw() -> void:
 		_draw_wash_trail()
 		_draw_tool_cursor()
 		_draw_grade_tracker()
+		_draw_customer_patience()
 		_draw_combo_badge()
 		_draw_bomb_button()
 		_draw_toolbar()
@@ -2851,6 +2852,90 @@ func _draw_grade_tracker() -> void:
 	else:
 		text = "Time %s" % _format_time(level_time)
 	draw_string(font, Vector2(rect.position.x, line_y), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 12, col)
+
+
+func _draw_customer_patience() -> void:
+	if completed:
+		return
+	# 손님 인내 게이지: STAR2_TIME(140s)을 기준으로 1.0 → 0.0으로 감소.
+	# 등급 트래커(x=14, w=120) 오른쪽, 사운드 버튼(x=306) 왼쪽 사이에 배치.
+	if STAR2_TIME <= 0.0:
+		return
+	var patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var rect := Rect2(144.0, 100.0, 110.0, 56.0)
+
+	draw_style_box(_style("cust_shadow", Color(0.03, 0.14, 0.2, 0.22), 16.0),
+		Rect2(rect.position + Vector2(0.0, 2.0), rect.size))
+	draw_style_box(_style("cust_chip", Color(0.03, 0.14, 0.2, 0.66), 16.0), rect)
+
+	# 손님 얼굴 (카드 왼쪽)
+	var face := Vector2(rect.position.x + 26.0, rect.position.y + 24.0)
+	var fr := 15.0
+	var face_col := Color(1.0, 0.85, 0.22).lerp(Color(1.0, 0.35, 0.22), 1.0 - patience)
+	draw_circle(face, fr, face_col)
+	draw_arc(face, fr, 0.0, TAU, 28, Color(0.0, 0.0, 0.0, 0.18), 1.5)
+
+	# 눈
+	draw_circle(Vector2(face.x - 5.0, face.y - 4.5), 2.0, Color(0.08, 0.06, 0.04))
+	draw_circle(Vector2(face.x + 5.0, face.y - 4.5), 2.0, Color(0.08, 0.06, 0.04))
+
+	# 눈썹 (찡그림 구간인 patience <= 0.2에서만 인상을 찌푸림)
+	# anger: 0.2에서 0으로 시작해 0에서 1로 증가 → 경계에서 불연속 없음
+	if patience <= 0.2:
+		var anger := clampf((0.2 - patience) / 0.2, 0.0, 1.0)
+		var tilt := anger * 2.8
+		draw_line(Vector2(face.x - 9.0, face.y - 10.0 - tilt), Vector2(face.x - 3.0, face.y - 9.5 + tilt),
+			Color(0.08, 0.06, 0.04, 0.9), 1.5)
+		draw_line(Vector2(face.x + 3.0, face.y - 9.5 + tilt), Vector2(face.x + 9.0, face.y - 10.0 - tilt),
+			Color(0.08, 0.06, 0.04, 0.9), 1.5)
+
+	# 입 (미소 / 무표정 / 찡그림)
+	if patience > 0.5:
+		# 미소: 아래로 볼록한 호 (Godot Y-down: 0.4→PI-0.4 clockwise = 아래를 지나는 호)
+		draw_arc(Vector2(face.x, face.y + 3.0), 6.0, 0.4, PI - 0.4, 12, Color(0.08, 0.06, 0.04), 2.0)
+	elif patience > 0.2:
+		# 무표정: 수평선
+		draw_line(Vector2(face.x - 5.5, face.y + 7.0), Vector2(face.x + 5.5, face.y + 7.0),
+			Color(0.08, 0.06, 0.04), 2.0)
+	else:
+		# 찡그림: 위로 볼록한 호 (PI+0.4→TAU-0.4 clockwise = 위를 지나는 호)
+		draw_arc(Vector2(face.x, face.y + 9.5), 6.0, PI + 0.4, TAU - 0.4, 12, Color(0.08, 0.06, 0.04), 2.0)
+
+	# 인내 게이지 바 (카드 오른쪽)
+	var bar := Rect2(rect.position.x + 53.0, rect.position.y + 14.0, 48.0, 11.0)
+	draw_style_box(_style("cust_bar_bg", Color(0.15, 0.28, 0.38, 0.55), 5.0), bar)
+	if patience > 0.0:
+		var bar_key: String
+		var bar_col: Color
+		if patience > 0.65:
+			bar_key = "cust_bar_g"
+			bar_col = Color(0.22, 0.87, 0.55)
+		elif patience > 0.35:
+			bar_key = "cust_bar_y"
+			bar_col = Color(0.97, 0.82, 0.22)
+		else:
+			bar_key = "cust_bar_r"
+			bar_col = Color(1.0, 0.40, 0.28)
+		draw_style_box(_style(bar_key, bar_col, 5.0),
+			Rect2(bar.position, Vector2(bar.size.x * patience, bar.size.y)))
+
+	# 기분 레이블
+	var font: Font = _font()
+	var mood_label: String
+	var mood_col := Color(0.86, 0.93, 0.97)
+	if patience > 0.65:
+		mood_label = "Happy!"
+	elif patience > 0.35:
+		mood_label = "OK..."
+	elif patience > 0.1:
+		mood_label = "Hurry!"
+	else:
+		var blink := 0.55 + 0.45 * sin(time_now * 8.0)
+		mood_label = "ANGRY!"
+		mood_col = Color(1.0, 0.62, 0.40, blink)
+	draw_string(font, Vector2(rect.position.x + 48.0, rect.position.y + rect.size.y - 8.0),
+		mood_label, HORIZONTAL_ALIGNMENT_CENTER, 62.0, 12, mood_col)
 
 
 func _draw_combo_badge() -> void:
