@@ -760,12 +760,18 @@ func _make_star3_gate_stream() -> AudioStreamWAV:
 	return _make_wav(data)
 
 
-func _play_star_earn_sfx(stars: int) -> void:
+func _play_star_earn_sfx(stars: int, on_finished: Callable = Callable()) -> void:
 	if not audio_playback_enabled or not is_instance_valid(_star_earn_sfx):
+		if on_finished.is_valid():
+			on_finished.call()
 		return
 	var stream := _make_star_earn_stream(stars)
 	if stream == null:
+		if on_finished.is_valid():
+			on_finished.call()
 		return
+	if on_finished.is_valid():
+		_star_earn_sfx.finished.connect(on_finished, CONNECT_ONE_SHOT)
 	_star_earn_sfx.stream = stream
 	_star_earn_sfx.play()
 
@@ -2064,13 +2070,10 @@ func _update_clean_progress() -> void:
 		_save_progress()
 		_stop_tool_loop()
 		_play_completion_sound()
-		_play_star_earn_sfx(earned_stars)
-		if audio_playback_enabled and is_instance_valid(_star_earn_sfx) and is_instance_valid(_coin_bonus_sfx):
-			var play_coin := func() -> void:
-				if is_instance_valid(_coin_bonus_sfx):
-					_coin_bonus_sfx.stop()
-					_coin_bonus_sfx.play()
-			_star_earn_sfx.finished.connect(play_coin, CONNECT_ONE_SHOT)
+		_play_star_earn_sfx(earned_stars, func() -> void:
+			if audio_playback_enabled and is_instance_valid(_coin_bonus_sfx):
+				_coin_bonus_sfx.stop()
+				_coin_bonus_sfx.play())
 		_spawn_completion_burst()
 		if OS.has_feature("mobile"):
 			Input.vibrate_handheld(80)
