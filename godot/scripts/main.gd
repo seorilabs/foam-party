@@ -1645,7 +1645,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 			if audio_playback_enabled and is_instance_valid(_star3_gate_sfx):
 				_star3_gate_sfx.stop()
 				_star3_gate_sfx.play()
-			_star3_combo_unlocked = true
+				_star3_combo_unlocked = true
 		if COMBO_BONUS_AMOUNTS.has(combo_count):
 			var _bonus: int = COMBO_BONUS_AMOUNTS[combo_count]
 			coins += _bonus
