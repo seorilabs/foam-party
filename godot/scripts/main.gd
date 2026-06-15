@@ -1277,6 +1277,7 @@ func _handle_tap(point: Vector2) -> bool:
 			_toggle_sound()
 		elif _get_help_rect().has_point(point):
 			show_tutorial = true
+			_play_ui_select()
 		return true
 
 	if completed and _get_retry_rect().has_point(point):
@@ -1297,6 +1298,7 @@ func _handle_tap(point: Vector2) -> bool:
 	if _get_help_rect().has_point(point):
 		show_tutorial = true
 		is_washing = false
+		_play_ui_select()
 		return true
 
 	if not completed and _get_bomb_rect().has_point(point):
