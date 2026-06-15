@@ -139,6 +139,7 @@ var best_times: Dictionary = {}
 var is_new_record := false
 var record_pop_time := -10.0
 var _tool_select_time := -10.0
+var _bomb_press_time := -10.0
 var game_state := STATE_TITLE
 var coins := 0
 var total_stars := 0
@@ -1338,7 +1339,12 @@ func _handle_tap(point: Vector2) -> bool:
 				_bomb_deny_sfx.stop()
 				_bomb_deny_sfx.play()
 		else:
-			apply_foam_bomb()
+			if apply_foam_bomb():
+				_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
+			else:
+				if audio_playback_enabled and is_instance_valid(_bomb_deny_sfx):
+					_bomb_deny_sfx.stop()
+					_bomb_deny_sfx.play()
 		return true
 
 	for index in range(tool_ids.size()):
@@ -1372,14 +1378,15 @@ func _toggle_sound() -> void:
 	_save_progress()
 
 
-func apply_foam_bomb() -> void:
+func apply_foam_bomb() -> bool:
 	if completed or coins < BOMB_COST:
-		return
-	coins -= BOMB_COST
+		return false
+	var applied := false
 	for raw_patch in dirt_patches:
 		var patch := raw_patch as DirtPatch
 		if _is_patch_removed(patch) or patch.state == STATE_FLYING:
 			continue
+		applied = true
 		patch.soap = 1.0
 		patch.wetness = max(patch.wetness, 0.3)
 		patch.looseness = max(patch.looseness, 0.7)
@@ -1391,9 +1398,13 @@ func apply_foam_bomb() -> void:
 		for bubble_index in range(3):
 			var offset := Vector2(rng.randf_range(-patch.radius, patch.radius), rng.randf_range(-patch.radius, patch.radius))
 			particles.append(WashParticle.new(center + offset, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-40.0, -16.0)), rng.randf_range(0.6, 1.1), rng.randf_range(4.0, 9.0), Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85), STYLE_BUBBLE))
+	if not applied:
+		return false
+	coins -= BOMB_COST
 	if audio_playback_enabled and is_instance_valid(_bomb_sfx):
 		_bomb_sfx.play(0.0)
 	_save_progress()
+	return true
 
 
 func _calc_coin_reward(stars: int) -> int:
@@ -2917,6 +2928,11 @@ func _draw_bomb_button() -> void:
 		return
 	var font: Font = _font()
 	var rect := _get_bomb_rect()
+	var t := float(Time.get_ticks_msec()) / 1000.0
+	var pop := 1.0 + 0.14 * exp(-(t - _bomb_press_time) * 9.0)
+	if pop > 1.001:
+		var c := rect.get_center()
+		draw_set_transform(c * (1.0 - pop), 0.0, Vector2(pop, pop))
 	var can_afford := coins >= BOMB_COST
 	var bg := Color("#f8f4a6") if can_afford else Color(0.55, 0.6, 0.63, 0.85)
 	draw_style_box(_style("bomb_on" if can_afford else "bomb_off", bg, 14.0), rect)
@@ -2927,6 +2943,8 @@ func _draw_bomb_button() -> void:
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
 	draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
+	if pop > 1.001:
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 # Live "what grade am I earning right now" tracker. Surfaces the otherwise
