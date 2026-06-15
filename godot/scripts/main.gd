@@ -1321,6 +1321,10 @@ func _handle_tap(point: Vector2) -> bool:
 		else:
 			if apply_foam_bomb():
 				_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
+			else:
+				if audio_playback_enabled and is_instance_valid(_bomb_deny_sfx):
+					_bomb_deny_sfx.stop()
+					_bomb_deny_sfx.play()
 		return true
 
 	for index in range(tool_ids.size()):
