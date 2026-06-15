@@ -1420,7 +1420,9 @@ func _update_wash_trail(delta: float) -> void:
 
 
 func _draw_wash_trail() -> void:
-	if completed or wash_trail.size() < 2:
+	# Hide the streak immediately in non-play moments (completion, tutorial popup)
+	# rather than letting it fade behind the overlay.
+	if completed or show_tutorial or game_state != STATE_PLAYING or wash_trail.size() < 2:
 		return
 	var base_color: Color = tool_colors[selected_tool]
 	var radius := _tool_radius(selected_tool)
