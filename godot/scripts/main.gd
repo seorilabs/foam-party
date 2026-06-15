@@ -1855,7 +1855,7 @@ func _register_best_time() -> void:
 	if is_new_record:
 		best_times[level_index] = level_time
 		record_pop_time = float(Time.get_ticks_msec()) / 1000.0
-		if is_instance_valid(_record_sfx):
+		if audio_playback_enabled and is_instance_valid(_record_sfx):
 			_record_sfx.play()
 
 
