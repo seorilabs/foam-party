@@ -281,6 +281,10 @@ func _load_progress() -> void:
 	var saved_date: String = daily_config.get_value("daily", "date", "")
 	if saved_date != today:
 		_generate_daily_mission(today)
+		if main_claimed_date == today:
+			daily_mission_claimed = true
+			daily_mission_progress = daily_mission_target
+			daily_mission_date = today
 		return
 	var loaded_type: String = daily_config.get_value("daily", "type", "")
 	var loaded_label: String = daily_config.get_value("daily", "label", "")
@@ -306,9 +310,6 @@ func _load_progress() -> void:
 		if daily_mission_progress < daily_mission_target:
 			daily_mission_progress = daily_mission_target
 	daily_mission_date = saved_date
-	var daily_coins := int(daily_config.get_value("daily", "coins", -1))
-	if daily_coins > coins:
-		coins = daily_coins
 
 
 func _save_progress() -> Error:
@@ -335,7 +336,6 @@ func _save_daily() -> Error:
 	config.set_value("daily", "progress", daily_mission_progress)
 	config.set_value("daily", "claimed", daily_mission_claimed)
 	config.set_value("daily", "date", daily_mission_date)
-	config.set_value("daily", "coins", coins)
 	return config.save(DAILY_SAVE_PATH)
 
 
