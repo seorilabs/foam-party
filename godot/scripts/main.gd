@@ -200,6 +200,8 @@ var _combo_milestone_player: AudioStreamPlayer = null
 var _star_lost_sfx: AudioStreamPlayer = null
 var _prev_star3_time_ok := true
 var _prev_star2_time_ok := true
+var _star3_gate_sfx: AudioStreamPlayer = null
+var _star3_combo_unlocked := false
 var _bar_fill_style := StyleBoxFlat.new()
 
 
@@ -375,6 +377,10 @@ func _setup_audio() -> void:
 		_star_lost_sfx.stream = _make_star_lost_stream()
 		_star_lost_sfx.volume_db = -5.0
 		add_child(_star_lost_sfx)
+		_star3_gate_sfx = AudioStreamPlayer.new()
+		_star3_gate_sfx.stream = _make_star3_gate_stream()
+		_star3_gate_sfx.volume_db = -4.0
+		add_child(_star3_gate_sfx)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -636,6 +642,21 @@ func _make_star_lost_stream() -> AudioStreamWAV:
 	return _make_wav(data)
 
 
+func _make_star3_gate_stream() -> AudioStreamWAV:
+	var note_samples: int = int(0.055 * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var freqs := [783.99, 987.77, 1174.66]  # G5, B5, D6 — rising major triad
+	for note in 3:
+		var phase := 0.0
+		for i in range(note_samples):
+			var t: float = float(i) / float(AUDIO_MIX_RATE)
+			phase += TAU * freqs[note] / float(AUDIO_MIX_RATE)
+			var env := exp(-t * 10.0) * clampf(t / 0.004, 0.0, 1.0)
+			var tail := clampf(float(note_samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.010)), 0.0, 1.0)
+			_append_i16_sample(data, sin(phase) * 0.36 * env * tail)
+	return _make_wav(data)
+
+
 func _check_star_time_loss() -> void:
 	var star3_time_ok := level_time <= _star_time_threshold(3)
 	var star2_time_ok := level_time <= _star_time_threshold(2)
@@ -865,6 +886,7 @@ func reset_game(new_level: int) -> void:
 	level_time = 0.0
 	_prev_star3_time_ok = true
 	_prev_star2_time_ok = true
+	_star3_combo_unlocked = false
 	earned_stars = 0
 	combo_pop_time = -10.0
 	is_new_record = false
@@ -1619,6 +1641,11 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		combo_count += 1
 		combo_timer = COMBO_WINDOW
 		best_combo = max(best_combo, combo_count)
+		if combo_count == STAR3_COMBO and not _star3_combo_unlocked:
+			if audio_playback_enabled and is_instance_valid(_star3_gate_sfx):
+				_star3_gate_sfx.stop()
+				_star3_gate_sfx.play()
+				_star3_combo_unlocked = true
 		if COMBO_BONUS_AMOUNTS.has(combo_count):
 			var _bonus: int = COMBO_BONUS_AMOUNTS[combo_count]
 			coins += _bonus
