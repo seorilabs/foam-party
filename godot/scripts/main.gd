@@ -207,6 +207,7 @@ var _star_warn_sfx: AudioStreamPlayer = null
 var _prev_in_warn_zone := false
 var _bomb_sfx: AudioStreamPlayer = null
 var _bomb_deny_sfx: AudioStreamPlayer = null
+var _coin_bonus_sfx: AudioStreamPlayer = null
 var _bar_fill_style := StyleBoxFlat.new()
 
 
@@ -409,6 +410,10 @@ func _setup_audio() -> void:
 		_bomb_deny_sfx.stream = _make_bomb_deny_stream()
 		_bomb_deny_sfx.volume_db = -9.0
 		add_child(_bomb_deny_sfx)
+		_coin_bonus_sfx = AudioStreamPlayer.new()
+		_coin_bonus_sfx.stream = _make_coin_bonus_stream()
+		_coin_bonus_sfx.volume_db = -6.0
+		add_child(_coin_bonus_sfx)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -717,6 +722,21 @@ func _make_bomb_deny_stream() -> AudioStreamWAV:
 		phase += TAU * freq / float(AUDIO_MIX_RATE)
 		var env := exp(-t * 35.0) * clampf(t / 0.002, 0.0, 1.0)
 		_append_i16_sample(data, clampf(sin(phase) * 0.28 * env, -1.0, 1.0))
+	return _make_wav(data)
+
+
+func _make_coin_bonus_stream() -> AudioStreamWAV:
+	var note_samples: int = int(0.055 * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var freqs := [1046.50, 1318.51]  # C6, E6 — 밝은 두 음 상행
+	for note in 2:
+		var phase := 0.0
+		for i in range(note_samples):
+			var t: float = float(i) / float(AUDIO_MIX_RATE)
+			phase += TAU * freqs[note] / float(AUDIO_MIX_RATE)
+			var env := exp(-t * 18.0) * clampf(t / 0.002, 0.0, 1.0)
+			var tail := clampf(float(note_samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.008)), 0.0, 1.0)
+			_append_i16_sample(data, sin(phase) * 0.32 * env * tail)
 	return _make_wav(data)
 
 
@@ -1756,6 +1776,9 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 			coins += _bonus
 			_combo_bonus_amount = _bonus
 			_combo_bonus_time = float(Time.get_ticks_msec()) / 1000.0
+			if audio_playback_enabled and is_instance_valid(_coin_bonus_sfx):
+				_coin_bonus_sfx.stop()
+				_coin_bonus_sfx.play()
 		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
 		if combo_count % 5 == 0 and combo_count != _last_milestone_haptic_combo:
 			_last_milestone_haptic_combo = combo_count
