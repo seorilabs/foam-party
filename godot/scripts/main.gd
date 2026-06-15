@@ -770,6 +770,7 @@ func _play_star_earn_sfx(stars: int, on_finished: Callable = Callable()) -> void
 		if on_finished.is_valid():
 			on_finished.call()
 		return
+	_star_earn_sfx.stop()
 	if on_finished.is_valid():
 		_star_earn_sfx.finished.connect(on_finished, CONNECT_ONE_SHOT)
 	_star_earn_sfx.stream = stream
