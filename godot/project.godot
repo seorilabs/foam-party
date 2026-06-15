@@ -2,7 +2,7 @@ config_version=5
 
 [application]
 
-config/name="폼 파티"
+config/name="Foam Party"
 run/main_scene="res://scenes/main.tscn"
 config/icon="res://assets/AppIcon.png"
 config/features=PackedStringArray("4.6", "Mobile")

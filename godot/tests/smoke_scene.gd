@@ -29,8 +29,8 @@ func _run_smoke() -> void:
 		return
 
 	var selected_label: String = root_node.call("get_selected_tool_label_for_test")
-	if selected_label != "고압수":
-		_fail("expected Korean default tool label")
+	if selected_label != "Water":
+		_fail("expected English default tool label")
 		return
 
 	var audio_count: int = root_node.call("get_audio_stream_count_for_test")
