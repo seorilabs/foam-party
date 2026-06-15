@@ -1338,6 +1338,8 @@ func _dismiss_tutorial() -> void:
 
 
 func _toggle_sound() -> void:
+	# ON→OFF: 뮤트 적용 전에 클릭음을 재생해 소리가 끊기지 않게 한다.
+	# OFF→ON: 언뮤트 후 클릭음을 재생한다.
 	if sound_enabled:
 		_play_ui_select()
 	sound_enabled = not sound_enabled
