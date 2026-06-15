@@ -1317,7 +1317,6 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 			var hint_was_inactive := patch.hint_time <= 0.0
 			patch.hint_time = max(patch.hint_time, 1.4)
 			if hint_was_inactive and _hint_sfx_player != null:
-				_hint_sfx_player.stop()
 				_hint_sfx_player.play()
 	else:
 		patch.resist_time = 0.0
