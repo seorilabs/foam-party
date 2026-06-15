@@ -1357,11 +1357,12 @@ func _toggle_sound() -> void:
 func apply_foam_bomb() -> bool:
 	if completed or coins < BOMB_COST:
 		return false
-	coins -= BOMB_COST
+	var applied := false
 	for raw_patch in dirt_patches:
 		var patch := raw_patch as DirtPatch
 		if _is_patch_removed(patch) or patch.state == STATE_FLYING:
 			continue
+		applied = true
 		patch.soap = 1.0
 		patch.wetness = max(patch.wetness, 0.3)
 		patch.looseness = max(patch.looseness, 0.7)
@@ -1373,6 +1374,9 @@ func apply_foam_bomb() -> bool:
 		for bubble_index in range(3):
 			var offset := Vector2(rng.randf_range(-patch.radius, patch.radius), rng.randf_range(-patch.radius, patch.radius))
 			particles.append(WashParticle.new(center + offset, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-40.0, -16.0)), rng.randf_range(0.6, 1.1), rng.randf_range(4.0, 9.0), Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85), STYLE_BUBBLE))
+	if not applied:
+		return false
+	coins -= BOMB_COST
 	if audio_playback_enabled and is_instance_valid(_bomb_sfx):
 		_bomb_sfx.play(0.0)
 	_save_progress()
