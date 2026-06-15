@@ -180,6 +180,7 @@ var daily_mission_progress := 0
 var daily_mission_claimed := false
 var daily_mission_date := ""
 var _daily_mission_pop_time := -10.0
+var _daily_progress_dirty := false
 
 var tool_ids := [TOOL_AIR, TOOL_WATER, TOOL_SOAP, TOOL_SPONGE]
 var tool_labels := {
@@ -268,6 +269,9 @@ func _load_progress() -> void:
 		daily_mission_type = config.get_value("daily", "type", "")
 		daily_mission_label = config.get_value("daily", "label", "")
 		daily_mission_target = config.get_value("daily", "target", 0)
+		if daily_mission_target <= 0:
+			_generate_daily_mission(today)
+			return
 		daily_mission_progress = config.get_value("daily", "progress", 0)
 		daily_mission_claimed = config.get_value("daily", "claimed", false)
 		daily_mission_date = saved_date
@@ -355,6 +359,7 @@ func _notification(what: int) -> void:
 		queue_redraw()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
 		_save_progress()
+		_daily_progress_dirty = false
 
 
 func _setup_font() -> void:
@@ -1806,9 +1811,12 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				daily_mission_claimed = true
 				coins += DAILY_MISSION_REWARD
 				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
+				_save_progress()
+				_daily_progress_dirty = false
 				if OS.has_feature("mobile"):
 					Input.vibrate_handheld(60)
-			_save_progress()
+			else:
+				_daily_progress_dirty = true
 	_spawn_removal_burst(burst_center, burst_radius)
 	if not completed:
 		_play_removal_sound()
