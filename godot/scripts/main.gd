@@ -2746,7 +2746,7 @@ func _draw_customer_patience() -> void:
 		return
 	# 손님 인내 게이지: STAR2_TIME(140s)을 기준으로 1.0 → 0.0으로 감소.
 	# 등급 트래커(x=14, w=120) 오른쪽, 사운드 버튼(x=306) 왼쪽 사이에 배치.
-	var patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
+	var patience := clampf(1.0 - level_time / maxf(STAR2_TIME, 0.001), 0.0, 1.0)
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
 	var rect := Rect2(144.0, 100.0, 110.0, 56.0)
 
