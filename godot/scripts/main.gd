@@ -2900,8 +2900,8 @@ func _draw_bomb_button() -> void:
 	var t := float(Time.get_ticks_msec()) / 1000.0
 	var pop := 1.0 + 0.14 * exp(-(t - _bomb_press_time) * 9.0)
 	if pop > 1.001:
-		var center := rect.get_center()
-		rect = Rect2(center - rect.size * pop * 0.5, rect.size * pop)
+		var c := rect.get_center()
+		draw_set_transform(c * (1.0 - pop), 0.0, Vector2(pop, pop))
 	var can_afford := coins >= BOMB_COST
 	var bg := Color("#f8f4a6") if can_afford else Color(0.55, 0.6, 0.63, 0.85)
 	draw_style_box(_style("bomb_on" if can_afford else "bomb_off", bg, 14.0), rect)
@@ -2912,6 +2912,8 @@ func _draw_bomb_button() -> void:
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
 	draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
+	if pop > 1.001:
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 # Live "what grade am I earning right now" tracker. Surfaces the otherwise
