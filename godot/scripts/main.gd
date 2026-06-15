@@ -196,7 +196,7 @@ var _hint_sfx_player: AudioStreamPlayer = null
 var _milestone_stream: AudioStreamWAV = null
 var _milestone_sfx_player: AudioStreamPlayer = null
 var _record_sfx: AudioStreamPlayer = null
-var _bar_fill_style: StyleBoxFlat = null
+var _bar_fill_style := StyleBoxFlat.new()
 
 
 func _ready() -> void:
@@ -1979,8 +1979,10 @@ func _draw_status() -> void:
 	var cp := clampf(clean_progress, 0.0, 1.0)
 	var fill_width: float = bar_rect.size.x * cp
 	_bar_fill_style.bg_color = BAR_COL_START.lerp(BAR_COL_END, cp)
-	if fill_width >= 8.0:
-		draw_style_box(_bar_fill_style, Rect2(bar_rect.position, Vector2(fill_width, bar_rect.size.y)))
+	if cp > 0.0:
+		var draw_w := maxf(fill_width, 2.0)
+		_bar_fill_style.set_corner_radius_all(mini(6, int(draw_w * 0.5)))
+		draw_style_box(_bar_fill_style, Rect2(bar_rect.position, Vector2(draw_w, bar_rect.size.y)))
 	draw_string(font, Vector2(294.0, bar_rect.position.y + 18.0), "%.0f%%" % (cp * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 66.0, 15, Color("#0d3b55"))
 
 	if _progress_milestone_time >= 0.0:
