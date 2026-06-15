@@ -711,7 +711,7 @@ func _make_bomb_deny_stream() -> AudioStreamWAV:
 	var phase := 0.0
 	for i in range(total_samples):
 		var t: float = float(i) / float(AUDIO_MIX_RATE)
-		var freq := 120.0 * exp(-t * 12.0) + 72.0
+		var freq := 48.0 * exp(-t * 12.0) + 72.0
 		phase += TAU * freq / float(AUDIO_MIX_RATE)
 		var env := exp(-t * 35.0) * clampf(t / 0.002, 0.0, 1.0)
 		_append_i16_sample(data, clampf(sin(phase) * 0.28 * env, -1.0, 1.0))
