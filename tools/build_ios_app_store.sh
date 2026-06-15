@@ -5,7 +5,36 @@ cd "$(dirname "$0")/.."
 
 targeted_device_family_from_preset() {
   local preset_value
-  preset_value="$(awk -F= '/application\/targeted_device_family=/{print $2; exit}' godot/export_presets.cfg | tr -d '"[:space:]')"
+  preset_value="$(awk -F= '
+    /^\[preset\.[0-9]+\]$/ {
+      preset_index = $0
+      sub(/^\[preset\./, "", preset_index)
+      sub(/\]$/, "", preset_index)
+      current_preset = preset_index
+      in_preset = 1
+      next
+    }
+    in_preset && $1 == "name" {
+      preset_name = $2
+      gsub(/[\"[:space:]]/, "", preset_name)
+      if (preset_name == "iOS") {
+        ios_preset = current_preset
+      }
+      in_preset = 0
+      next
+    }
+    ios_preset != "" && $0 == "[preset." ios_preset ".options]" {
+      in_ios_options = 1
+      next
+    }
+    in_ios_options && /^\[/ {
+      in_ios_options = 0
+    }
+    in_ios_options && $1 == "application/targeted_device_family" {
+      print $2
+      exit
+    }
+  ' godot/export_presets.cfg | tr -d '"[:space:]')"
   case "$preset_value" in
     0|"") printf "1" ;;
     1) printf "2" ;;

@@ -1805,7 +1805,7 @@ func _draw_status() -> void:
 	draw_style_box(_style("hud_shadow", Color(0.05, 0.23, 0.33, 0.25), 20.0), Rect2(card.position + Vector2(0.0, 3.0), card.size))
 	draw_style_box(_style("hud_card", Color(0.97, 0.99, 1.0, 0.94), 20.0), card)
 
-	var coin_chip := Rect2(170.0, card.position.y + 10.0, 70.0, 28.0)
+	var coin_chip := Rect2(150.0, card.position.y + 10.0, 90.0, 28.0)
 	var title_width := coin_chip.position.x - 32.0 - 8.0
 	var title_size := 19
 	while title_size > 15 and font.get_string_size("Foam Party", HORIZONTAL_ALIGNMENT_LEFT, -1.0, title_size).x > title_width:
@@ -1814,7 +1814,12 @@ func _draw_status() -> void:
 	draw_style_box(_style("coin_chip", Color("#fff3cf"), 14.0), coin_chip)
 	draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#ffce3d"))
 	draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#9a7400"), false, 1.5)
-	draw_string(font, Vector2(coin_chip.position.x + 30.0, coin_chip.position.y + 20.0), "%d" % coins, HORIZONTAL_ALIGNMENT_LEFT, 34.0, 14, Color("#6b5200"))
+	var coin_text := "%d" % coins
+	var coin_text_width := coin_chip.size.x - 38.0
+	var coin_font_size := 14
+	while coin_font_size > 10 and font.get_string_size(coin_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, coin_font_size).x > coin_text_width:
+		coin_font_size -= 1
+	draw_string(font, Vector2(coin_chip.position.x + 30.0, coin_chip.position.y + 20.0), coin_text, HORIZONTAL_ALIGNMENT_LEFT, coin_text_width, coin_font_size, Color("#6b5200"))
 	var badge := Rect2(248.0, card.position.y + 10.0, 112.0, 28.0)
 	draw_style_box(_style("level_badge", Color("#49a7ff"), 14.0), badge)
 	draw_string(font, Vector2(badge.position.x, badge.position.y + 20.0), "%s %02d" % [car_type_labels[car_type], level_index], HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 13, Color.WHITE)

@@ -38,6 +38,15 @@ export FOAM_PARTY_IOS_PROFILE_SPECIFIER="<App Store provisioning profile name or
 tools/build_ios_app_store.sh
 ```
 
+Bundle ID, Team ID, signing identity, target device family가 App Store Connect/App ID 확정값과 달라지면 환경 변수로 명시해 단일 빌드에서 덮어쓴다.
+
+```bash
+export FOAM_PARTY_IOS_BUNDLE_ID="com.seorilabs.foamparty"
+export FOAM_PARTY_IOS_TEAM_ID="HCDUXX4Z3X"
+export FOAM_PARTY_IOS_SIGNING_IDENTITY="Apple Distribution: Seori Labs (HCDUXX4Z3X)"
+export FOAM_PARTY_IOS_TARGETED_DEVICE_FAMILY="1"
+```
+
 Godot iOS export는 `build/ios/foam-party.xcodeproj`를 만들고, 스크립트가 `build/ios/foam-party.xcarchive`와 `.ipa` export를 이어서 만든다.
 
 ## 현재 제한
