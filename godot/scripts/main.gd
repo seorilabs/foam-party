@@ -208,6 +208,7 @@ var _prev_in_warn_zone := false
 var _bomb_sfx: AudioStreamPlayer = null
 var _bomb_deny_sfx: AudioStreamPlayer = null
 var _coin_bonus_sfx: AudioStreamPlayer = null
+var _star_earn_sfx: AudioStreamPlayer = null
 var _bar_fill_style := StyleBoxFlat.new()
 
 
@@ -414,6 +415,9 @@ func _setup_audio() -> void:
 		_coin_bonus_sfx.stream = _make_coin_bonus_stream()
 		_coin_bonus_sfx.volume_db = -6.0
 		add_child(_coin_bonus_sfx)
+		_star_earn_sfx = AudioStreamPlayer.new()
+		_star_earn_sfx.volume_db = -6.0
+		add_child(_star_earn_sfx)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -752,6 +756,29 @@ func _make_star3_gate_stream() -> AudioStreamWAV:
 			var env := exp(-t * 10.0) * clampf(t / 0.004, 0.0, 1.0)
 			var tail := clampf(float(note_samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.010)), 0.0, 1.0)
 			_append_i16_sample(data, sin(phase) * 0.36 * env * tail)
+	return _make_wav(data)
+
+
+func _play_star_earn_sfx(stars: int) -> void:
+	if not audio_playback_enabled or not is_instance_valid(_star_earn_sfx):
+		return
+	_star_earn_sfx.stream = _make_star_earn_stream(stars)
+	_star_earn_sfx.play()
+
+
+func _make_star_earn_stream(stars: int) -> AudioStreamWAV:
+	var note_samples := int(0.09 * float(AUDIO_MIX_RATE))
+	var freqs := [523.25, 659.26, 783.99]  # C5 E5 G5
+	var data := PackedByteArray()
+	for n in range(stars):
+		var freq := freqs[n]
+		var phase := 0.0
+		for i in range(note_samples):
+			var t: float = float(i) / float(AUDIO_MIX_RATE)
+			phase += TAU * freq / float(AUDIO_MIX_RATE)
+			var env := exp(-t * 12.0) * clampf(t / 0.004, 0.0, 1.0)
+			var tail := clampf(float(note_samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.010)), 0.0, 1.0)
+			_append_i16_sample(data, sin(phase) * 0.38 * env * tail)
 	return _make_wav(data)
 
 
@@ -2020,6 +2047,7 @@ func _update_clean_progress() -> void:
 		_save_progress()
 		_stop_tool_loop()
 		_play_completion_sound()
+		_play_star_earn_sfx(earned_stars)
 		_spawn_completion_burst()
 		if OS.has_feature("mobile"):
 			Input.vibrate_handheld(80)
