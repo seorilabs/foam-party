@@ -197,6 +197,9 @@ var _milestone_stream: AudioStreamWAV = null
 var _milestone_sfx_player: AudioStreamPlayer = null
 var _record_sfx: AudioStreamPlayer = null
 var _combo_milestone_player: AudioStreamPlayer = null
+var _star_lost_sfx: AudioStreamPlayer = null
+var _prev_star3_time_ok := true
+var _prev_star2_time_ok := true
 var _bar_fill_style := StyleBoxFlat.new()
 
 
@@ -261,6 +264,7 @@ func start_game() -> void:
 func _process(delta: float) -> void:
 	if game_state == STATE_PLAYING and not completed and not show_tutorial:
 		level_time += delta
+		_check_star_time_loss()
 		if combo_timer > 0.0:
 			combo_timer -= delta
 			if combo_timer <= 0.0:
@@ -367,6 +371,10 @@ func _setup_audio() -> void:
 		_combo_milestone_player.stream = _make_combo_milestone_stream()
 		_combo_milestone_player.volume_db = -5.0
 		add_child(_combo_milestone_player)
+		_star_lost_sfx = AudioStreamPlayer.new()
+		_star_lost_sfx.stream = _make_star_lost_stream()
+		_star_lost_sfx.volume_db = -5.0
+		add_child(_star_lost_sfx)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -614,6 +622,31 @@ func _make_combo_milestone_stream() -> AudioStreamWAV:
 	return _make_wav(data)
 
 
+func _make_star_lost_stream() -> AudioStreamWAV:
+	var total_samples: int = int(0.12 * float(AUDIO_MIX_RATE))
+	var data := PackedByteArray()
+	var phase := 0.0
+	for i in range(total_samples):
+		var t: float = float(i) / float(AUDIO_MIX_RATE)
+		var freq := 440.0 * pow(0.5, t * 3.0)
+		phase += TAU * freq / float(AUDIO_MIX_RATE)
+		var env := exp(-t * 5.5) * clampf(t / 0.010, 0.0, 1.0)
+		var tail := clampf(float(total_samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.020)), 0.0, 1.0)
+		_append_i16_sample(data, sin(phase) * 0.35 * env * tail)
+	return _make_wav(data)
+
+
+func _check_star_time_loss() -> void:
+	var star3_time_ok := level_time <= _star_time_threshold(3)
+	var star2_time_ok := level_time <= _star_time_threshold(2)
+	if (_prev_star3_time_ok and not star3_time_ok) or (_prev_star2_time_ok and not star2_time_ok):
+		if audio_playback_enabled and is_instance_valid(_star_lost_sfx):
+			_star_lost_sfx.stop()
+			_star_lost_sfx.play()
+	_prev_star3_time_ok = star3_time_ok
+	_prev_star2_time_ok = star2_time_ok
+
+
 func _make_hint_stream() -> AudioStreamWAV:
 	var total_samples: int = int(0.09 * float(AUDIO_MIX_RATE))
 	var data := PackedByteArray()
@@ -830,6 +863,8 @@ func reset_game(new_level: int) -> void:
 	combo_timer = 0.0
 	best_combo = 0
 	level_time = 0.0
+	_prev_star3_time_ok = true
+	_prev_star2_time_ok = true
 	earned_stars = 0
 	combo_pop_time = -10.0
 	is_new_record = false
