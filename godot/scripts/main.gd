@@ -747,16 +747,19 @@ func _make_coin_bonus_stream() -> AudioStreamWAV:
 
 func _make_star3_gate_stream() -> AudioStreamWAV:
 	var note_samples: int = int(0.055 * float(AUDIO_MIX_RATE))
+	var final_samples: int = int(0.075 * float(AUDIO_MIX_RATE))
 	var data := PackedByteArray()
-	var freqs := [783.99, 987.77, 1174.66]  # G5, B5, D6 — rising major triad
-	for note in 3:
+	var freqs := [783.99, 987.77, 1174.66, 1567.98]  # G5, B5, D6, G6
+	for note in freqs.size():
+		var samples := final_samples if note == freqs.size() - 1 else note_samples
 		var phase := 0.0
-		for i in range(note_samples):
+		for i in range(samples):
 			var t: float = float(i) / float(AUDIO_MIX_RATE)
 			phase += TAU * freqs[note] / float(AUDIO_MIX_RATE)
 			var env := exp(-t * 10.0) * clampf(t / 0.004, 0.0, 1.0)
-			var tail := clampf(float(note_samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.010)), 0.0, 1.0)
-			_append_i16_sample(data, sin(phase) * 0.36 * env * tail)
+			var tail := clampf(float(samples - 1 - i) / float(int(AUDIO_MIX_RATE * 0.010)), 0.0, 1.0)
+			var amp := 0.40 if note == freqs.size() - 1 else 0.36
+			_append_i16_sample(data, sin(phase) * amp * env * tail)
 	return _make_wav(data)
 
 
