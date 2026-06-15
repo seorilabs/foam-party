@@ -2609,7 +2609,7 @@ func _draw_combo_badge() -> void:
 	var fill_frac := clampf(combo_timer / COMBO_WINDOW, 0.0, 1.0)
 	var ring_alpha := clampf(fill_frac / 0.3, 0.0, 1.0)
 	var ring_r := badge_size.x * 0.5 + 8.0
-	var ring_center := Vector2(195.0, badge_center_y)
+	var ring_center := Vector2(badge.position.x + badge_size.x * 0.5, badge_center_y)
 	var is_urgent := fill_frac < 0.35
 	var ring_col: Color
 	if is_urgent:
@@ -2618,8 +2618,8 @@ func _draw_combo_badge() -> void:
 		ring_col = Color(1.0, 0.87, 0.25, ring_alpha)
 	else:
 		ring_col = Color(0.49, 0.89, 0.82, ring_alpha)
-	draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU * fill_frac, 48, Color(0.0, 0.0, 0.0, 0.22 * ring_alpha), 5.0)
-	draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU * fill_frac, 48, ring_col, 3.5)
+	draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU, 64, Color(0.0, 0.0, 0.0, 0.22 * ring_alpha), 5.0, true)
+	draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU * fill_frac, 64, ring_col, 3.5, true)
 
 
 func _draw_toolbar() -> void:
