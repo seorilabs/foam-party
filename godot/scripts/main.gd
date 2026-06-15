@@ -331,11 +331,12 @@ func _setup_audio() -> void:
 	ui_select_stream = _make_select_stream()
 	completion_stream = _make_completion_stream()
 	removal_stream = _make_removal_stream()
-	combo_break_stream = _make_combo_break_stream()
-	combo_break_player = AudioStreamPlayer.new()
-	combo_break_player.stream = combo_break_stream
-	combo_break_player.volume_db = -7.0
-	add_child(combo_break_player)
+	if audio_playback_enabled:
+		combo_break_stream = _make_combo_break_stream()
+		combo_break_player = AudioStreamPlayer.new()
+		combo_break_player.stream = combo_break_stream
+		combo_break_player.volume_db = -7.0
+		add_child(combo_break_player)
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
