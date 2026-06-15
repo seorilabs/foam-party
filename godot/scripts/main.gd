@@ -2746,7 +2746,9 @@ func _draw_customer_patience() -> void:
 		return
 	# 손님 인내 게이지: STAR2_TIME(140s)을 기준으로 1.0 → 0.0으로 감소.
 	# 등급 트래커(x=14, w=120) 오른쪽, 사운드 버튼(x=306) 왼쪽 사이에 배치.
-	var patience := clampf(1.0 - level_time / maxf(STAR2_TIME, 0.001), 0.0, 1.0)
+	if STAR2_TIME <= 0.0:
+		return
+	var patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
 	var rect := Rect2(144.0, 100.0, 110.0, 56.0)
 
@@ -2766,8 +2768,9 @@ func _draw_customer_patience() -> void:
 	draw_circle(Vector2(face.x + 5.0, face.y - 4.5), 2.0, Color(0.08, 0.06, 0.04))
 
 	# 눈썹 (찡그림 구간인 patience <= 0.2에서만 인상을 찌푸림)
+	# anger: 0.2에서 0으로 시작해 0에서 1로 증가 → 경계에서 불연속 없음
 	if patience <= 0.2:
-		var anger := clampf((0.35 - patience) / 0.35, 0.0, 1.0)
+		var anger := clampf((0.2 - patience) / 0.2, 0.0, 1.0)
 		var tilt := anger * 2.8
 		draw_line(Vector2(face.x - 9.0, face.y - 10.0 - tilt), Vector2(face.x - 3.0, face.y - 9.5 + tilt),
 			Color(0.08, 0.06, 0.04, 0.9), 1.5)
