@@ -115,6 +115,7 @@ var _progress_milestone_text := ""
 var _progress_milestone_color := Color.WHITE
 var combo_count := 0
 var combo_timer := 0.0
+var _halo_phase := 0.0
 var best_combo := 0
 var _combo_bonus_time := -10.0
 var _combo_bonus_amount := 0
@@ -240,6 +241,9 @@ func _process(delta: float) -> void:
 			if combo_timer <= 0.0:
 				combo_timer = 0.0
 				combo_count = 0
+			elif combo_count >= STAR3_COMBO:
+				var urgency := clampf(1.0 - combo_timer / maxf(COMBO_WINDOW, 0.001), 0.0, 1.0)
+				_halo_phase = fmod(_halo_phase + delta * (9.0 + urgency * 6.0) * TAU, TAU)
 
 	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial:
 		_apply_tool_at(pointer_position, delta)
@@ -2516,7 +2520,7 @@ func _draw_combo_badge() -> void:
 	var bg := Color("#ffce3d") if is_hot else Color(0.97, 0.99, 1.0, 0.95)
 	# Hot streaks gain a soft pulsing halo so momentum is unmistakable.
 	if is_hot:
-		var halo: float = 0.18 + 0.12 * sin(time_now * 9.0)
+		var halo: float = 0.18 + 0.12 * sin(_halo_phase)
 		var halo_size := badge_size + Vector2(18.0, 18.0)
 		var halo_rect := Rect2(Vector2(195.0, 134.0) - halo_size * 0.5, halo_size)
 		draw_style_box(_style("combo_halo", Color(1.0, 0.78, 0.22, halo), 24.0), halo_rect)
