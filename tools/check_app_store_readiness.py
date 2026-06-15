@@ -3,7 +3,6 @@ import argparse
 import json
 import plistlib
 import subprocess
-import tempfile
 from pathlib import Path
 
 
@@ -45,17 +44,19 @@ def sips_value(path, key):
 
 
 def load_profile(path):
-    proc = run(["security", "cms", "-D", "-i", str(path)])
+    proc = subprocess.run(
+        ["security", "cms", "-D", "-i", str(path)],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
     if proc.returncode != 0:
         return None
-    with tempfile.NamedTemporaryFile("wb", delete=False) as tmp:
-        tmp.write(proc.stdout.encode())
-        tmp_path = Path(tmp.name)
     try:
-        with tmp_path.open("rb") as handle:
-            return plistlib.load(handle)
-    finally:
-        tmp_path.unlink(missing_ok=True)
+        return plistlib.loads(proc.stdout)
+    except plistlib.InvalidFileException:
+        return None
 
 
 def find_matching_profile(bundle_id, team_id):

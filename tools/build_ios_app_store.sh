@@ -3,10 +3,22 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+targeted_device_family_from_preset() {
+  local preset_value
+  preset_value="$(awk -F= '/application\/targeted_device_family=/{print $2; exit}' godot/export_presets.cfg | tr -d '"[:space:]')"
+  case "$preset_value" in
+    0|"") printf "1" ;;
+    1) printf "2" ;;
+    2) printf "1,2" ;;
+    *) printf "%s" "$preset_value" ;;
+  esac
+}
+
 team_id="${FOAM_PARTY_IOS_TEAM_ID:-HCDUXX4Z3X}"
 bundle_id="${FOAM_PARTY_IOS_BUNDLE_ID:-com.seorilabs.foamparty}"
 profile_value="${FOAM_PARTY_IOS_PROFILE_SPECIFIER:-${FOAM_PARTY_IOS_PROFILE_UUID:-${GODOT_APPLE_PLATFORM_PROFILE_SPECIFIER_RELEASE:-${GODOT_APPLE_PLATFORM_PROVISIONING_PROFILE_UUID_RELEASE:-${GODOT_IOS_PROVISIONING_PROFILE_UUID_RELEASE:-}}}}}"
 signing_identity="${FOAM_PARTY_IOS_SIGNING_IDENTITY:-Apple Distribution: Seori Labs (${team_id})}"
+targeted_device_family="${FOAM_PARTY_IOS_TARGETED_DEVICE_FAMILY:-$(targeted_device_family_from_preset)}"
 build_dir="build/ios"
 project_name="foam-party"
 archive_path="${build_dir}/${project_name}.xcarchive"
@@ -29,7 +41,7 @@ if [[ "${1:-}" == "--unsigned-build" ]]; then
     -destination 'generic/platform=iOS' \
     build \
     CODE_SIGNING_ALLOWED=NO \
-    TARGETED_DEVICE_FAMILY=1
+    TARGETED_DEVICE_FAMILY="$targeted_device_family"
   exit 0
 fi
 
@@ -60,7 +72,7 @@ xcodebuild \
   CODE_SIGN_STYLE=Manual \
   CODE_SIGN_IDENTITY="$signing_identity" \
   PROVISIONING_PROFILE_SPECIFIER="$profile_value" \
-  TARGETED_DEVICE_FAMILY=1
+  TARGETED_DEVICE_FAMILY="$targeted_device_family"
 
 cat > "$export_options" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
