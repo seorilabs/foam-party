@@ -1941,6 +1941,24 @@ func _spawn_completion_burst() -> void:
 		particles.append(particle)
 	if is_new_record:
 		_spawn_record_burst()
+	if level_time > 0.0 and level_time < 60.0:
+		_spawn_speedrun_burst()
+
+
+func _spawn_speedrun_burst() -> void:
+	var center := Vector2(DESIGN_SIZE.x * 0.5, DESIGN_SIZE.y * 0.38)
+	for i in range(32):
+		var angle := TAU * float(i) / 32.0
+		var speed := rng.randf_range(190.0, 360.0)
+		var hue := rng.randf_range(0.10, 0.15)  # gold
+		particles.append(WashParticle.new(
+			center,
+			Vector2.from_angle(angle) * speed,
+			rng.randf_range(0.55, 1.1),
+			rng.randf_range(3.5, 6.5),
+			Color.from_hsv(hue, 0.88, 1.0, 0.95),
+			STYLE_SPARKLE
+		))
 
 
 func _spawn_record_burst() -> void:
