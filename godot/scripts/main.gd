@@ -2065,6 +2065,9 @@ func _update_clean_progress() -> void:
 		_stop_tool_loop()
 		_play_completion_sound()
 		_play_star_earn_sfx(earned_stars)
+		if audio_playback_enabled and is_instance_valid(_coin_bonus_sfx):
+			_coin_bonus_sfx.stop()
+			_coin_bonus_sfx.play()
 		_spawn_completion_burst()
 		if OS.has_feature("mobile"):
 			Input.vibrate_handheld(80)
