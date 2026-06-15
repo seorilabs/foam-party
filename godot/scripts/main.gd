@@ -1321,6 +1321,7 @@ func _handle_tap(point: Vector2) -> bool:
 
 func _dismiss_tutorial() -> void:
 	show_tutorial = false
+	_play_ui_select()
 	if not tutorial_seen:
 		tutorial_seen = true
 		_save_progress()
