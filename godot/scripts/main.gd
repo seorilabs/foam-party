@@ -1338,10 +1338,13 @@ func _dismiss_tutorial() -> void:
 
 
 func _toggle_sound() -> void:
+	if sound_enabled:
+		_play_ui_select()
 	sound_enabled = not sound_enabled
 	_apply_sound_setting()
+	if sound_enabled:
+		_play_ui_select()
 	_save_progress()
-	_play_ui_select()
 
 
 func apply_foam_bomb() -> void:
