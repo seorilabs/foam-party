@@ -1249,12 +1249,16 @@ func _handle_key(keycode: Key) -> void:
 		return
 	if keycode == KEY_1:
 		selected_tool = TOOL_AIR
+		_play_ui_select()
 	elif keycode == KEY_2:
 		selected_tool = TOOL_WATER
+		_play_ui_select()
 	elif keycode == KEY_3:
 		selected_tool = TOOL_SOAP
+		_play_ui_select()
 	elif keycode == KEY_4:
 		selected_tool = TOOL_SPONGE
+		_play_ui_select()
 	elif keycode == KEY_SPACE and completed:
 		reset_game(level_index + 1)
 		_save_progress()
