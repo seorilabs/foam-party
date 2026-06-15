@@ -2589,7 +2589,7 @@ func _draw_combo_badge() -> void:
 	if is_hot:
 		var halo: float = 0.18 + 0.12 * sin(time_now * 9.0)
 		var halo_size := badge_size + Vector2(18.0, 18.0)
-		var halo_rect := Rect2(Vector2(195.0, 134.0) - halo_size * 0.5, halo_size)
+		var halo_rect := Rect2(Vector2(195.0, badge_center_y) - halo_size * 0.5, halo_size)
 		draw_style_box(_style("combo_halo", Color(1.0, 0.78, 0.22, halo), 24.0), halo_rect)
 	draw_style_box(_style(style_key, bg, 18.0), badge)
 	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "Combo x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
