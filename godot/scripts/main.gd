@@ -2765,8 +2765,8 @@ func _draw_customer_patience() -> void:
 	draw_circle(Vector2(face.x - 5.0, face.y - 4.5), 2.0, Color(0.08, 0.06, 0.04))
 	draw_circle(Vector2(face.x + 5.0, face.y - 4.5), 2.0, Color(0.08, 0.06, 0.04))
 
-	# 눈썹 (patience < 0.35이면 인상을 찌푸림)
-	if patience < 0.35:
+	# 눈썹 (찡그림 구간인 patience <= 0.2에서만 인상을 찌푸림)
+	if patience <= 0.2:
 		var anger := clampf((0.35 - patience) / 0.35, 0.0, 1.0)
 		var tilt := anger * 2.8
 		draw_line(Vector2(face.x - 9.0, face.y - 10.0 - tilt), Vector2(face.x - 3.0, face.y - 9.5 + tilt),
