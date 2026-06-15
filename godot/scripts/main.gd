@@ -182,6 +182,7 @@ var daily_mission_claimed := false
 var daily_mission_date := ""
 var _daily_mission_pop_time := -10.0
 var _daily_progress_dirty := false
+var _main_save_dirty := false
 var _daily_save_timer: Timer = null
 
 var tool_ids := [TOOL_AIR, TOOL_WATER, TOOL_SOAP, TOOL_SPONGE]
@@ -340,11 +341,14 @@ func _save_daily() -> Error:
 
 
 func _flush_daily_if_dirty() -> void:
-	if not _daily_progress_dirty:
-		return
-	var err := _save_daily()
-	if err == OK:
-		_daily_progress_dirty = false
+	if _daily_progress_dirty:
+		var err := _save_daily()
+		if err == OK:
+			_daily_progress_dirty = false
+	if _main_save_dirty:
+		var err := _save_progress()
+		if err == OK:
+			_main_save_dirty = false
 
 
 func _apply_sound_setting() -> void:
@@ -411,7 +415,9 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
 		var prog_err := _save_progress()
 		var daily_err := _save_daily()
-		if prog_err == OK and daily_err == OK:
+		if prog_err == OK:
+			_main_save_dirty = false
+		if daily_err == OK:
 			_daily_progress_dirty = false
 
 
@@ -1864,9 +1870,12 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				daily_mission_claimed = true
 				coins += DAILY_MISSION_REWARD
 				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
-				var err := _save_daily()
-				if err != OK:
+				var daily_err := _save_daily()
+				if daily_err != OK:
 					_daily_progress_dirty = true
+				var prog_err := _save_progress()
+				if prog_err != OK:
+					_main_save_dirty = true
 				if OS.has_feature("mobile"):
 					Input.vibrate_handheld(60)
 			else:
