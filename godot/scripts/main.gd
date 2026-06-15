@@ -1316,9 +1316,6 @@ func _handle_tap(point: Vector2) -> bool:
 				_bomb_deny_sfx.play()
 		else:
 			apply_foam_bomb()
-			if audio_playback_enabled and is_instance_valid(_bomb_sfx):
-				_bomb_sfx.stop()
-				_bomb_sfx.play()
 		return true
 
 	for index in range(tool_ids.size()):
@@ -1367,8 +1364,7 @@ func apply_foam_bomb() -> void:
 			var offset := Vector2(rng.randf_range(-patch.radius, patch.radius), rng.randf_range(-patch.radius, patch.radius))
 			particles.append(WashParticle.new(center + offset, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-40.0, -16.0)), rng.randf_range(0.6, 1.1), rng.randf_range(4.0, 9.0), Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85), STYLE_BUBBLE))
 	if audio_playback_enabled and is_instance_valid(_bomb_sfx):
-		_bomb_sfx.stop()
-		_bomb_sfx.play()
+		_bomb_sfx.play(0.0)
 	_save_progress()
 
 
