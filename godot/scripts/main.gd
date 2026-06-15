@@ -118,6 +118,8 @@ var initial_dirt_total := 1.0
 var level_index := 1
 var completed := false
 var completion_burst_done := false
+var _gleam_time := -1.0
+const GLEAM_DURATION := 0.72
 var _progress_milestone_hit := 0
 var _progress_milestone_time := -1.0
 var _progress_milestone_text := ""
@@ -262,6 +264,11 @@ func _process(delta: float) -> void:
 	_update_particles(delta)
 	_update_clean_progress()
 	_update_audio()
+	if _gleam_time >= 0.0:
+		_gleam_time = minf(_gleam_time + delta / GLEAM_DURATION, 1.0)
+		queue_redraw()
+		if _gleam_time >= 1.0:
+			_gleam_time = -1.0
 	# Per-frame redraw drives all animation (dirt, particles, combo/tool pulses,
 	# hint fade). The coaching glow pulses via sin(time), so keep redrawing while
 	# a hint is active even if the unconditional redraw below is ever made lazy.
@@ -656,6 +663,7 @@ func _draw() -> void:
 	_set_design_draw_transform()
 	_draw_dirt()
 	_draw_particles()
+	_draw_gleam()
 	if game_state == STATE_TITLE:
 		_draw_title_screen()
 	else:
@@ -677,6 +685,7 @@ func reset_game(new_level: int) -> void:
 	level_index = new_level
 	completed = false
 	completion_burst_done = false
+	_gleam_time = -1.0
 	is_washing = false
 	wash_trail.clear()
 	wash_speed = 0.0
@@ -1665,6 +1674,7 @@ func _update_clean_progress() -> void:
 
 	if clean_progress >= 0.985 and not completed:
 		completed = true
+		_gleam_time = 0.0
 		is_washing = false
 		earned_stars = _calc_stars()
 		coin_reward = _calc_coin_reward(earned_stars)
@@ -2327,6 +2337,30 @@ func _draw_sparkle(center: Vector2, radius: float, color: Color) -> void:
 	draw_line(center + Vector2(-diagonal, -diagonal), center + Vector2(diagonal, diagonal), color, 1.5)
 	draw_line(center + Vector2(-diagonal, diagonal), center + Vector2(diagonal, -diagonal), color, 1.5)
 	draw_circle(center, radius * 0.22, color)
+
+
+func _draw_gleam() -> void:
+	if _gleam_time < 0.0:
+		return
+	var sweep_x := lerp(-80.0, DESIGN_SIZE.x + 80.0, _gleam_time)
+	var alpha := sin(PI * _gleam_time) * 0.55
+	var h := DESIGN_SIZE.y
+	# Wide soft outer band (parallelogram leaning top-left to bottom-right)
+	var outer_points := PackedVector2Array([
+		Vector2(sweep_x - 48.0, 0.0),
+		Vector2(sweep_x + 28.0, 0.0),
+		Vector2(sweep_x + 52.0, h),
+		Vector2(sweep_x - 24.0, h),
+	])
+	draw_colored_polygon(outer_points, Color(1.0, 1.0, 1.0, alpha * 0.45))
+	# Narrower brighter core
+	var core_points := PackedVector2Array([
+		Vector2(sweep_x - 10.0, 0.0),
+		Vector2(sweep_x + 14.0, 0.0),
+		Vector2(sweep_x + 24.0, h),
+		Vector2(sweep_x, h),
+	])
+	draw_colored_polygon(core_points, Color(1.0, 1.0, 1.0, alpha * 0.75))
 
 
 func _draw_tool_cursor() -> void:
