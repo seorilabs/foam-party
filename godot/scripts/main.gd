@@ -2020,12 +2020,18 @@ func _draw_patch_hint(patch: DirtPatch, center: Vector2) -> void:
 
 
 func _draw_mud_patch(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
-	var color := Color(0.36, 0.19, 0.08, 0.82 * strength)
-	draw_circle(center, radius * (0.8 + strength * 0.25), color)
+	var s := clampf(strength, 0.0, 1.0)
+	var base_color := Color(
+		lerp(0.72, 0.36, s),
+		lerp(0.58, 0.19, s),
+		lerp(0.44, 0.08, s),
+		0.82 * s
+	)
+	draw_circle(center, radius * (0.8 + s * 0.25), base_color)
 	for index in range(5):
 		var angle := seed_value + float(index) * 1.35
 		var offset := Vector2(cos(angle), sin(angle)) * radius * 0.45
-		draw_circle(center + offset, radius * 0.38, color.darkened(0.1))
+		draw_circle(center + offset, radius * 0.38, base_color.darkened(0.1))
 
 
 func _draw_dust_patch(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
