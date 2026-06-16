@@ -3392,7 +3392,7 @@ func _draw_customer_patience() -> void:
 		var bubble := Rect2(rect.position.x, rect.position.y - 38.0, rect.size.x, 28.0)
 		draw_style_box(_style("cheer_bubble", Color(1.0, 0.97, 0.82, 0.92 * cheer_alpha), 10.0), bubble)
 		# 말풍선 꼬리: 손님 얼굴 중심 방향을 가리키는 삼각형
-		var face_x := rect.position.x + 26.0
+		var face_x := face.x
 		var tail_y := bubble.position.y + bubble.size.y
 		draw_colored_polygon(
 			PackedVector2Array([
