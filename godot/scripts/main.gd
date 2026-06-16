@@ -2268,9 +2268,10 @@ func _update_clean_progress() -> void:
 				_coin_bonus_sfx.stop()
 				_coin_bonus_sfx.play())
 		_spawn_completion_burst()
-		var _t := float(Time.get_ticks_msec()) / 1000.0
-		for _si in range(min(earned_stars, STAR_REVEAL_DELAYS.size())):
-			_star_reveal_times[_si] = _t + STAR_REVEAL_DELAYS[_si]
+		if _star_reveal_times[0] < 0.0:
+			var _t := float(Time.get_ticks_msec()) / 1000.0
+			for _si in range(min(earned_stars, STAR_REVEAL_DELAYS.size())):
+				_star_reveal_times[_si] = _t + STAR_REVEAL_DELAYS[_si]
 		if OS.has_feature("mobile"):
 			Input.vibrate_handheld(80)
 
@@ -3545,7 +3546,7 @@ func _draw_completion_panel() -> void:
 			else:
 				pop_scale = 1.0 + sin(time_now * 4.0 + float(index) * 0.9) * 0.08
 			_draw_star(star_center, 17.0 * pop_scale, Color("#ffce3d"), Color("#e0a818"))
-		elif index >= earned_stars:
+		elif index >= earned_stars or reveal_age < 0.0:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "All Clean!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
