@@ -21,6 +21,7 @@ const GRADE_SLOT_LOCKED := "locked"
 const BAR_COL_START := Color(0.286, 0.655, 1.0)   # #49a7ff
 const BAR_COL_END   := Color(0.224, 0.851, 0.541)  # #39d98a
 const SAVE_PATH := "user://foam_party_save.cfg"
+const DAILY_SAVE_PATH := "user://foam_party_daily.cfg"
 const BOMB_COST := 40
 const STATE_TITLE := "title"
 const STATE_PLAYING := "playing"
@@ -52,6 +53,14 @@ const STYLE_BUBBLE := "bubble"
 const STYLE_FOAM := "foam"
 const STYLE_SPARKLE := "sparkle"
 const STYLE_CONFETTI := "confetti"
+const DAILY_MISSION_POOL := [
+	{"type": "leaf", "label": "낙엽 %d개 날리기", "target": 20},
+	{"type": "dust", "label": "먼지 %d개 제거하기", "target": 20},
+	{"type": "mud", "label": "흙탕물 %d개 씻기", "target": 15},
+	{"type": "oil", "label": "오일 %d개 청소하기", "target": 15},
+	{"type": "bug", "label": "벌레 자국 %d개 닦기", "target": 12},
+]
+const DAILY_MISSION_REWARD := 50
 
 class DirtPatch:
 	var kind: String
@@ -166,6 +175,17 @@ var completion_sfx_player: AudioStreamPlayer
 var active_tool_sound := ""
 var audio_playback_enabled := true
 
+var daily_mission_type := ""
+var daily_mission_label := ""
+var daily_mission_target := 0
+var daily_mission_progress := 0
+var daily_mission_claimed := false
+var daily_mission_date := ""
+var _daily_mission_pop_time := -10.0
+var _daily_progress_dirty := false
+var _main_save_dirty := false
+var _daily_save_timer: Timer = null
+
 var tool_ids := [TOOL_AIR, TOOL_WATER, TOOL_SOAP, TOOL_SPONGE]
 var tool_labels := {
 	TOOL_AIR: "Air",
@@ -221,6 +241,14 @@ func _ready() -> void:
 	_setup_font()
 	_build_car_shapes()
 	_load_progress()
+	if daily_mission_type.is_empty():
+		_generate_daily_mission(_today_string())
+	if persistence_enabled:
+		_daily_save_timer = Timer.new()
+		_daily_save_timer.wait_time = 1.0
+		_daily_save_timer.timeout.connect(_flush_daily_if_dirty)
+		add_child(_daily_save_timer)
+		_daily_save_timer.start()
 	_setup_audio()
 	_bar_fill_style = StyleBoxFlat.new()
 	_bar_fill_style.bg_color = BAR_COL_START
@@ -233,23 +261,68 @@ func _load_progress() -> void:
 	if not persistence_enabled:
 		return
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) != OK:
+	var main_claimed_date := ""
+	var main_save_ok := config.load(SAVE_PATH) == OK
+	if main_save_ok:
+		level_index = max(1, int(config.get_value("game", "level", 1)))
+		coins = max(0, int(config.get_value("game", "coins", 0)))
+		total_stars = max(0, int(config.get_value("game", "total_stars", 0)))
+		sound_enabled = bool(config.get_value("settings", "sound", true))
+		tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
+		var stored_best: Variant = config.get_value("game", "best_times", {})
+		if stored_best is Dictionary:
+			best_times = {}
+			for key in (stored_best as Dictionary):
+				best_times[int(key)] = float(stored_best[key])
+		main_claimed_date = String(config.get_value("daily", "claimed_date", ""))
+	var today := _today_string()
+	var daily_config := ConfigFile.new()
+	if daily_config.load(DAILY_SAVE_PATH) != OK:
+		_generate_daily_mission(today)
+		if main_claimed_date == today:
+			daily_mission_claimed = true
+			daily_mission_progress = daily_mission_target
 		return
-	level_index = max(1, int(config.get_value("game", "level", 1)))
-	coins = max(0, int(config.get_value("game", "coins", 0)))
-	total_stars = max(0, int(config.get_value("game", "total_stars", 0)))
-	sound_enabled = bool(config.get_value("settings", "sound", true))
-	tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
-	var stored_best: Variant = config.get_value("game", "best_times", {})
-	if stored_best is Dictionary:
-		best_times = {}
-		for key in (stored_best as Dictionary):
-			best_times[int(key)] = float(stored_best[key])
+	var saved_date: String = daily_config.get_value("daily", "date", "")
+	if saved_date != today:
+		_generate_daily_mission(today)
+		if main_claimed_date == today:
+			daily_mission_claimed = true
+			daily_mission_progress = daily_mission_target
+			daily_mission_date = today
+		return
+	var loaded_type: String = daily_config.get_value("daily", "type", "")
+	var loaded_label: String = daily_config.get_value("daily", "label", "")
+	var loaded_target: int = int(daily_config.get_value("daily", "target", 0))
+	var type_valid := false
+	for m in DAILY_MISSION_POOL:
+		if m["type"] == loaded_type:
+			type_valid = true
+			break
+	if loaded_target <= 0 or not type_valid or loaded_label.is_empty():
+		_generate_daily_mission(today)
+		if main_claimed_date == today:
+			daily_mission_claimed = true
+			daily_mission_progress = daily_mission_target
+		return
+	daily_mission_type = loaded_type
+	daily_mission_label = loaded_label
+	daily_mission_target = loaded_target
+	daily_mission_progress = clampi(int(daily_config.get_value("daily", "progress", 0)), 0, daily_mission_target)
+	daily_mission_claimed = bool(daily_config.get_value("daily", "claimed", false))
+	if daily_mission_claimed or daily_mission_progress >= daily_mission_target or main_claimed_date == today:
+		daily_mission_claimed = true
+		if daily_mission_progress < daily_mission_target:
+			daily_mission_progress = daily_mission_target
+	daily_mission_date = saved_date
+	if main_save_ok and daily_mission_claimed and main_claimed_date != today:
+		coins += DAILY_MISSION_REWARD
+		_main_save_dirty = true
 
 
-func _save_progress() -> void:
+func _save_progress() -> Error:
 	if not persistence_enabled:
-		return
+		return OK
 	var config := ConfigFile.new()
 	config.set_value("game", "level", level_index)
 	config.set_value("game", "coins", coins)
@@ -257,7 +330,32 @@ func _save_progress() -> void:
 	config.set_value("settings", "sound", sound_enabled)
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
 	config.set_value("game", "best_times", best_times)
-	config.save(SAVE_PATH)
+	config.set_value("daily", "claimed_date", daily_mission_date if daily_mission_claimed else "")
+	return config.save(SAVE_PATH)
+
+
+func _save_daily() -> Error:
+	if not persistence_enabled:
+		return OK
+	var config := ConfigFile.new()
+	config.set_value("daily", "type", daily_mission_type)
+	config.set_value("daily", "label", daily_mission_label)
+	config.set_value("daily", "target", daily_mission_target)
+	config.set_value("daily", "progress", daily_mission_progress)
+	config.set_value("daily", "claimed", daily_mission_claimed)
+	config.set_value("daily", "date", daily_mission_date)
+	return config.save(DAILY_SAVE_PATH)
+
+
+func _flush_daily_if_dirty() -> void:
+	if _daily_progress_dirty:
+		var err := _save_daily()
+		if err == OK:
+			_daily_progress_dirty = false
+	if _main_save_dirty:
+		var err := _save_progress()
+		if err == OK:
+			_main_save_dirty = false
 
 
 func _apply_sound_setting() -> void:
@@ -322,7 +420,16 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		queue_redraw()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
-		_save_progress()
+		var prog_err := _save_progress()
+		var daily_err := _save_daily()
+		if prog_err == OK:
+			_main_save_dirty = false
+		else:
+			_main_save_dirty = true
+		if daily_err == OK:
+			_daily_progress_dirty = false
+		else:
+			_daily_progress_dirty = true
 
 
 func _setup_font() -> void:
@@ -1003,6 +1110,7 @@ func _draw() -> void:
 		_draw_tool_cursor()
 		_draw_grade_tracker()
 		_draw_customer_patience()
+		_draw_daily_mission()
 		_draw_combo_badge()
 		_draw_bomb_button()
 		_draw_toolbar()
@@ -1841,6 +1949,23 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				_combo_milestone_player.play()
 			if OS.has_feature("mobile"):
 				Input.vibrate_handheld(38)
+		if not daily_mission_claimed and patch.kind == daily_mission_type:
+			daily_mission_progress += 1
+			if daily_mission_progress >= daily_mission_target:
+				daily_mission_progress = daily_mission_target
+				daily_mission_claimed = true
+				coins += DAILY_MISSION_REWARD
+				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
+				var daily_err := _save_daily()
+				if daily_err != OK:
+					_daily_progress_dirty = true
+				var prog_err := _save_progress()
+				if prog_err != OK:
+					_main_save_dirty = true
+				if OS.has_feature("mobile"):
+					Input.vibrate_handheld(60)
+			else:
+				_daily_progress_dirty = true
 	_spawn_removal_burst(burst_center, burst_radius)
 	if not completed:
 		_play_removal_sound()
@@ -2923,6 +3048,71 @@ func _draw_title_screen() -> void:
 	draw_string(font, Vector2(0.0, 588.0), "Coins %d · Stars %d" % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
 	var version_y := minf(826.0, DESIGN_SIZE.y - _safe_area_design_insets().w - 12.0)
 	draw_string(font, Vector2(0.0, version_y), "v0.1", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 12, Color(1.0, 1.0, 1.0, 0.5))
+
+
+func _today_string() -> String:
+	var d := Time.get_date_dict_from_system()
+	return "%04d-%02d-%02d" % [d.year, d.month, d.day]
+
+
+func _generate_daily_mission(today: String) -> void:
+	daily_mission_date = today
+	var day_hash := absi(today.hash())
+	var pick := day_hash % DAILY_MISSION_POOL.size()
+	var m: Dictionary = DAILY_MISSION_POOL[pick]
+	daily_mission_type = m["type"]
+	daily_mission_target = m["target"]
+	daily_mission_label = m["label"] % daily_mission_target
+	daily_mission_progress = 0
+	daily_mission_claimed = false
+
+
+func _draw_daily_mission() -> void:
+	if game_state != STATE_PLAYING or daily_mission_type.is_empty():
+		return
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var top_y := _hud_top_y() + 62.0
+	var rect := Rect2(14.0, top_y, 242.0, 30.0)
+
+	draw_style_box(_style("dm_shadow", Color(0.03, 0.14, 0.2, 0.18), 12.0),
+		Rect2(rect.position + Vector2(0.0, 2.0), rect.size))
+	draw_style_box(_style("dm_bg", Color(0.03, 0.14, 0.2, 0.60), 12.0), rect)
+
+	var font := _font()
+	var claimed := daily_mission_claimed
+	var progress := mini(daily_mission_progress, daily_mission_target)
+
+	var bar_margin := 4.0
+	var bar_rect := Rect2(rect.position.x + bar_margin, rect.position.y + rect.size.y - 6.0,
+		rect.size.x - bar_margin * 2.0, 4.0)
+	draw_style_box(_style("dm_bar_bg", Color(0.0, 0.0, 0.0, 0.35), 2.0), bar_rect)
+	var fill := 1.0 if claimed else float(progress) / float(max(daily_mission_target, 1))
+	if fill > 0.0:
+		var fill_col := Color("#39d98a") if claimed else Color("#49a7ff")
+		var fill_w := maxf(6.0, bar_rect.size.x * fill)
+		draw_style_box(_style("dm_bar_fill", fill_col, 2.0),
+			Rect2(bar_rect.position, Vector2(fill_w, bar_rect.size.y)))
+
+	var label_text := daily_mission_label
+	var count_text := "완료!" if claimed else "%d/%d" % [progress, daily_mission_target]
+	var text_y := rect.position.y + 18.0
+	var label_col := Color(0.7, 1.0, 0.75) if claimed else Color(0.85, 0.95, 1.0)
+	var count_col := Color("#39d98a") if claimed else Color(0.7, 0.9, 1.0)
+	draw_string(font, Vector2(rect.position.x + 8.0, text_y),
+		label_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 64.0, 11, label_col)
+	draw_string(font, Vector2(rect.position.x + rect.size.x - 6.0, text_y),
+		count_text, HORIZONTAL_ALIGNMENT_RIGHT, -1, 11, count_col)
+
+	if _daily_mission_pop_time >= 0.0:
+		var age := time_now - _daily_mission_pop_time
+		if age < 2.8:
+			var alpha := clampf(1.0 - (age - 1.6) / 1.2, 0.0, 1.0)
+			var rise := age * 26.0
+			var pop_text := "+%d 코인!  데일리 미션 클리어!" % DAILY_MISSION_REWARD
+			draw_string(font, Vector2(14.0, top_y - 14.0 - rise),
+				pop_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.9, 0.3, alpha))
+		else:
+			_daily_mission_pop_time = -10.0
 
 
 func _draw_top_buttons() -> void:
