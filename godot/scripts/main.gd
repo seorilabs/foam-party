@@ -144,6 +144,8 @@ var _combo_bonus_amount := 0
 var level_time := 0.0
 var earned_stars := 0
 var combo_pop_time := -10.0
+var _customer_cheer_text := ""
+var _customer_cheer_time := -10.0
 var best_times: Dictionary = {}
 var is_new_record := false
 var record_pop_time := -10.0
@@ -1186,6 +1188,8 @@ func reset_game(new_level: int) -> void:
 	_prev_in_warn_zone = false
 	earned_stars = 0
 	combo_pop_time = -10.0
+	_customer_cheer_text = ""
+	_customer_cheer_time = -10.0
 	is_new_record = false
 	record_pop_time = -10.0
 	_progress_milestone_hit = 0
@@ -1986,6 +1990,18 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				_coin_bonus_sfx.stop()
 				_coin_bonus_sfx.play()
 		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
+		var _cheer := ""
+		if combo_count == STAR3_COMBO:
+			_cheer = "Nice!"
+		elif combo_count == 6:
+			_cheer = "Keep going!"
+		elif combo_count == 8:
+			_cheer = "Spotless!"
+		elif combo_count >= 10 and combo_count % 5 == 0:
+			_cheer = "WOW!"
+		if _cheer != "":
+			_customer_cheer_text = _cheer
+			_customer_cheer_time = combo_pop_time
 		if combo_count % 5 == 0 and combo_count != _last_milestone_haptic_combo:
 			_last_milestone_haptic_combo = combo_count
 			if audio_playback_enabled and is_instance_valid(_combo_milestone_player):
@@ -3368,6 +3384,26 @@ func _draw_customer_patience() -> void:
 		mood_col = Color(1.0, 0.62, 0.40, blink)
 	draw_string(font, Vector2(rect.position.x + 48.0, rect.position.y + rect.size.y - 8.0),
 		mood_label, HORIZONTAL_ALIGNMENT_CENTER, 62.0, 12, mood_col)
+
+	# 콤보 리액션 말풍선: 콤보 마일스톤 달성 직후 2.2초간 표시 후 페이드.
+	var cheer_age := time_now - _customer_cheer_time
+	if cheer_age < 2.2 and _customer_cheer_text != "":
+		var cheer_alpha := clampf(1.0 - (cheer_age - 1.4) / 0.8, 0.0, 1.0)
+		var bubble := Rect2(rect.position.x, rect.position.y - 38.0, rect.size.x, 28.0)
+		draw_style_box(_style("cheer_bubble", Color(1.0, 0.97, 0.82, 0.92 * cheer_alpha), 10.0), bubble)
+		# 말풍선 꼬리: 손님 얼굴 중심 방향을 가리키는 삼각형
+		var face_x := face.x
+		var tail_y := bubble.position.y + bubble.size.y
+		draw_colored_polygon(
+			PackedVector2Array([
+				Vector2(face_x - 6.0, tail_y),
+				Vector2(face_x + 6.0, tail_y),
+				Vector2(face_x, tail_y + 8.0),
+			]),
+			Color(1.0, 0.97, 0.82, 0.92 * cheer_alpha))
+		draw_string(font, Vector2(bubble.position.x, bubble.position.y + 20.0),
+			_customer_cheer_text, HORIZONTAL_ALIGNMENT_CENTER, bubble.size.x, 14,
+			Color(0.35, 0.18, 0.02, cheer_alpha))
 
 
 func _draw_combo_badge() -> void:
