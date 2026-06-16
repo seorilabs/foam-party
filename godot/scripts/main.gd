@@ -155,8 +155,8 @@ var game_state := STATE_TITLE
 var coins := 0
 var total_stars := 0
 var coin_reward := 0
-var _star_reveal_times: Array = [-10.0, -10.0, -10.0]
-const STAR_REVEAL_DELAYS := [0.3, 0.75, 1.25]
+var _star_reveal_times: Array[float] = [-10.0, -10.0, -10.0]
+const STAR_REVEAL_DELAYS: Array[float] = [0.3, 0.75, 1.25]
 const STAR_REVEAL_POP_DUR := 0.5
 var sound_enabled := true
 var tutorial_seen := false
@@ -2269,7 +2269,7 @@ func _update_clean_progress() -> void:
 				_coin_bonus_sfx.play())
 		_spawn_completion_burst()
 		var _t := float(Time.get_ticks_msec()) / 1000.0
-		for _si in range(earned_stars):
+		for _si in range(min(earned_stars, STAR_REVEAL_DELAYS.size())):
 			_star_reveal_times[_si] = _t + STAR_REVEAL_DELAYS[_si]
 		if OS.has_feature("mobile"):
 			Input.vibrate_handheld(80)
@@ -3537,7 +3537,7 @@ func _draw_completion_panel() -> void:
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
 	for index in range(3):
 		var star_center := Vector2(145.0 + float(index) * 50.0, panel.position.y + 42.0)
-		var reveal_age := time_now - _star_reveal_times[index]
+		var reveal_age: float = time_now - _star_reveal_times[index]
 		if index < earned_stars and reveal_age >= 0.0:
 			var pop_scale := 1.0
 			if reveal_age < STAR_REVEAL_POP_DUR:
@@ -3545,7 +3545,7 @@ func _draw_completion_panel() -> void:
 			else:
 				pop_scale = 1.0 + sin(time_now * 4.0 + float(index) * 0.9) * 0.08
 			_draw_star(star_center, 17.0 * pop_scale, Color("#ffce3d"), Color("#e0a818"))
-		else:
+		elif index >= earned_stars:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "All Clean!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
