@@ -3391,20 +3391,16 @@ func _draw_customer_patience() -> void:
 		var cheer_alpha := clampf(1.0 - (cheer_age - 1.4) / 0.8, 0.0, 1.0)
 		var bubble := Rect2(rect.position.x, rect.position.y - 38.0, rect.size.x, 28.0)
 		draw_style_box(_style("cheer_bubble", Color(1.0, 0.97, 0.82, 0.92 * cheer_alpha), 10.0), bubble)
-		# 말풍선 꼬리: 카드 상단 중앙 방향으로 뾰족한 삼각형
-		var tip_x := bubble.position.x + bubble.size.x * 0.28
+		# 말풍선 꼬리: 손님 얼굴 중심 방향을 가리키는 삼각형
+		var face_x := rect.position.x + 26.0
 		var tail_y := bubble.position.y + bubble.size.y
 		draw_colored_polygon(
 			PackedVector2Array([
-				Vector2(tip_x - 6.0, tail_y),
-				Vector2(tip_x + 6.0, tail_y),
-				Vector2(tip_x, tail_y + 8.0),
+				Vector2(face_x - 6.0, tail_y),
+				Vector2(face_x + 6.0, tail_y),
+				Vector2(face_x, tail_y + 8.0),
 			]),
-			PackedColorArray([
-				Color(1.0, 0.97, 0.82, 0.92 * cheer_alpha),
-				Color(1.0, 0.97, 0.82, 0.92 * cheer_alpha),
-				Color(1.0, 0.97, 0.82, 0.92 * cheer_alpha),
-			]))
+			Color(1.0, 0.97, 0.82, 0.92 * cheer_alpha))
 		draw_string(font, Vector2(bubble.position.x, bubble.position.y + 20.0),
 			_customer_cheer_text, HORIZONTAL_ALIGNMENT_CENTER, bubble.size.x, 14,
 			Color(0.35, 0.18, 0.02, cheer_alpha))
