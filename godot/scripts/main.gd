@@ -287,8 +287,9 @@ func _process(delta: float) -> void:
 		if STAR2_TIME > 0.0:
 			var _patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
 			var _pzone := 3 if _patience > 0.65 else (2 if _patience > 0.35 else (1 if _patience > 0.1 else 0))
-			# One sound per downgrade event; if multiple zones are skipped in a
-			# single frame (e.g. large delta), only one alert plays intentionally.
+			# Policy: one alert per downgrade event. Patience decreases linearly
+			# over 140s so multi-zone skips in one frame are not a realistic
+			# concern; a single alert per event is the correct UX choice.
 			if _pzone < _prev_patience_zone:
 				if audio_playback_enabled and is_instance_valid(_patience_warn_sfx):
 					_patience_warn_sfx.stop()
