@@ -144,6 +144,10 @@ var _combo_bonus_amount := 0
 var level_time := 0.0
 var earned_stars := 0
 var combo_pop_time := -10.0
+var _combo_milestone_flash_time := -10.0
+var _combo_milestone_flash_color := Color.WHITE
+var _combo_milestone_fanfare := ""
+var _combo_milestone_count := 0
 var _customer_cheer_text := ""
 var _customer_cheer_time := -10.0
 var best_times: Dictionary = {}
@@ -1156,6 +1160,7 @@ func _draw() -> void:
 		_draw_bomb_button()
 		_draw_toolbar()
 		_draw_completion_panel()
+		_draw_combo_milestone_flash()
 	_draw_top_buttons()
 	if show_tutorial:
 		_draw_tutorial()
@@ -1192,6 +1197,10 @@ func reset_game(new_level: int) -> void:
 	earned_stars = 0
 	_star_reveal_times = [-10.0, -10.0, -10.0]
 	combo_pop_time = -10.0
+	_combo_milestone_flash_time = -10.0
+	_combo_milestone_flash_color = Color.WHITE
+	_combo_milestone_fanfare = ""
+	_combo_milestone_count = 0
 	_customer_cheer_text = ""
 	_customer_cheer_time = -10.0
 	is_new_record = false
@@ -1994,6 +2003,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				_coin_bonus_sfx.stop()
 				_coin_bonus_sfx.play()
 		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
+		_trigger_combo_milestone_flash(combo_count)
 		var _cheer := ""
 		if combo_count == STAR3_COMBO:
 			_cheer = "Nice!"
@@ -3460,6 +3470,90 @@ func _draw_combo_badge() -> void:
 		var ring_points := clampi(int(ring_r * TAU), 32, 128)
 		draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU, ring_points, Color(0.0, 0.0, 0.0, 0.22 * ring_alpha), 5.0, true)
 		draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU * fill_frac, ring_points, ring_col, 3.5, true)
+
+
+func _trigger_combo_milestone_flash(count: int) -> void:
+	# ×4 콤보: 노란색 플래시 / ×6: 주황색 / ×8: 빨간색 / ×10+: 레인보우(보라)
+	if count == 4:
+		_combo_milestone_flash_color = Color(1.0, 0.92, 0.22, 0.0)
+		_combo_milestone_fanfare = "Combo x4!"
+	elif count == 6:
+		_combo_milestone_flash_color = Color(1.0, 0.58, 0.12, 0.0)
+		_combo_milestone_fanfare = "Combo x6!"
+	elif count == 8:
+		_combo_milestone_flash_color = Color(1.0, 0.22, 0.22, 0.0)
+		_combo_milestone_fanfare = "Combo x8!"
+	elif count >= 10 and count % 5 == 0:
+		_combo_milestone_flash_color = Color(0.72, 0.22, 1.0, 0.0)
+		_combo_milestone_fanfare = "MAX COMBO x%d!" % count
+	else:
+		return
+	_combo_milestone_count = count
+	_combo_milestone_flash_time = float(Time.get_ticks_msec()) / 1000.0
+
+
+func _draw_combo_milestone_flash() -> void:
+	if _combo_milestone_flash_time < 0.0:
+		return
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var age := time_now - _combo_milestone_flash_time
+	const FLASH_DUR := 0.55
+	const TEXT_DUR := 1.1
+	if age > TEXT_DUR:
+		_combo_milestone_flash_time = -10.0
+		return
+
+	# 화면 플래시 오버레이: 빠르게 점등 후 서서히 소멸
+	if age < FLASH_DUR:
+		var flash_alpha: float
+		if age < 0.06:
+			flash_alpha = age / 0.06
+		else:
+			flash_alpha = 1.0 - (age - 0.06) / (FLASH_DUR - 0.06)
+		flash_alpha *= 0.38
+		var fc := Color(_combo_milestone_flash_color.r, _combo_milestone_flash_color.g, _combo_milestone_flash_color.b, flash_alpha)
+		draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), fc)
+
+	# ×8 이상: 화면 가장자리 glow 테두리
+	var _milestone_count := _combo_milestone_count
+	if _milestone_count >= 8:
+		var edge_alpha := maxf(0.0, 1.0 - age / TEXT_DUR)
+		edge_alpha *= 0.55
+		var ec := Color(_combo_milestone_flash_color.r, _combo_milestone_flash_color.g, _combo_milestone_flash_color.b, edge_alpha)
+		const EDGE := 22.0
+		draw_rect(Rect2(0.0, 0.0, DESIGN_SIZE.x, EDGE), ec)
+		draw_rect(Rect2(0.0, DESIGN_SIZE.y - EDGE, DESIGN_SIZE.x, EDGE), ec)
+		draw_rect(Rect2(0.0, 0.0, EDGE, DESIGN_SIZE.y), ec)
+		draw_rect(Rect2(DESIGN_SIZE.x - EDGE, 0.0, EDGE, DESIGN_SIZE.y), ec)
+
+	# 팡파르 텍스트: 중앙에 크게 등장 후 위로 부드럽게 퇴장
+	if age < TEXT_DUR:
+		var t_alpha := 1.0 - (age / TEXT_DUR)
+		t_alpha = t_alpha * t_alpha
+		var rise := age * 52.0
+		# 콤보 수에 따라 글자 크기 단계적 증가
+		var font_size: int
+		if _combo_milestone_count >= 10:
+			font_size = 34
+		elif _combo_milestone_count >= 8:
+			font_size = 30
+		elif _combo_milestone_count >= 6:
+			font_size = 26
+		else:
+			font_size = 22
+		# 팡파르 텍스트 팝: 0→peak scale(0.12s) 후 정착
+		var pop_scale: float
+		if age < 0.12:
+			pop_scale = 1.0 + 0.4 * (1.0 - age / 0.12) * (1.0 - age / 0.12)
+		else:
+			pop_scale = 1.0
+		var draw_size := int(float(font_size) * pop_scale)
+		var tc := Color(_combo_milestone_flash_color.r, _combo_milestone_flash_color.g, _combo_milestone_flash_color.b, t_alpha)
+		var center_y := DESIGN_SIZE.y * 0.42 - rise
+		# 그림자 (카툰 윤곽선 느낌)
+		var shadow_col := Color(0.0, 0.0, 0.0, t_alpha * 0.55)
+		draw_string(_font(), Vector2(4.0, center_y + float(draw_size) * 0.5 + 2.0), _combo_milestone_fanfare, HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x + 8.0, draw_size, shadow_col)
+		draw_string(_font(), Vector2(0.0, center_y + float(draw_size) * 0.5), _combo_milestone_fanfare, HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, draw_size, tc)
 
 
 func _draw_toolbar() -> void:
