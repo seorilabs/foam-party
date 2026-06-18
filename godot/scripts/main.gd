@@ -85,6 +85,7 @@ class DirtPatch:
 	var resist_time: float = 0.0
 	var hint_time: float = 0.0
 	var hint_tool: String = ""
+	var shake_x: float = 0.0
 
 	func _init(new_kind: String, new_position: Vector2, new_radius: float, new_health: float, new_seed: float) -> void:
 		kind = new_kind
@@ -161,6 +162,8 @@ var is_new_record := false
 var record_pop_time := -10.0
 var _tool_select_time := -10.0
 var _bomb_press_time := -10.0
+var _tool_misapplied_time := -10.0
+var _tool_misapplied_tool_id := ""
 var game_state := STATE_TITLE
 var coins := 0
 var total_stars := 0
@@ -1797,10 +1800,18 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 	# Keep coaching even on a stubborn last sliver; only skip the truly-gone.
 	if patch.health / max(1.0, patch.max_health) < 0.05:
 		return
-	if _tool_misapplied(selected_tool, patch):
+	var wrong_tool := _tool_misapplied(selected_tool, patch)
+	if wrong_tool:
 		# +2*delta here, -delta decay in _update_dirt_motion -> net +delta only
 		# while actively rubbing, so brief stray touches never accumulate.
 		patch.resist_time += delta * 2.0
+		var time_now := float(Time.get_ticks_msec()) / 1000.0
+		if time_now - _tool_misapplied_time > 0.6:
+			_tool_misapplied_time = time_now
+			_tool_misapplied_tool_id = selected_tool
+			patch.shake_x = 6.0
+			if OS.has_feature("mobile"):
+				Input.vibrate_handheld(30)
 		if patch.resist_time >= 0.3:
 			# Keep a single active coach so overlapping patches stay readable.
 			if _hint_patch != null and _hint_patch != patch:
@@ -1961,6 +1972,11 @@ func _update_dirt_motion(delta: float) -> void:
 		else:
 			patch.drift = patch.drift.move_toward(Vector2.ZERO, delta * 10.0)
 			patch.velocity *= 0.9
+
+		if patch.shake_x != 0.0:
+			patch.shake_x = -patch.shake_x * exp(-delta * 30.0)
+			if absf(patch.shake_x) < 0.2:
+				patch.shake_x = 0.0
 
 		patch.wetness = max(0.0, patch.wetness - delta * 0.08)
 		if patch.state != STATE_SOAPED and patch.state != STATE_LOOSENED:
@@ -2777,7 +2793,7 @@ func _draw_dirt() -> void:
 		if _is_patch_removed(patch):
 			continue
 		var strength: float = clamp(patch.health / patch.max_health, 0.0, 1.0)
-		var center: Vector2 = _patch_center(patch)
+		var center: Vector2 = _patch_center(patch) + Vector2(patch.shake_x, 0.0)
 		if patch.state == STATE_FLYING:
 			_draw_flying_trail(patch, center, strength)
 		if patch.wetness > 0.08 or patch.state == STATE_RUNOFF:
@@ -2805,7 +2821,7 @@ func _draw_dirt() -> void:
 		if _is_patch_removed(hint_patch):
 			continue
 		if hint_patch.hint_time > 0.0 and hint_patch.hint_tool != "":
-			_draw_patch_hint(hint_patch, _patch_center(hint_patch))
+			_draw_patch_hint(hint_patch, _patch_center(hint_patch) + Vector2(hint_patch.shake_x, 0.0))
 
 
 func _draw_patch_hint(patch: DirtPatch, center: Vector2) -> void:
@@ -3599,6 +3615,10 @@ func _draw_toolbar() -> void:
 		var rect := _get_tool_rect(index)
 		var color: Color = tool_colors[tool_id]
 		var is_selected := selected_tool == tool_id
+		if _tool_misapplied_time > 0.0 and tool_id == _tool_misapplied_tool_id:
+			var age := time_now - _tool_misapplied_time
+			if age < 0.5:
+				rect.position.x += sin(age * 55.0) * 5.0 * (1.0 - age / 0.5)
 		var visual_rect := rect
 		if is_selected:
 			visual_rect = Rect2(rect.position - Vector2(0.0, 8.0), rect.size + Vector2(0.0, 8.0))
