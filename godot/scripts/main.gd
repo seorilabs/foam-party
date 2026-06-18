@@ -3607,6 +3607,10 @@ func _draw_toolbar() -> void:
 		var rect := _get_tool_rect(index)
 		var color: Color = tool_colors[tool_id]
 		var is_selected := selected_tool == tool_id
+		if _tool_misapplied_time > 0.0 and tool_id == _tool_misapplied_tool_id:
+			var age := time_now - _tool_misapplied_time
+			if age < 0.5:
+				rect.position.x += sin(age * 55.0) * 5.0 * (1.0 - age / 0.5)
 		var visual_rect := rect
 		if is_selected:
 			visual_rect = Rect2(rect.position - Vector2(0.0, 8.0), rect.size + Vector2(0.0, 8.0))
@@ -3629,10 +3633,6 @@ func _draw_toolbar() -> void:
 				_tool_hint_box.border_color = Color(color.r, color.g, color.b, 0.55 + 0.45 * pulse)
 				draw_style_box(_tool_hint_box, visual_rect.grow(4.0))
 			draw_style_box(_style("tool_idle", Color("#16384a"), 16.0), visual_rect)
-		if _tool_misapplied_time > 0.0 and tool_id == _tool_misapplied_tool_id:
-			var age := time_now - _tool_misapplied_time
-			if age < 0.5:
-				visual_rect.position.x += sin(age * 55.0) * 5.0 * (1.0 - age / 0.5)
 		_draw_tool_icon(tool_id, visual_rect.position + Vector2(visual_rect.size.x * 0.5, 30.0))
 		draw_string(font, visual_rect.position + Vector2(0.0, visual_rect.size.y - 9.0), tool_labels[tool_id], HORIZONTAL_ALIGNMENT_CENTER, visual_rect.size.x, 14, Color("#123246") if is_selected else Color(0.85, 0.93, 0.97))
 
