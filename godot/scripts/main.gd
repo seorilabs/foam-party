@@ -1800,7 +1800,8 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 	# Keep coaching even on a stubborn last sliver; only skip the truly-gone.
 	if patch.health / max(1.0, patch.max_health) < 0.05:
 		return
-	if _tool_misapplied(selected_tool, patch):
+	var wrong_tool := _tool_misapplied(selected_tool, patch)
+	if wrong_tool:
 		# +2*delta here, -delta decay in _update_dirt_motion -> net +delta only
 		# while actively rubbing, so brief stray touches never accumulate.
 		patch.resist_time += delta * 2.0
