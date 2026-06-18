@@ -1994,7 +1994,7 @@ func _runoff_cleanup_rate(patch: DirtPatch) -> float:
 
 
 func _patch_center(patch: DirtPatch) -> Vector2:
-	return patch.position + patch.drift + Vector2(patch.shake_x, 0.0)
+	return patch.position + patch.drift
 
 
 func _is_light_dirt(kind: String) -> bool:
@@ -2792,7 +2792,7 @@ func _draw_dirt() -> void:
 		if _is_patch_removed(patch):
 			continue
 		var strength: float = clamp(patch.health / patch.max_health, 0.0, 1.0)
-		var center: Vector2 = _patch_center(patch)
+		var center: Vector2 = _patch_center(patch) + Vector2(patch.shake_x, 0.0)
 		if patch.state == STATE_FLYING:
 			_draw_flying_trail(patch, center, strength)
 		if patch.wetness > 0.08 or patch.state == STATE_RUNOFF:
@@ -2820,7 +2820,7 @@ func _draw_dirt() -> void:
 		if _is_patch_removed(hint_patch):
 			continue
 		if hint_patch.hint_time > 0.0 and hint_patch.hint_tool != "":
-			_draw_patch_hint(hint_patch, _patch_center(hint_patch))
+			_draw_patch_hint(hint_patch, _patch_center(hint_patch) + Vector2(hint_patch.shake_x, 0.0))
 
 
 func _draw_patch_hint(patch: DirtPatch, center: Vector2) -> void:
