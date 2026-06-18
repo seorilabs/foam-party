@@ -243,6 +243,7 @@ var _prev_star2_time_ok := true
 var _star3_gate_sfx: AudioStreamPlayer = null
 var _star3_combo_unlocked := false
 var _last_milestone_haptic_combo := -1
+var _tool_misapplied_time := -1.0
 var _star_warn_sfx: AudioStreamPlayer = null
 var _prev_in_warn_zone := false
 var _patience_warn_sfx: AudioStreamPlayer = null
@@ -1809,8 +1810,12 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 			patch.hint_tool = _recommended_tool(patch)
 			var hint_was_inactive := patch.hint_time <= 0.0
 			patch.hint_time = max(patch.hint_time, 1.4)
-			if hint_was_inactive and _hint_sfx_player != null:
-				_hint_sfx_player.play()
+			if hint_was_inactive:
+				_tool_misapplied_time = Time.get_ticks_msec() / 1000.0
+				if OS.has_feature("mobile"):
+					Input.vibrate_handheld(30)
+				if _hint_sfx_player != null:
+					_hint_sfx_player.play()
 	else:
 		patch.resist_time = 0.0
 		patch.hint_time = 0.0
@@ -3621,6 +3626,10 @@ func _draw_toolbar() -> void:
 				_tool_hint_box.border_color = Color(color.r, color.g, color.b, 0.55 + 0.45 * pulse)
 				draw_style_box(_tool_hint_box, visual_rect.grow(4.0))
 			draw_style_box(_style("tool_idle", Color("#16384a"), 16.0), visual_rect)
+		if _tool_misapplied_time > 0.0 and tool_id == selected_tool:
+			var age := time_now - _tool_misapplied_time
+			if age < 0.5:
+				visual_rect.position.x += sin(age * 55.0) * 5.0 * (1.0 - age / 0.5)
 		_draw_tool_icon(tool_id, visual_rect.position + Vector2(visual_rect.size.x * 0.5, 30.0))
 		draw_string(font, visual_rect.position + Vector2(0.0, visual_rect.size.y - 9.0), tool_labels[tool_id], HORIZONTAL_ALIGNMENT_CENTER, visual_rect.size.x, 14, Color("#123246") if is_selected else Color(0.85, 0.93, 0.97))
 
