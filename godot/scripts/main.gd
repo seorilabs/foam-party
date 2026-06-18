@@ -3768,6 +3768,14 @@ func _upgrade_mult(key: String) -> float:
 	return UPGRADE_MULTS[clampi(lvl, 0, UPGRADE_MAX_LEVEL)]
 
 
+func _upgrade_row_y(panel: Rect2, idx: int) -> float:
+	return panel.position.y + 110.0 + float(idx) * 118.0
+
+
+func _upgrade_buy_rect(panel: Rect2, idx: int) -> Rect2:
+	return Rect2(panel.position.x + panel.size.x - 124.0, _upgrade_row_y(panel, idx) + 32.0, 100.0, 38.0)
+
+
 func _handle_upgrade_panel_tap(point: Vector2) -> void:
 	var panel := Rect2(20.0, 100.0, 350.0, 520.0)
 	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
@@ -3777,9 +3785,7 @@ func _handle_upgrade_panel_tap(point: Vector2) -> void:
 		_play_ui_select()
 		return
 	for idx in range(UPGRADE_KEYS.size()):
-		var row_y := panel.position.y + 130.0 + float(idx) * 118.0
-		var buy_rect := Rect2(panel.position.x + panel.size.x - 110.0, row_y + 32.0, 88.0, 38.0)
-		if buy_rect.has_point(point):
+		if _upgrade_buy_rect(panel, idx).has_point(point):
 			_try_buy_upgrade(idx)
 			return
 
@@ -3798,7 +3804,15 @@ func _try_buy_upgrade(idx: int) -> void:
 		upgrade_soap += 1
 	else:
 		upgrade_sponge += 1
-	_save_progress()
+	if _save_progress() != OK:
+		coins += cost
+		if idx == 0:
+			upgrade_water -= 1
+		elif idx == 1:
+			upgrade_soap -= 1
+		else:
+			upgrade_sponge -= 1
+		return
 	_play_ui_select()
 	queue_redraw()
 
@@ -3822,7 +3836,7 @@ func _draw_upgrade_panel() -> void:
 
 	for idx in range(UPGRADE_KEYS.size()):
 		var lvl: int = upgrade_lvls[idx]
-		var row_y := panel.position.y + 110.0 + float(idx) * 118.0
+		var row_y := _upgrade_row_y(panel, idx)
 		var row_rect := Rect2(panel.position.x + 14.0, row_y, panel.size.x - 28.0, 106.0)
 		draw_style_box(_style("upg_row_%d" % idx, Color("#ddeaf8"), 14.0), row_rect)
 
@@ -3838,7 +3852,7 @@ func _draw_upgrade_panel() -> void:
 			else:
 				draw_circle(Vector2(dot_x, dot_y), 7.0, Color("#b8cfe0"))
 
-		var buy_rect := Rect2(panel.position.x + panel.size.x - 124.0, row_y + 32.0, 100.0, 38.0)
+		var buy_rect := _upgrade_buy_rect(panel, idx)
 		if lvl >= UPGRADE_MAX_LEVEL:
 			draw_style_box(_style("upg_max_bg", Color("#b8cfe0"), 10.0), buy_rect)
 			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), "MAX", HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 15, Color("#6a8aaa"))
