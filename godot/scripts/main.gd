@@ -1804,9 +1804,9 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 		# +2*delta here, -delta decay in _update_dirt_motion -> net +delta only
 		# while actively rubbing, so brief stray touches never accumulate.
 		patch.resist_time += delta * 2.0
-		var now := float(Time.get_ticks_msec()) / 1000.0
-		if now - _tool_misapplied_time > 0.6:
-			_tool_misapplied_time = now
+		var time_now := float(Time.get_ticks_msec()) / 1000.0
+		if time_now - _tool_misapplied_time > 0.6:
+			_tool_misapplied_time = time_now
 			_tool_misapplied_tool_id = selected_tool
 			patch.shake_x = 6.0
 			if OS.has_feature("mobile"):
