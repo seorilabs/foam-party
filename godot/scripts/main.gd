@@ -244,6 +244,7 @@ var _star3_gate_sfx: AudioStreamPlayer = null
 var _star3_combo_unlocked := false
 var _last_milestone_haptic_combo := -1
 var _tool_misapplied_time := -1.0
+var _tool_misapplied_tool_id := ""
 var _star_warn_sfx: AudioStreamPlayer = null
 var _prev_in_warn_zone := false
 var _patience_warn_sfx: AudioStreamPlayer = null
@@ -1802,6 +1803,12 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 		# +2*delta here, -delta decay in _update_dirt_motion -> net +delta only
 		# while actively rubbing, so brief stray touches never accumulate.
 		patch.resist_time += delta * 2.0
+		var now := Time.get_ticks_msec() / 1000.0
+		if now - _tool_misapplied_time > 0.6:
+			_tool_misapplied_time = now
+			_tool_misapplied_tool_id = selected_tool
+			if OS.has_feature("mobile"):
+				Input.vibrate_handheld(30)
 		if patch.resist_time >= 0.3:
 			# Keep a single active coach so overlapping patches stay readable.
 			if _hint_patch != null and _hint_patch != patch:
@@ -1810,12 +1817,8 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 			patch.hint_tool = _recommended_tool(patch)
 			var hint_was_inactive := patch.hint_time <= 0.0
 			patch.hint_time = max(patch.hint_time, 1.4)
-			if hint_was_inactive:
-				_tool_misapplied_time = Time.get_ticks_msec() / 1000.0
-				if OS.has_feature("mobile"):
-					Input.vibrate_handheld(30)
-				if _hint_sfx_player != null:
-					_hint_sfx_player.play()
+			if hint_was_inactive and _hint_sfx_player != null:
+				_hint_sfx_player.play()
 	else:
 		patch.resist_time = 0.0
 		patch.hint_time = 0.0
@@ -3626,7 +3629,7 @@ func _draw_toolbar() -> void:
 				_tool_hint_box.border_color = Color(color.r, color.g, color.b, 0.55 + 0.45 * pulse)
 				draw_style_box(_tool_hint_box, visual_rect.grow(4.0))
 			draw_style_box(_style("tool_idle", Color("#16384a"), 16.0), visual_rect)
-		if _tool_misapplied_time > 0.0 and tool_id == selected_tool:
+		if _tool_misapplied_time > 0.0 and tool_id == _tool_misapplied_tool_id:
 			var age := time_now - _tool_misapplied_time
 			if age < 0.5:
 				visual_rect.position.x += sin(age * 55.0) * 5.0 * (1.0 - age / 0.5)
