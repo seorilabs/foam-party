@@ -85,6 +85,7 @@ class DirtPatch:
 	var resist_time: float = 0.0
 	var hint_time: float = 0.0
 	var hint_tool: String = ""
+	var shake_x: float = 0.0
 
 	func _init(new_kind: String, new_position: Vector2, new_radius: float, new_health: float, new_seed: float) -> void:
 		kind = new_kind
@@ -161,8 +162,6 @@ var is_new_record := false
 var record_pop_time := -10.0
 var _tool_select_time := -10.0
 var _bomb_press_time := -10.0
-var _tool_misapplied_time := -10.0
-var _tool_misapplied_tool_id := ""
 var game_state := STATE_TITLE
 var coins := 0
 var total_stars := 0
@@ -1803,12 +1802,6 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 		# +2*delta here, -delta decay in _update_dirt_motion -> net +delta only
 		# while actively rubbing, so brief stray touches never accumulate.
 		patch.resist_time += delta * 2.0
-		var now := float(Time.get_ticks_msec()) / 1000.0
-		if now - _tool_misapplied_time > 0.6:
-			_tool_misapplied_time = now
-			_tool_misapplied_tool_id = selected_tool
-			if OS.has_feature("mobile"):
-				Input.vibrate_handheld(30)
 		if patch.resist_time >= 0.3:
 			# Keep a single active coach so overlapping patches stay readable.
 			if _hint_patch != null and _hint_patch != patch:
@@ -1817,8 +1810,12 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 			patch.hint_tool = _recommended_tool(patch)
 			var hint_was_inactive := patch.hint_time <= 0.0
 			patch.hint_time = max(patch.hint_time, 1.4)
-			if hint_was_inactive and _hint_sfx_player != null:
-				_hint_sfx_player.play()
+			if hint_was_inactive:
+				patch.shake_x = 6.0
+				if OS.has_feature("mobile"):
+					Input.vibrate_handheld(15)
+				if _hint_sfx_player != null:
+					_hint_sfx_player.play()
 	else:
 		patch.resist_time = 0.0
 		patch.hint_time = 0.0
@@ -1970,6 +1967,11 @@ func _update_dirt_motion(delta: float) -> void:
 			patch.drift = patch.drift.move_toward(Vector2.ZERO, delta * 10.0)
 			patch.velocity *= 0.9
 
+		if patch.shake_x != 0.0:
+			patch.shake_x = -patch.shake_x * (1.0 - delta * 28.0)
+			if absf(patch.shake_x) < 0.2:
+				patch.shake_x = 0.0
+
 		patch.wetness = max(0.0, patch.wetness - delta * 0.08)
 		if patch.state != STATE_SOAPED and patch.state != STATE_LOOSENED:
 			patch.soap = max(0.0, patch.soap - delta * 0.025)
@@ -1987,7 +1989,7 @@ func _runoff_cleanup_rate(patch: DirtPatch) -> float:
 
 
 func _patch_center(patch: DirtPatch) -> Vector2:
-	return patch.position + patch.drift
+	return patch.position + patch.drift + Vector2(patch.shake_x, 0.0)
 
 
 func _is_light_dirt(kind: String) -> bool:
@@ -3607,10 +3609,6 @@ func _draw_toolbar() -> void:
 		var rect := _get_tool_rect(index)
 		var color: Color = tool_colors[tool_id]
 		var is_selected := selected_tool == tool_id
-		if _tool_misapplied_time > 0.0 and tool_id == _tool_misapplied_tool_id:
-			var age := time_now - _tool_misapplied_time
-			if age < 0.5:
-				rect.position.x += sin(age * 55.0) * 5.0 * (1.0 - age / 0.5)
 		var visual_rect := rect
 		if is_selected:
 			visual_rect = Rect2(rect.position - Vector2(0.0, 8.0), rect.size + Vector2(0.0, 8.0))
