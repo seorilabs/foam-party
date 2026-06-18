@@ -23,6 +23,12 @@ const BAR_COL_END   := Color(0.224, 0.851, 0.541)  # #39d98a
 const SAVE_PATH := "user://foam_party_save.cfg"
 const DAILY_SAVE_PATH := "user://foam_party_daily.cfg"
 const BOMB_COST := 40
+const UPGRADE_COSTS := [[80, 160, 280], [80, 160, 280], [80, 160, 280]]
+const UPGRADE_MULTS := [1.0, 1.3, 1.6, 2.0]
+const UPGRADE_KEYS := ["water", "soap", "sponge"]
+const UPGRADE_NAMES := ["Water Power", "Soap Power", "Sponge Power"]
+const UPGRADE_DESCS := ["Scrubs mud & dust faster", "Loosens stains faster", "Wipes faster"]
+const UPGRADE_MAX_LEVEL := 3
 const STATE_TITLE := "title"
 const STATE_PLAYING := "playing"
 const GAMEPLAY_SCALE := 1.16
@@ -192,6 +198,10 @@ var daily_mission_claimed := false
 var daily_mission_date := ""
 var _daily_mission_pop_time := -10.0
 var _daily_progress_dirty := false
+var upgrade_water := 0
+var upgrade_soap := 0
+var upgrade_sponge := 0
+var show_upgrade_panel := false
 var _main_save_dirty := false
 var _daily_save_timer: Timer = null
 
@@ -280,6 +290,9 @@ func _load_progress() -> void:
 		total_stars = max(0, int(config.get_value("game", "total_stars", 0)))
 		sound_enabled = bool(config.get_value("settings", "sound", true))
 		tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
+		upgrade_water = clampi(int(config.get_value("upgrades", "water", 0)), 0, UPGRADE_MAX_LEVEL)
+		upgrade_soap = clampi(int(config.get_value("upgrades", "soap", 0)), 0, UPGRADE_MAX_LEVEL)
+		upgrade_sponge = clampi(int(config.get_value("upgrades", "sponge", 0)), 0, UPGRADE_MAX_LEVEL)
 		var stored_best: Variant = config.get_value("game", "best_times", {})
 		if stored_best is Dictionary:
 			best_times = {}
@@ -342,6 +355,9 @@ func _save_progress() -> Error:
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
 	config.set_value("game", "best_times", best_times)
 	config.set_value("daily", "claimed_date", daily_mission_date if daily_mission_claimed else "")
+	config.set_value("upgrades", "water", upgrade_water)
+	config.set_value("upgrades", "soap", upgrade_soap)
+	config.set_value("upgrades", "sponge", upgrade_sponge)
 	return config.save(SAVE_PATH)
 
 
@@ -1150,6 +1166,8 @@ func _draw() -> void:
 	_draw_gleam()
 	if game_state == STATE_TITLE:
 		_draw_title_screen()
+		if show_upgrade_panel:
+			_draw_upgrade_panel()
 	else:
 		_draw_wash_trail()
 		_draw_tool_cursor()
@@ -1514,8 +1532,15 @@ func _handle_tap(point: Vector2) -> bool:
 		return true
 
 	if game_state == STATE_TITLE:
+		if show_upgrade_panel:
+			_handle_upgrade_panel_tap(point)
+			return true
 		if _get_start_rect().has_point(point):
 			start_game()
+			_play_ui_select()
+		elif _get_upgrade_btn_rect().has_point(point):
+			show_upgrade_panel = true
+			queue_redraw()
 			_play_ui_select()
 		elif _get_sound_rect().has_point(point):
 			_toggle_sound()
@@ -1835,53 +1860,56 @@ func _apply_air_to_patch(patch: DirtPatch, delta: float, source_point: Vector2, 
 
 
 func _apply_water_to_patch(patch: DirtPatch, delta: float, proximity: float) -> void:
+	var wr := CLEAN_DAMAGE_RATE * _upgrade_mult("water")
 	patch.wetness = min(1.0, patch.wetness + delta * proximity * 1.85)
 	patch.runoff = min(1.0, patch.runoff + delta * proximity * 0.8)
 
 	if patch.kind == "mud":
 		patch.state = STATE_RUNOFF if patch.wetness > 0.3 else STATE_WET
 		patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.1)
-		patch.health -= 2.25 * proximity * delta * CLEAN_DAMAGE_RATE
+		patch.health -= 2.25 * proximity * delta * wr
 	elif patch.kind == "dust":
 		patch.state = STATE_RUNOFF
 		patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.0)
-		patch.health -= 1.85 * proximity * delta * CLEAN_DAMAGE_RATE
+		patch.health -= 1.85 * proximity * delta * wr
 	elif patch.kind == "leaf":
 		patch.state = STATE_WET
 		patch.velocity += Vector2(12.0, 36.0) * delta * proximity
-		patch.health -= 0.25 * proximity * delta * CLEAN_DAMAGE_RATE
+		patch.health -= 0.25 * proximity * delta * wr
 	elif patch.kind == "oil" or patch.kind == "bug":
 		var rinse_power: float = patch.soap * (0.75 + patch.looseness)
 		if rinse_power > 0.25:
 			patch.state = STATE_RUNOFF
-			patch.health -= rinse_power * 1.75 * proximity * delta * CLEAN_DAMAGE_RATE
+			patch.health -= rinse_power * 1.75 * proximity * delta * wr
 			patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.55)
 			patch.soap = max(0.0, patch.soap - delta * proximity * 0.45)
 		else:
 			patch.state = STATE_WET
-			patch.health -= 0.08 * proximity * delta * CLEAN_DAMAGE_RATE
+			patch.health -= 0.08 * proximity * delta * wr
 			patch.soap = max(0.0, patch.soap - delta * proximity * 0.12)
 	else:
 		patch.state = STATE_WET
-		patch.health -= 0.45 * proximity * delta * CLEAN_DAMAGE_RATE
+		patch.health -= 0.45 * proximity * delta * wr
 
 
 func _apply_soap_to_patch(patch: DirtPatch, delta: float, proximity: float) -> void:
+	var sr := CLEAN_DAMAGE_RATE * _upgrade_mult("soap")
 	if patch.kind == "oil" or patch.kind == "bug":
 		patch.soap = min(1.0, patch.soap + delta * proximity * 1.65)
 		patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.95)
 		patch.state = STATE_LOOSENED if patch.looseness > 0.65 else STATE_SOAPED
-		patch.health -= 0.05 * proximity * delta * CLEAN_DAMAGE_RATE
+		patch.health -= 0.05 * proximity * delta * sr
 	elif patch.kind == "mud":
 		patch.soap = min(1.0, patch.soap + delta * proximity * 0.85)
 		patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.42)
 		patch.state = STATE_SOAPED
-		patch.health -= 0.12 * proximity * delta * CLEAN_DAMAGE_RATE
+		patch.health -= 0.12 * proximity * delta * sr
 	else:
 		patch.soap = min(0.45, patch.soap + delta * proximity * 0.25)
 
 
 func _apply_sponge_to_patch(patch: DirtPatch, delta: float, source_point: Vector2, proximity: float) -> void:
+	var spr := CLEAN_DAMAGE_RATE * _upgrade_mult("sponge")
 	var push := _push_direction(patch, source_point)
 	patch.drift += push * delta * proximity * 3.0
 	patch.drift = patch.drift.limit_length(7.0)
@@ -1890,20 +1918,20 @@ func _apply_sponge_to_patch(patch: DirtPatch, delta: float, source_point: Vector
 		if patch.soap > 0.25 or patch.looseness > 0.35:
 			patch.state = STATE_LOOSENED
 			patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.2)
-			patch.health -= (1.15 + patch.soap) * proximity * delta * CLEAN_DAMAGE_RATE
+			patch.health -= (1.15 + patch.soap) * proximity * delta * spr
 			patch.soap = max(0.0, patch.soap - delta * proximity * 0.22)
 		else:
-			patch.health -= 0.12 * proximity * delta * CLEAN_DAMAGE_RATE
+			patch.health -= 0.12 * proximity * delta * spr
 	elif patch.kind == "mud":
 		if patch.wetness > 0.2 or patch.soap > 0.15:
 			patch.state = STATE_LOOSENED
-			patch.health -= 1.15 * proximity * delta * CLEAN_DAMAGE_RATE
+			patch.health -= 1.15 * proximity * delta * spr
 		else:
-			patch.health -= 0.35 * proximity * delta * CLEAN_DAMAGE_RATE
+			patch.health -= 0.35 * proximity * delta * spr
 	elif patch.kind == "dust":
-		patch.health -= 0.45 * proximity * delta * CLEAN_DAMAGE_RATE
+		patch.health -= 0.45 * proximity * delta * spr
 	elif patch.kind == "leaf":
-		patch.health -= 0.2 * proximity * delta * CLEAN_DAMAGE_RATE
+		patch.health -= 0.2 * proximity * delta * spr
 
 
 func _update_dirt_motion(delta: float) -> void:
@@ -3123,7 +3151,11 @@ func _draw_title_screen() -> void:
 		start_label = "Continue · %s %02d" % [car_type_labels[car_type], level_index]
 	draw_string(font, Vector2(start_rect.position.x, start_rect.position.y + 38.0), start_label, HORIZONTAL_ALIGNMENT_CENTER, start_rect.size.x, 19, Color("#0d3b2a"))
 
-	draw_string(font, Vector2(0.0, 588.0), "Coins %d · Stars %d" % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
+	draw_string(font, Vector2(0.0, 578.0), "Coins %d  ·  Stars %d" % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
+	var upg_rect := _get_upgrade_btn_rect()
+	draw_style_box(_style("upg_shadow", Color(0.18, 0.25, 0.55, 0.9), 12.0), Rect2(upg_rect.position + Vector2(0.0, 4.0), upg_rect.size))
+	draw_style_box(_style("upg_btn", Color(0.33, 0.53, 0.95, 1.0), 12.0), upg_rect)
+	draw_string(font, Vector2(upg_rect.position.x, upg_rect.position.y + 28.0), "Upgrades", HORIZONTAL_ALIGNMENT_CENTER, upg_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
 	var version_y := minf(826.0, DESIGN_SIZE.y - _safe_area_design_insets().w - 12.0)
 	draw_string(font, Vector2(0.0, version_y), "v0.1", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 12, Color(1.0, 1.0, 1.0, 0.5))
 
@@ -3719,3 +3751,100 @@ func _get_help_rect() -> Rect2:
 
 func _get_bomb_rect() -> Rect2:
 	return Rect2(276.0, minf(688.0, _tool_button_y() - 58.0), 92.0, 46.0)
+
+
+func _get_upgrade_btn_rect() -> Rect2:
+	return Rect2(95.0, 600.0, 200.0, 44.0)
+
+
+func _upgrade_mult(key: String) -> float:
+	var lvl := 0
+	if key == "water":
+		lvl = upgrade_water
+	elif key == "soap":
+		lvl = upgrade_soap
+	else:
+		lvl = upgrade_sponge
+	return UPGRADE_MULTS[clampi(lvl, 0, UPGRADE_MAX_LEVEL)]
+
+
+func _handle_upgrade_panel_tap(point: Vector2) -> void:
+	var panel := Rect2(20.0, 100.0, 350.0, 520.0)
+	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
+	if close_rect.has_point(point):
+		show_upgrade_panel = false
+		queue_redraw()
+		_play_ui_select()
+		return
+	for idx in range(UPGRADE_KEYS.size()):
+		var row_y := panel.position.y + 130.0 + float(idx) * 118.0
+		var buy_rect := Rect2(panel.position.x + panel.size.x - 110.0, row_y + 32.0, 88.0, 38.0)
+		if buy_rect.has_point(point):
+			_try_buy_upgrade(idx)
+			return
+
+
+func _try_buy_upgrade(idx: int) -> void:
+	var lvl := upgrade_water if idx == 0 else (upgrade_soap if idx == 1 else upgrade_sponge)
+	if lvl >= UPGRADE_MAX_LEVEL:
+		return
+	var cost: int = UPGRADE_COSTS[idx][lvl]
+	if coins < cost:
+		return
+	coins -= cost
+	if idx == 0:
+		upgrade_water += 1
+	elif idx == 1:
+		upgrade_soap += 1
+	else:
+		upgrade_sponge += 1
+	_save_progress()
+	_play_ui_select()
+	queue_redraw()
+
+
+func _draw_upgrade_panel() -> void:
+	var font: Font = _font()
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.05, 0.18, 0.72))
+	var panel := Rect2(20.0, 100.0, 350.0, 520.0)
+	draw_style_box(_style("upg_panel_shadow", Color(0.02, 0.06, 0.22, 0.5), 22.0), Rect2(panel.position + Vector2(0.0, 6.0), panel.size))
+	draw_style_box(_style("upg_panel", Color("#f0f6ff"), 22.0), panel)
+
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 50.0), "Upgrade Shop", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#0d2a50"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 74.0), "Coins: %d" % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#3a7fc1"))
+
+	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
+	draw_style_box(_style("upg_close_bg", Color("#e0e9f5"), 10.0), close_rect)
+	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 26.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 18, Color("#0d2a50"))
+
+	var tool_col := [Color("#49a7ff"), Color("#f8f4a6"), Color("#ff9f5a")]
+	var upgrade_lvls := [upgrade_water, upgrade_soap, upgrade_sponge]
+
+	for idx in range(UPGRADE_KEYS.size()):
+		var lvl: int = upgrade_lvls[idx]
+		var row_y := panel.position.y + 110.0 + float(idx) * 118.0
+		var row_rect := Rect2(panel.position.x + 14.0, row_y, panel.size.x - 28.0, 106.0)
+		draw_style_box(_style("upg_row_%d" % idx, Color("#ddeaf8"), 14.0), row_rect)
+
+		draw_circle(Vector2(panel.position.x + 48.0, row_y + 53.0), 22.0, tool_col[idx])
+		draw_string(font, Vector2(panel.position.x + 80.0, row_y + 28.0), UPGRADE_NAMES[idx], HORIZONTAL_ALIGNMENT_LEFT, 200.0, 16, Color("#0d2a50"))
+		draw_string(font, Vector2(panel.position.x + 80.0, row_y + 50.0), UPGRADE_DESCS[idx], HORIZONTAL_ALIGNMENT_LEFT, 190.0, 12, Color("#2c6b78"))
+
+		for dot_idx in range(UPGRADE_MAX_LEVEL):
+			var dot_x := panel.position.x + 80.0 + float(dot_idx) * 22.0
+			var dot_y := row_y + 72.0
+			if dot_idx < lvl:
+				draw_circle(Vector2(dot_x, dot_y), 7.0, Color("#3a9ef0"))
+			else:
+				draw_circle(Vector2(dot_x, dot_y), 7.0, Color("#b8cfe0"))
+
+		var buy_rect := Rect2(panel.position.x + panel.size.x - 124.0, row_y + 32.0, 100.0, 38.0)
+		if lvl >= UPGRADE_MAX_LEVEL:
+			draw_style_box(_style("upg_max_bg", Color("#b8cfe0"), 10.0), buy_rect)
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), "MAX", HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 15, Color("#6a8aaa"))
+		else:
+			var cost: int = UPGRADE_COSTS[idx][lvl]
+			var affordable: bool = coins >= cost
+			var btn_col := Color("#39d98a") if affordable else Color("#8fc4b4")
+			draw_style_box(_style("upg_buy_%d" % idx, btn_col, 10.0), buy_rect)
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), "%d coins" % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 14, Color("#0d2a3b") if affordable else Color("#4a7a6a"))
