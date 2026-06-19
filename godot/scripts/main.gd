@@ -5,7 +5,7 @@ const TOOL_AIR := "air"
 const TOOL_WATER := "water"
 const TOOL_SOAP := "soap"
 const TOOL_SPONGE := "sponge"
-const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop"]
+const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop", "sticker"]
 const CAR_TYPES := ["compact", "sports", "truck"]
 const CLEAN_DAMAGE_RATE := 72.0
 const AUDIO_MIX_RATE := 22050
@@ -66,6 +66,7 @@ const DAILY_MISSION_POOL := [
 	{"type": "oil", "label": "오일 %d개 청소하기", "target": 15},
 	{"type": "bug", "label": "벌레 자국 %d개 닦기", "target": 12},
 	{"type": "poop", "label": "새똥 %d개 닦기", "target": 10},
+	{"type": "sticker", "label": "스티커 %d개 떼기", "target": 8},
 ]
 const DAILY_MISSION_REWARD := 50
 
@@ -1760,13 +1761,13 @@ func _spawn_dirt() -> void:
 	var health_base_max := 120.0
 	match car_type:
 		"sports":
-			type_pool = ["oil", "dust", "oil", "dust", "oil", "leaf", "dust", "bug", "mud"]
+			type_pool = ["oil", "dust", "oil", "dust", "sticker", "leaf", "dust", "bug", "mud"]
 			radius_min = 11.0
 			radius_max = 20.0
 			health_base_min = 80.0
 			health_base_max = 135.0
 		"truck":
-			type_pool = ["mud", "mud", "bug", "leaf", "mud", "poop", "dust", "oil", "leaf"]
+			type_pool = ["mud", "mud", "bug", "leaf", "mud", "poop", "dust", "sticker", "leaf"]
 			radius_min = 15.0
 			radius_max = 28.0
 			health_base_min = 85.0
@@ -1786,6 +1787,8 @@ func _spawn_dirt() -> void:
 			health += 25.0 * health_scale
 		elif kind == "poop":
 			health += 15.0 * health_scale
+		elif kind == "sticker":
+			health += 20.0 * health_scale
 		var patch := DirtPatch.new(kind, base_position + jitter, radius, health, rng.randf_range(0.0, 10.0))
 		dirt_patches.append(patch)
 
@@ -1849,6 +1852,8 @@ func _tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 			if not poop_activated:
 				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
 			return false
+		"sticker":
+			return tool_id != TOOL_SPONGE
 	return false
 
 
@@ -1872,6 +1877,8 @@ func _recommended_tool(patch: DirtPatch) -> String:
 			if patch.soap > 0.25 or patch.state in [STATE_LOOSENED, STATE_RUNOFF]:
 				return TOOL_WATER
 			return TOOL_SOAP
+		"sticker":
+			return TOOL_SPONGE
 	return TOOL_WATER
 
 
@@ -1989,6 +1996,9 @@ func _apply_water_to_patch(patch: DirtPatch, delta: float, proximity: float) -> 
 		else:
 			patch.state = STATE_WET
 			patch.health -= 0.04 * proximity * delta * wr
+	elif patch.kind == "sticker":
+		patch.state = STATE_WET
+		patch.health -= 0.03 * proximity * delta * wr
 	else:
 		patch.state = STATE_WET
 		patch.health -= 0.45 * proximity * delta * wr
@@ -2011,6 +2021,8 @@ func _apply_soap_to_patch(patch: DirtPatch, delta: float, proximity: float) -> v
 		patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.2)
 		patch.state = STATE_LOOSENED if patch.looseness > 0.5 else STATE_SOAPED
 		patch.health -= 0.06 * proximity * delta * sr
+	elif patch.kind == "sticker":
+		patch.health -= 0.02 * proximity * delta * sr
 	else:
 		patch.soap = min(0.45, patch.soap + delta * proximity * 0.25)
 
@@ -2039,6 +2051,10 @@ func _apply_sponge_to_patch(patch: DirtPatch, delta: float, source_point: Vector
 		patch.health -= 0.45 * proximity * delta * spr
 	elif patch.kind == "leaf":
 		patch.health -= 0.2 * proximity * delta * spr
+	elif patch.kind == "sticker":
+		patch.state = STATE_LOOSENED
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.5)
+		patch.health -= 1.35 * proximity * delta * spr
 	elif patch.kind == "poop":
 		if patch.soap > 0.25 or patch.looseness > 0.35:
 			patch.state = STATE_LOOSENED
@@ -2919,6 +2935,8 @@ func _draw_dirt() -> void:
 			_draw_bug_patch(center, patch.radius, strength, patch.seed_offset)
 		elif patch.kind == "poop":
 			_draw_poop_patch(center, patch.radius, strength, patch.seed_offset)
+		elif patch.kind == "sticker":
+			_draw_sticker_patch(center, patch.radius, strength, patch.seed_offset, patch.looseness)
 
 		if patch.wetness > 0.18:
 			_draw_wet_gloss(center, patch.radius, patch.wetness)
@@ -3048,6 +3066,58 @@ func _draw_poop_patch(center: Vector2, radius: float, strength: float, seed_valu
 		var dist: float = 0.55 + 0.28 * abs(sin(seed_value + float(index) * 0.71))
 		var drop_r: float = radius * (0.12 + 0.14 * abs(cos(seed_value + float(index) * 1.13)))
 		draw_circle(center + Vector2(cos(angle), sin(angle)) * radius * dist, max(2.0, drop_r), drop_color)
+
+
+func _draw_sticker_patch(center: Vector2, radius: float, strength: float, seed_value: float, looseness: float) -> void:
+	var s := clampf(strength, 0.0, 1.0)
+	# Pick sticker color from a bright palette using seed.
+	var palette := [
+		Color(0.98, 0.26, 0.26), Color(0.98, 0.62, 0.10), Color(0.18, 0.72, 0.28),
+		Color(0.18, 0.48, 0.98), Color(0.72, 0.22, 0.95), Color(0.98, 0.92, 0.12),
+	]
+	var hue_index := int(seed_value * 3.7) % palette.size()
+	var sticker_color := Color(palette[hue_index].r, palette[hue_index].g, palette[hue_index].b, 0.92 * s)
+	var border_color := Color(sticker_color.r * 0.65, sticker_color.g * 0.65, sticker_color.b * 0.65, 0.95 * s)
+	var w := radius * 1.65
+	var h := radius * 1.1
+	var tilt := (fmod(seed_value, 1.0) - 0.5) * 0.55
+	# Draw shadow.
+	var shadow_points := PackedVector2Array()
+	for corner in [Vector2(-w, -h), Vector2(w, -h), Vector2(w, h), Vector2(-w, h)]:
+		shadow_points.append(center + Vector2(2.0, 3.0) + corner.rotated(tilt))
+	draw_colored_polygon(shadow_points, Color(0.0, 0.0, 0.0, 0.18 * s))
+	# Draw main sticker body.
+	var body_points := PackedVector2Array()
+	for corner in [Vector2(-w, -h), Vector2(w, -h), Vector2(w, h), Vector2(-w, h)]:
+		body_points.append(center + corner.rotated(tilt))
+	draw_colored_polygon(body_points, sticker_color)
+	# Diagonal stripe accent.
+	var stripe_color := Color(1.0, 1.0, 1.0, 0.28 * s)
+	for si in range(3):
+		var ox := -w * 0.5 + float(si) * w * 0.42
+		var stripe_poly := PackedVector2Array([
+			center + Vector2(ox, -h).rotated(tilt),
+			center + Vector2(ox + w * 0.18, -h).rotated(tilt),
+			center + Vector2(ox + w * 0.18, h).rotated(tilt),
+			center + Vector2(ox, h).rotated(tilt),
+		])
+		draw_colored_polygon(stripe_poly, stripe_color)
+	# Border line.
+	for bi in range(4):
+		var corners := [Vector2(-w, -h), Vector2(w, -h), Vector2(w, h), Vector2(-w, h)]
+		draw_line(center + corners[bi].rotated(tilt), center + corners[(bi + 1) % 4].rotated(tilt), border_color, 2.5)
+	# Peeling corner effect — grows as looseness increases.
+	if looseness > 0.1 or s < 0.7:
+		var peel := clampf(looseness * 1.2 + (1.0 - s) * 0.8, 0.0, 1.0)
+		var peel_size := peel * radius * 0.7
+		var corner := center + Vector2(w, h).rotated(tilt)
+		var peel_poly := PackedVector2Array([
+			corner,
+			corner + Vector2(-peel_size, 0.0).rotated(tilt),
+			corner + Vector2(0.0, -peel_size).rotated(tilt),
+		])
+		draw_colored_polygon(peel_poly, Color(0.88, 0.88, 0.88, 0.82 * s))
+		draw_polyline(peel_poly, Color(0.55, 0.55, 0.55, 0.6 * s), 1.5)
 
 
 func _draw_flying_trail(patch: DirtPatch, center: Vector2, strength: float) -> void:
