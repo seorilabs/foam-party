@@ -1375,6 +1375,13 @@ func get_patch_count_by_kind_for_test(kind: String) -> int:
 	return count
 
 
+func spawn_patch_for_test(kind: String) -> int:
+	var patch := DirtPatch.new(kind, _gameplay_point(Vector2(195.0, 520.0)), _gameplay_length(18.0), 100.0, 0.5)
+	dirt_patches.append(patch)
+	initial_dirt_total = max(1.0, initial_dirt_total + patch.max_health)
+	return dirt_patches.size() - 1
+
+
 func get_patch_state_for_test(patch_index: int) -> String:
 	if patch_index < 0 or patch_index >= dirt_patches.size():
 		return ""

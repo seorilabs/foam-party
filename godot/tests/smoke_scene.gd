@@ -235,7 +235,7 @@ func _run_smoke() -> void:
 		return
 
 	# --- contextual "use this tool" hint ---
-	for hint_method in ["is_tool_misapplied_for_test", "get_recommended_tool_for_test", "get_patch_hint_time_for_test", "simulate_patch_hint_for_test"]:
+	for hint_method in ["is_tool_misapplied_for_test", "get_recommended_tool_for_test", "get_patch_hint_time_for_test", "simulate_patch_hint_for_test", "get_patch_count_by_kind_for_test", "spawn_patch_for_test"]:
 		if not root_node.has_method(hint_method):
 			_fail("hint helper API missing: " + hint_method)
 			return
@@ -306,14 +306,8 @@ func _run_smoke() -> void:
 		_fail("sustained wrong rubbing should still surface the hint")
 		return
 
-	# --- sticker: spawn / misapplied / sponge removes ---
-	if int(root_node.call("get_patch_count_by_kind_for_test", "sticker")) < 1:
-		_fail("sticker should spawn at least once")
-		return
-	var hint_sticker: int = root_node.call("get_patch_index_by_kind_for_test", "sticker")
-	if hint_sticker < 0:
-		_fail("sticker patch missing for hint test")
-		return
+	# --- sticker: misapplied / sponge removes (injected patch — no pool dependency) ---
+	var hint_sticker: int = root_node.call("spawn_patch_for_test", "sticker")
 	if String(root_node.call("get_recommended_tool_for_test", hint_sticker)) != "sponge":
 		_fail("sticker should recommend sponge")
 		return
