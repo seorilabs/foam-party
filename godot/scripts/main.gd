@@ -4072,6 +4072,17 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 	var skin: Dictionary = skins[skin_idx]
 	var sid: String = skin["id"]
 	var cost: int = skin["cost"]
+
+	var prev_sid: String
+	if tool_key == TOOL_WATER:
+		prev_sid = skin_water
+	elif tool_key == TOOL_AIR:
+		prev_sid = skin_air
+	elif tool_key == TOOL_SOAP:
+		prev_sid = skin_soap
+	else:
+		prev_sid = skin_sponge
+
 	if owned_skins.get(sid, false):
 		if tool_key == TOOL_WATER:
 			skin_water = sid
@@ -4081,10 +4092,21 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 			skin_soap = sid
 		else:
 			skin_sponge = sid
-		_save_progress()
+		if _save_progress() != OK:
+			if tool_key == TOOL_WATER:
+				skin_water = prev_sid
+			elif tool_key == TOOL_AIR:
+				skin_air = prev_sid
+			elif tool_key == TOOL_SOAP:
+				skin_soap = prev_sid
+			else:
+				skin_sponge = prev_sid
+			queue_redraw()
+			return
 		queue_redraw()
 		_play_ui_select()
 		return
+
 	if coins < cost:
 		return
 	coins -= cost
@@ -4101,13 +4123,14 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 		coins += cost
 		owned_skins.erase(sid)
 		if tool_key == TOOL_WATER:
-			skin_water = "classic"
+			skin_water = prev_sid
 		elif tool_key == TOOL_AIR:
-			skin_air = "classic"
+			skin_air = prev_sid
 		elif tool_key == TOOL_SOAP:
-			skin_soap = "classic"
+			skin_soap = prev_sid
 		else:
-			skin_sponge = "classic"
+			skin_sponge = prev_sid
+		queue_redraw()
 		return
 	_play_ui_select()
 	queue_redraw()
