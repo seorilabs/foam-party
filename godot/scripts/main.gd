@@ -3045,8 +3045,8 @@ func _draw_poop_patch(center: Vector2, radius: float, strength: float, seed_valu
 	var drop_color := Color(0.92, 0.90, 0.84, 0.78 * s)
 	for index in range(6):
 		var angle := seed_value + float(index) * TAU / 6.0
-		var dist := 0.55 + 0.28 * abs(sin(seed_value + float(index) * 0.71))
-		var drop_r := radius * (0.12 + 0.14 * abs(cos(seed_value + float(index) * 1.13)))
+		var dist: float = 0.55 + 0.28 * abs(sin(seed_value + float(index) * 0.71))
+		var drop_r: float = radius * (0.12 + 0.14 * abs(cos(seed_value + float(index) * 1.13)))
 		draw_circle(center + Vector2(cos(angle), sin(angle)) * radius * dist, max(2.0, drop_r), drop_color)
 
 
