@@ -1655,7 +1655,8 @@ func _calc_coin_reward(stars: int) -> int:
 
 func _calc_level_milestone_bonus(level: int) -> int:
 	if level % 5 == 0:
-		return 50 + (level / 5) * 25
+		var step: int = level / 5
+		return 50 + step * 25
 	return 0
 
 
@@ -3726,11 +3727,10 @@ func _draw_completion_panel() -> void:
 
 	if _level_milestone_bonus > 0:
 		var time_now2 := float(Time.get_ticks_msec()) / 1000.0
-		var pulse := 1.0 + 0.12 * sin(time_now2 * 5.0)
 		var milestone_chip := Rect2(panel.position.x + 10.0, panel.position.y - 14.0, 106.0, 30.0)
 		var chip_color := Color("#a855f7").lerp(Color("#ec4899"), 0.5 + 0.5 * sin(time_now2 * 3.0))
 		draw_style_box(_style("milestone_chip", chip_color, 15.0), milestone_chip)
-		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), "Lv.%d 이정표! +%d" % [level_index, _level_milestone_bonus], HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x * pulse, 13, Color("#fff0ff"))
+		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), "Lv.%d 이정표! +%d" % [level_index, _level_milestone_bonus], HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x, 13, Color("#fff0ff"))
 
 	var retry_rect := _get_retry_rect()
 	draw_style_box(_style("retry_shadow", Color("#246076"), 14.0), Rect2(retry_rect.position + Vector2(0.0, 4.0), retry_rect.size))
