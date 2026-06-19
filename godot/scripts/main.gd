@@ -1845,7 +1845,7 @@ func _tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 		"poop":
 			if tool_id == TOOL_AIR:
 				return true
-			if patch.soap <= 0.25:
+			if patch.soap <= 0.25 and patch.state != STATE_LOOSENED:
 				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
 			return false
 	return false
@@ -1868,7 +1868,7 @@ func _recommended_tool(patch: DirtPatch) -> String:
 				return TOOL_SPONGE
 			return TOOL_SOAP
 		"poop":
-			if patch.soap > 0.25:
+			if patch.soap > 0.25 or patch.state == STATE_LOOSENED:
 				return TOOL_WATER
 			return TOOL_SOAP
 	return TOOL_WATER
@@ -1979,8 +1979,8 @@ func _apply_water_to_patch(patch: DirtPatch, delta: float, proximity: float) -> 
 			patch.health -= 0.08 * proximity * delta * wr
 			patch.soap = max(0.0, patch.soap - delta * proximity * 0.12)
 	elif patch.kind == "poop":
-		var rinse_power: float = patch.soap * (0.9 + patch.looseness * 0.5)
-		if rinse_power > 0.25:
+		if patch.soap > 0.25 or patch.state == STATE_LOOSENED:
+			var rinse_power: float = max(patch.soap, 0.3) * (0.9 + patch.looseness * 0.5)
 			patch.state = STATE_RUNOFF
 			patch.health -= rinse_power * 2.2 * proximity * delta * wr
 			patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.45)
