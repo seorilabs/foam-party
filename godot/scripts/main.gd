@@ -1367,6 +1367,14 @@ func get_patch_index_by_kind_for_test(kind: String) -> int:
 	return -1
 
 
+func get_patch_count_by_kind_for_test(kind: String) -> int:
+	var count := 0
+	for raw_patch in dirt_patches:
+		if (raw_patch as DirtPatch).kind == kind:
+			count += 1
+	return count
+
+
 func get_patch_state_for_test(patch_index: int) -> String:
 	if patch_index < 0 or patch_index >= dirt_patches.size():
 		return ""

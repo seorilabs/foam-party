@@ -307,6 +307,9 @@ func _run_smoke() -> void:
 		return
 
 	# --- sticker: spawn / misapplied / sponge removes ---
+	if int(root_node.call("get_patch_count_by_kind_for_test", "sticker")) < 1:
+		_fail("sticker should spawn at least once")
+		return
 	var hint_sticker: int = root_node.call("get_patch_index_by_kind_for_test", "sticker")
 	if hint_sticker < 0:
 		_fail("sticker patch missing for hint test")
