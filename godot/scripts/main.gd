@@ -26,8 +26,8 @@ const BOMB_COST := 40
 const UPGRADE_COSTS := [[80, 160, 280], [80, 160, 280], [80, 160, 280]]
 const UPGRADE_MULTS := [1.0, 1.3, 1.6, 2.0]
 const UPGRADE_KEYS := ["water", "soap", "sponge"]
-const UPGRADE_NAMES := ["Water Power", "Soap Power", "Sponge Power"]
-const UPGRADE_DESCS := ["Scrubs mud & dust faster", "Loosens stains faster", "Wipes faster"]
+const UPGRADE_NAMES := ["고압수 강화", "비누 강화", "스펀지 강화"]
+const UPGRADE_DESCS := ["흙탕물·먼지 제거 속도 향상", "얼룩 분리 속도 향상", "닦는 속도 향상"]
 const UPGRADE_MAX_LEVEL := 3
 const STATE_TITLE := "title"
 const STATE_PLAYING := "playing"
@@ -181,9 +181,9 @@ var last_particle_spawn := 0.0
 var car_color := Color("#ffcf5a")
 var car_type := "compact"
 var car_type_labels := {
-	"compact": "City",
-	"sports": "Sport",
-	"truck": "Truck",
+	"compact": "시티",
+	"sports": "스포츠",
+	"truck": "트럭",
 }
 var canvas_origin := Vector2.ZERO
 var canvas_scale := 1.0
@@ -245,10 +245,10 @@ var _daily_save_timer: Timer = null
 
 var tool_ids := [TOOL_AIR, TOOL_WATER, TOOL_SOAP, TOOL_SPONGE]
 var tool_labels := {
-	TOOL_AIR: "Air",
-	TOOL_WATER: "Water",
-	TOOL_SOAP: "Soap",
-	TOOL_SPONGE: "Sponge",
+	TOOL_AIR: "바람",
+	TOOL_WATER: "고압수",
+	TOOL_SOAP: "비누",
+	TOOL_SPONGE: "스펀지",
 }
 var tool_colors := {
 	TOOL_AIR: Color("#b7f0ff"),
@@ -2650,13 +2650,13 @@ func _draw_status() -> void:
 
 func _tool_hint() -> String:
 	if selected_tool == TOOL_AIR:
-		return "blow leaves"
+		return "낙엽을 날려요"
 	if selected_tool == TOOL_WATER:
-		return "rinse dirt"
+		return "오물을 씻어요"
 	if selected_tool == TOOL_SOAP:
-		return "loosen stains"
+		return "얼룩을 불려요"
 	if selected_tool == TOOL_SPONGE:
-		return "wipe clean"
+		return "오물을 닦아요"
 	return ""
 
 
@@ -3280,7 +3280,7 @@ func _draw_title_screen() -> void:
 	draw_circle(Vector2(220.0, 296.0), 20.0, Color(1.0, 1.0, 1.0, 0.28))
 	draw_string(font, Vector2(2.0, 332.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color("#0d3b55"))
 	draw_string(font, Vector2(0.0, 328.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color.WHITE)
-	draw_string(font, Vector2(0.0, 368.0), "A bubbly car wash game", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 18, Color("#0d3b55"))
+	draw_string(font, Vector2(0.0, 368.0), "거품 팡팡 세차 게임", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 18, Color("#0d3b55"))
 
 	# 타이틀 데일리 미션 카드 — 시작 전에 오늘 할 일을 보여준다
 	if not daily_mission_type.is_empty():
@@ -3319,16 +3319,16 @@ func _draw_title_screen() -> void:
 	var start_rect := _get_start_rect()
 	draw_style_box(_style("start_shadow", Color("#1f8a55"), 16.0), Rect2(start_rect.position + Vector2(0.0, 5.0), start_rect.size))
 	draw_style_box(_style("start_button", Color("#39d98a"), 16.0), start_rect)
-	var start_label := "Start Wash"
+	var start_label := "세차 시작"
 	if level_index > 1:
-		start_label = "Continue · %s %02d" % [car_type_labels[car_type], level_index]
+		start_label = "이어하기 · %s %02d" % [car_type_labels[car_type], level_index]
 	draw_string(font, Vector2(start_rect.position.x, start_rect.position.y + 38.0), start_label, HORIZONTAL_ALIGNMENT_CENTER, start_rect.size.x, 19, Color("#0d3b2a"))
 
-	draw_string(font, Vector2(0.0, 578.0), "Coins %d  ·  Stars %d" % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
+	draw_string(font, Vector2(0.0, 578.0), "코인 %d  ·  별 %d" % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
 	var upg_rect := _get_upgrade_btn_rect()
 	draw_style_box(_style("upg_shadow", Color(0.18, 0.25, 0.55, 0.9), 12.0), Rect2(upg_rect.position + Vector2(0.0, 4.0), upg_rect.size))
 	draw_style_box(_style("upg_btn", Color(0.33, 0.53, 0.95, 1.0), 12.0), upg_rect)
-	draw_string(font, Vector2(upg_rect.position.x, upg_rect.position.y + 28.0), "Upgrades", HORIZONTAL_ALIGNMENT_CENTER, upg_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
+	draw_string(font, Vector2(upg_rect.position.x, upg_rect.position.y + 28.0), "업그레이드", HORIZONTAL_ALIGNMENT_CENTER, upg_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
 	var skin_rect := _get_skin_btn_rect()
 	draw_style_box(_style("skin_shadow", Color(0.28, 0.12, 0.48, 0.9), 12.0), Rect2(skin_rect.position + Vector2(0.0, 4.0), skin_rect.size))
 	draw_style_box(_style("skin_btn", Color(0.58, 0.28, 0.88, 1.0), 12.0), skin_rect)
@@ -3427,13 +3427,13 @@ func _draw_tutorial() -> void:
 	var panel := Rect2(30.0, 176.0, 330.0, 452.0)
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 44.0), "Wash Guide", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 44.0), "세차 가이드", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
 
 	var rows := [
-		[TOOL_AIR, "Air", "Blow off leaves and dust"],
-		[TOOL_WATER, "Water", "Rinse mud and soap away"],
-		[TOOL_SOAP, "Soap", "Soften oil and bug marks"],
-		[TOOL_SPONGE, "Sponge", "Wipe loosened stains"],
+		[TOOL_AIR, "바람", "낙엽과 먼지를 날려요"],
+		[TOOL_WATER, "고압수", "흙탕물과 비누를 씻어요"],
+		[TOOL_SOAP, "비누", "기름때와 벌레 자국을 불려요"],
+		[TOOL_SPONGE, "스펀지", "불린 얼룩을 닦아요"],
 	]
 	for row_index in range(rows.size()):
 		var row: Array = rows[row_index]
@@ -3443,8 +3443,8 @@ func _draw_tutorial() -> void:
 		draw_string(font, Vector2(panel.position.x + 92.0, row_y - 2.0), row[1], HORIZONTAL_ALIGNMENT_LEFT, 200.0, 17, Color("#123246"))
 		draw_string(font, Vector2(panel.position.x + 92.0, row_y + 20.0), row[2], HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 116.0, 13, Color("#2c6b78"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 410.0), "Chain combos for 3 stars. Foam Bomb: %d coins" % BOMB_COST, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#2c6b78"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 436.0), "Tap to start!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 16, Color("#1f8a55"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 410.0), "콤보를 이어가면 별 3개! 거품 폭탄: %d 코인" % BOMB_COST, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 436.0), "탭하여 시작!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 16, Color("#1f8a55"))
 
 
 func _draw_bomb_button() -> void:
@@ -3463,7 +3463,7 @@ func _draw_bomb_button() -> void:
 	draw_circle(rect.position + Vector2(22.0, 17.0), 9.0, Color(1.0, 1.0, 1.0, 0.95))
 	draw_circle(rect.position + Vector2(32.0, 12.0), 6.0, Color(1.0, 1.0, 1.0, 0.8))
 	draw_circle(rect.position + Vector2(30.0, 22.0), 4.5, Color(1.0, 1.0, 1.0, 0.8))
-	draw_string(font, Vector2(rect.position.x + 42.0, rect.position.y + 20.0), "Foam", HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 11, Color("#123246"))
+	draw_string(font, Vector2(rect.position.x + 42.0, rect.position.y + 20.0), "거품", HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 11, Color("#123246"))
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
 	draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
@@ -3600,14 +3600,14 @@ func _draw_customer_patience() -> void:
 	var mood_label: String
 	var mood_col := Color(0.86, 0.93, 0.97)
 	if patience > 0.65:
-		mood_label = "Happy!"
+		mood_label = "만족!"
 	elif patience > 0.35:
-		mood_label = "OK..."
+		mood_label = "보통..."
 	elif patience > 0.1:
-		mood_label = "Hurry!"
+		mood_label = "서둘러!"
 	else:
 		var blink := 0.55 + 0.45 * sin(time_now * 8.0)
-		mood_label = "ANGRY!"
+		mood_label = "화났어요!"
 		mood_col = Color(1.0, 0.62, 0.40, blink)
 	draw_string(font, Vector2(rect.position.x + 48.0, rect.position.y + rect.size.y - 8.0),
 		mood_label, HORIZONTAL_ALIGNMENT_CENTER, 62.0, 12, mood_col)
@@ -3653,14 +3653,14 @@ func _draw_combo_badge() -> void:
 		var halo_rect := Rect2(Vector2(195.0, badge_center_y) - halo_size * 0.5, halo_size)
 		draw_style_box(_style("combo_halo", Color(1.0, 0.78, 0.22, halo), 24.0), halo_rect)
 	draw_style_box(_style(style_key, bg, 18.0), badge)
-	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "Combo x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
+	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "콤보 x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
 	if _combo_bonus_time >= 0.0:
 		var _age := float(Time.get_ticks_msec()) / 1000.0 - _combo_bonus_time
 		if _age < 1.2:
 			var _alpha := 1.0 - _age / 1.2
 			var _rise := _age * 38.0
 			draw_string(_font(), Vector2(badge.position.x + 4.0, badge.position.y - _rise - 14.0),
-				"+%d coins!" % _combo_bonus_amount, HORIZONTAL_ALIGNMENT_LEFT,
+				"+%d 코인!" % _combo_bonus_amount, HORIZONTAL_ALIGNMENT_LEFT,
 				-1, 16, Color(1.0, 0.85, 0.2, _alpha))
 	# Circular timer ring — sweeps clockwise from top as the combo window drains.
 	var fill_frac := clampf(combo_timer / COMBO_WINDOW, 0.0, 1.0)
@@ -3685,16 +3685,16 @@ func _trigger_combo_milestone_flash(count: int) -> void:
 	# ×4 콤보: 노란색 플래시 / ×6: 주황색 / ×8: 빨간색 / ×10+: 레인보우(보라)
 	if count == 4:
 		_combo_milestone_flash_color = Color(1.0, 0.92, 0.22, 0.0)
-		_combo_milestone_fanfare = "Combo x4!"
+		_combo_milestone_fanfare = "콤보 x4!"
 	elif count == 6:
 		_combo_milestone_flash_color = Color(1.0, 0.58, 0.12, 0.0)
-		_combo_milestone_fanfare = "Combo x6!"
+		_combo_milestone_fanfare = "콤보 x6!"
 	elif count == 8:
 		_combo_milestone_flash_color = Color(1.0, 0.22, 0.22, 0.0)
-		_combo_milestone_fanfare = "Combo x8!"
+		_combo_milestone_fanfare = "콤보 x8!"
 	elif count >= 10 and count % 5 == 0:
 		_combo_milestone_flash_color = Color(0.72, 0.22, 1.0, 0.0)
-		_combo_milestone_fanfare = "MAX COMBO x%d!" % count
+		_combo_milestone_fanfare = "MAX 콤보 x%d!" % count
 	else:
 		return
 	_combo_milestone_count = count
@@ -3856,7 +3856,7 @@ func _draw_completion_panel() -> void:
 		elif index >= earned_stars or reveal_age < 0.0:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "All Clean!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "완전 청소!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), "%s %02d · %s · Best x%d" % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
 
 	var record_seconds: float = _best_time_for_level(level_index)
@@ -3865,9 +3865,9 @@ func _draw_completion_panel() -> void:
 		var record_color := Color("#e0a818").lerp(Color("#fff3cf"), 0.5 + 0.5 * sin(time_now * 6.0))
 		_draw_star(Vector2(panel.position.x + 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
 		_draw_star(Vector2(panel.position.x + panel.size.x - 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
-		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), "New record! %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), "신기록! %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
 	elif record_seconds > 0.0:
-		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), "Best time %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), "최고 기록 %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
 
 	var reward_chip := Rect2(panel.position.x + panel.size.x - 106.0, panel.position.y - 14.0, 96.0, 30.0)
 	draw_style_box(_style("reward_chip", Color("#ffce3d"), 15.0), reward_chip)
@@ -3885,12 +3885,12 @@ func _draw_completion_panel() -> void:
 	var retry_rect := _get_retry_rect()
 	draw_style_box(_style("retry_shadow", Color("#246076"), 14.0), Rect2(retry_rect.position + Vector2(0.0, 4.0), retry_rect.size))
 	draw_style_box(_style("retry_button", Color("#7fd6e6"), 14.0), retry_rect)
-	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), "↺ Wash Again", HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, 16, Color("#0d3b55"))
+	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), "↺ 다시 세차", HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, 16, Color("#0d3b55"))
 
 	var next_rect := _get_next_rect()
 	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))
 	draw_style_box(_style("next_button", Color("#39d98a"), 14.0), next_rect)
-	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), "Next Car ▶", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
+	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), "다음 차 ▶", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
 
 
 func _format_time(seconds_value: float) -> String:
@@ -4012,8 +4012,8 @@ func _draw_upgrade_panel() -> void:
 	draw_style_box(_style("upg_panel_shadow", Color(0.02, 0.06, 0.22, 0.5), 22.0), Rect2(panel.position + Vector2(0.0, 6.0), panel.size))
 	draw_style_box(_style("upg_panel", Color("#f0f6ff"), 22.0), panel)
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 50.0), "Upgrade Shop", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#0d2a50"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 74.0), "Coins: %d" % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#3a7fc1"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 50.0), "업그레이드 상점", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#0d2a50"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 74.0), "코인: %d" % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#3a7fc1"))
 
 	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
 	draw_style_box(_style("upg_close_bg", Color("#e0e9f5"), 10.0), close_rect)
@@ -4043,13 +4043,13 @@ func _draw_upgrade_panel() -> void:
 		var buy_rect := _upgrade_buy_rect(panel, idx)
 		if lvl >= UPGRADE_MAX_LEVEL:
 			draw_style_box(_style("upg_max_bg", Color("#b8cfe0"), 10.0), buy_rect)
-			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), "MAX", HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 15, Color("#6a8aaa"))
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), "최대", HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 15, Color("#6a8aaa"))
 		else:
 			var cost: int = UPGRADE_COSTS[idx][lvl]
 			var affordable: bool = coins >= cost
 			var btn_col := Color("#39d98a") if affordable else Color("#8fc4b4")
 			draw_style_box(_style("upg_buy_%d" % idx, btn_col, 10.0), buy_rect)
-			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), "%d coins" % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 14, Color("#0d2a3b") if affordable else Color("#4a7a6a"))
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), "%d 코인" % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 14, Color("#0d2a3b") if affordable else Color("#4a7a6a"))
 
 
 func _get_skin_btn_rect() -> Rect2:
@@ -4200,14 +4200,14 @@ func _draw_skin_panel() -> void:
 	draw_style_box(_style("skin_panel_bg", Color("#f5f0ff"), 22.0), panel)
 
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 48.0), "노즐 스킨", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#2a0d50"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 70.0), "Coins: %d" % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#7a3ac1"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 70.0), "코인: %d" % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#7a3ac1"))
 
 	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
 	draw_style_box(_style("skin_close_bg", Color("#e8d8f8"), 10.0), close_rect)
 	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 26.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 18, Color("#2a0d50"))
 
 	var tab_keys: Array = [TOOL_WATER, TOOL_AIR, TOOL_SOAP, TOOL_SPONGE]
-	var tab_labels := ["Water", "Air", "Soap", "Sponge"]
+	var tab_labels := ["고압수", "바람", "비누", "스펀지"]
 	for t in range(4):
 		var tr: Rect2 = _skin_tab_rect(panel, t)
 		var is_active: bool = _skin_panel_tab == t
@@ -4260,4 +4260,4 @@ func _draw_skin_panel() -> void:
 			var affordable: bool = coins >= cost
 			var btn_c := Color("#a855f7") if affordable else Color("#c8a8f0")
 			draw_style_box(_style("skin_buy_%d_%d_%s" % [ci, int(affordable), sid], btn_c, 8.0), buy_rect)
-			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), "%d coins" % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 11, Color(1.0, 1.0, 1.0) if affordable else Color("#6a4a8a"))
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), "%d 코인" % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 11, Color(1.0, 1.0, 1.0) if affordable else Color("#6a4a8a"))
