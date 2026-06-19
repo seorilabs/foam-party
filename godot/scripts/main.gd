@@ -1845,8 +1845,7 @@ func _tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 		"poop":
 			if tool_id == TOOL_AIR:
 				return true
-			var soaped: bool = patch.soap > 0.25 or patch.looseness > 0.35
-			if not soaped:
+			if patch.soap <= 0.25:
 				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
 			return false
 	return false
@@ -1869,7 +1868,7 @@ func _recommended_tool(patch: DirtPatch) -> String:
 				return TOOL_SPONGE
 			return TOOL_SOAP
 		"poop":
-			if patch.soap > 0.25 or patch.looseness > 0.35:
+			if patch.soap > 0.25:
 				return TOOL_WATER
 			return TOOL_SOAP
 	return TOOL_WATER
