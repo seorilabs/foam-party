@@ -3694,7 +3694,7 @@ func _trigger_combo_milestone_flash(count: int) -> void:
 		_combo_milestone_fanfare = "콤보 x8!"
 	elif count >= 10 and count % 5 == 0:
 		_combo_milestone_flash_color = Color(0.72, 0.22, 1.0, 0.0)
-		_combo_milestone_fanfare = "MAX 콤보 x%d!" % count
+		_combo_milestone_fanfare = "최대 콤보 x%d!" % count
 	else:
 		return
 	_combo_milestone_count = count
@@ -3857,7 +3857,7 @@ func _draw_completion_panel() -> void:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "완전 청소!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), "%s %02d · %s · Best x%d" % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), "%s %02d · %s · 최고 콤보 x%d" % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
 
 	var record_seconds: float = _best_time_for_level(level_index)
 	if is_new_record:
