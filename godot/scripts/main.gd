@@ -1767,7 +1767,7 @@ func _spawn_dirt() -> void:
 			health_base_min = 80.0
 			health_base_max = 135.0
 		"truck":
-			type_pool = ["mud", "mud", "bug", "leaf", "mud", "poop", "dust", "sticker", "leaf"]
+			type_pool = ["mud", "sticker", "bug", "leaf", "mud", "poop", "dust", "oil", "leaf"]
 			radius_min = 15.0
 			radius_max = 28.0
 			health_base_min = 85.0
