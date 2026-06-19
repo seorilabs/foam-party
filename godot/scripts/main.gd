@@ -3170,6 +3170,38 @@ func _draw_title_screen() -> void:
 	draw_string(font, Vector2(0.0, 328.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color.WHITE)
 	draw_string(font, Vector2(0.0, 368.0), "A bubbly car wash game", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 18, Color("#0d3b55"))
 
+	# 타이틀 데일리 미션 카드 — 시작 전에 오늘 할 일을 보여준다
+	if not daily_mission_type.is_empty():
+		var dm_rect := Rect2(18.0, 382.0, 354.0, 82.0)
+		var dm_claimed := daily_mission_claimed
+		var dm_prog := mini(daily_mission_progress, daily_mission_target)
+		draw_style_box(_style("title_dm_shadow", Color(0.03, 0.12, 0.22, 0.22), 14.0),
+			Rect2(dm_rect.position + Vector2(0.0, 3.0), dm_rect.size))
+		var dm_bg_col := Color(0.05, 0.26, 0.18, 0.72) if dm_claimed else Color(0.05, 0.20, 0.32, 0.72)
+		draw_style_box(_style("title_dm_bg", dm_bg_col, 14.0), dm_rect)
+		draw_string(font, Vector2(dm_rect.position.x + 12.0, dm_rect.position.y + 18.0),
+			"오늘의 미션", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.6, 0.85, 1.0, 0.8))
+		draw_string(font, Vector2(dm_rect.position.x + dm_rect.size.x - 10.0, dm_rect.position.y + 18.0),
+			"+%d 코인" % DAILY_MISSION_REWARD, HORIZONTAL_ALIGNMENT_RIGHT, -1, 11,
+			Color(1.0, 0.85, 0.25, 0.9))
+		var mission_col := Color(0.72, 1.0, 0.78) if dm_claimed else Color(0.90, 0.96, 1.0)
+		draw_string(font, Vector2(dm_rect.position.x + 12.0, dm_rect.position.y + 40.0),
+			daily_mission_label, HORIZONTAL_ALIGNMENT_LEFT, dm_rect.size.x - 24.0, 14, mission_col)
+		var dm_bar_margin := 12.0
+		var dm_bar_rect := Rect2(dm_rect.position.x + dm_bar_margin, dm_rect.position.y + 52.0,
+			dm_rect.size.x - dm_bar_margin * 2.0, 6.0)
+		draw_style_box(_style("title_dm_bar_bg", Color(0.0, 0.0, 0.0, 0.35), 3.0), dm_bar_rect)
+		var dm_fill := 1.0 if dm_claimed else float(dm_prog) / float(max(daily_mission_target, 1))
+		if dm_fill > 0.0:
+			var bar_fill_col := Color("#39d98a") if dm_claimed else Color("#49a7ff")
+			var fill_w := maxf(8.0, dm_bar_rect.size.x * dm_fill)
+			draw_style_box(_style("title_dm_bar_fill", bar_fill_col, 3.0),
+				Rect2(dm_bar_rect.position, Vector2(fill_w, dm_bar_rect.size.y)))
+		var count_text := "완료! ✓" if dm_claimed else "%d / %d" % [dm_prog, daily_mission_target]
+		var count_col := Color("#39d98a") if dm_claimed else Color(0.7, 0.9, 1.0)
+		draw_string(font, Vector2(dm_rect.position.x + dm_rect.size.x - 12.0, dm_rect.position.y + 74.0),
+			count_text, HORIZONTAL_ALIGNMENT_RIGHT, -1, 12, count_col)
+
 	var start_rect := _get_start_rect()
 	draw_style_box(_style("start_shadow", Color("#1f8a55"), 16.0), Rect2(start_rect.position + Vector2(0.0, 5.0), start_rect.size))
 	draw_style_box(_style("start_button", Color("#39d98a"), 16.0), start_rect)
