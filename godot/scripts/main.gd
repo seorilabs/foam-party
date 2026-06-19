@@ -168,6 +168,7 @@ var game_state := STATE_TITLE
 var coins := 0
 var total_stars := 0
 var coin_reward := 0
+var _level_milestone_bonus := 0
 var _star_reveal_times: Array[float] = [-10.0, -10.0, -10.0]
 const STAR_REVEAL_DELAYS: Array[float] = [0.3, 0.75, 1.25]
 const STAR_REVEAL_POP_DUR := 0.5
@@ -1230,6 +1231,7 @@ func reset_game(new_level: int) -> void:
 	_progress_milestone_time = -1.0
 	_progress_milestone_text = ""
 	_progress_milestone_color = Color.WHITE
+	_level_milestone_bonus = 0
 	_stop_tool_loop()
 	particles.clear()
 	_set_car_palette()
@@ -1649,6 +1651,13 @@ func apply_foam_bomb() -> bool:
 
 func _calc_coin_reward(stars: int) -> int:
 	return 20 + stars * 10 + min(best_combo, 10) * 2
+
+
+func _calc_level_milestone_bonus(level: int) -> int:
+	if level <= 0 or level % 5 != 0:
+		return 0
+	var step := int(level / 5)
+	return 50 + step * 25
 
 
 func _set_car_palette() -> void:
@@ -2311,6 +2320,8 @@ func _update_clean_progress() -> void:
 		is_washing = false
 		earned_stars = _calc_stars()
 		coin_reward = _calc_coin_reward(earned_stars)
+		_level_milestone_bonus = _calc_level_milestone_bonus(level_index)
+		coin_reward += _level_milestone_bonus
 		coins += coin_reward
 		total_stars += earned_stars
 		_register_best_time()
@@ -3713,6 +3724,13 @@ func _draw_completion_panel() -> void:
 	draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#fff3cf"))
 	draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#9a7400"), false, 1.5)
 	draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 21.0), "+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 15, Color("#6b5200"))
+
+	if _level_milestone_bonus > 0:
+		var time_now2 := float(Time.get_ticks_msec()) / 1000.0
+		var milestone_chip := Rect2(panel.position.x + 10.0, panel.position.y - 14.0, 106.0, 30.0)
+		var chip_color := Color("#a855f7").lerp(Color("#ec4899"), 0.5 + 0.5 * sin(time_now2 * 3.0))
+		draw_style_box(_style("milestone_chip", chip_color, 15.0), milestone_chip)
+		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), "Lv.%d 이정표! +%d" % [level_index, _level_milestone_bonus], HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x, 13, Color("#fff0ff"))
 
 	var retry_rect := _get_retry_rect()
 	draw_style_box(_style("retry_shadow", Color("#246076"), 14.0), Rect2(retry_rect.position + Vector2(0.0, 4.0), retry_rect.size))
