@@ -4030,7 +4030,7 @@ func _skin_tab_rect(panel: Rect2, tab_idx: int) -> Rect2:
 
 func _skin_card_rect(panel: Rect2, card_idx: int) -> Rect2:
 	var col: int = card_idx % 2
-	var row: int = card_idx / 2
+	var row: int = int(card_idx / 2)
 	var card_w: float = (panel.size.x - 28.0 - 8.0) / 2.0
 	var card_h := 118.0
 	var x: float = panel.position.x + 14.0 + float(col) * (card_w + 8.0)
@@ -4050,7 +4050,7 @@ func _handle_skin_panel_tap(point: Vector2) -> void:
 		queue_redraw()
 		_play_ui_select()
 		return
-	var tab_keys := ["water", "air", "soap", "sponge"]
+	var tab_keys: Array = [TOOL_WATER, TOOL_AIR, TOOL_SOAP, TOOL_SPONGE]
 	for t in range(4):
 		if _skin_tab_rect(panel, t).has_point(point):
 			_skin_panel_tab = t
@@ -4150,7 +4150,7 @@ func _draw_skin_panel() -> void:
 	draw_style_box(_style("skin_close_bg", Color("#e8d8f8"), 10.0), close_rect)
 	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 26.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 18, Color("#2a0d50"))
 
-	var tab_keys := ["water", "air", "soap", "sponge"]
+	var tab_keys: Array = [TOOL_WATER, TOOL_AIR, TOOL_SOAP, TOOL_SPONGE]
 	var tab_labels := ["Water", "Air", "Soap", "Sponge"]
 	for t in range(4):
 		var tr: Rect2 = _skin_tab_rect(panel, t)
