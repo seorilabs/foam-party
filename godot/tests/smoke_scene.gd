@@ -235,11 +235,11 @@ func _run_smoke() -> void:
 		return
 
 	# --- contextual "use this tool" hint ---
-	for hint_method in ["is_tool_misapplied_for_test", "get_recommended_tool_for_test", "get_patch_hint_time_for_test", "simulate_patch_hint_for_test"]:
+	for hint_method in ["is_tool_misapplied_for_test", "get_recommended_tool_for_test", "get_patch_hint_time_for_test", "simulate_patch_hint_for_test", "get_patch_count_by_kind_for_test", "spawn_patch_for_test"]:
 		if not root_node.has_method(hint_method):
 			_fail("hint helper API missing: " + hint_method)
 			return
-	root_node.call("reset_game", 3)
+	root_node.call("reset_game", 2)
 	var hint_leaf: int = root_node.call("get_patch_index_by_kind_for_test", "leaf")
 	var hint_oil: int = root_node.call("get_patch_index_by_kind_for_test", "oil")
 	if hint_leaf < 0 or hint_oil < 0:
@@ -304,6 +304,33 @@ func _run_smoke() -> void:
 		return
 	if String(root_node.call("simulate_patch_hint_for_test", "water", hint_leaf2, 0.6)) != "air":
 		_fail("sustained wrong rubbing should still surface the hint")
+		return
+
+	# --- sticker: misapplied / sponge removes (injected patch — no pool dependency) ---
+	var hint_sticker: int = root_node.call("spawn_patch_for_test", "sticker")
+	if String(root_node.call("get_recommended_tool_for_test", hint_sticker)) != "sponge":
+		_fail("sticker should recommend sponge")
+		return
+	if not bool(root_node.call("is_tool_misapplied_for_test", "water", hint_sticker)):
+		_fail("water on sticker should be flagged")
+		return
+	if not bool(root_node.call("is_tool_misapplied_for_test", "soap", hint_sticker)):
+		_fail("soap on sticker should be flagged")
+		return
+	if not bool(root_node.call("is_tool_misapplied_for_test", "air", hint_sticker)):
+		_fail("air on sticker should be flagged")
+		return
+	if bool(root_node.call("is_tool_misapplied_for_test", "sponge", hint_sticker)):
+		_fail("sponge on sticker should not be flagged")
+		return
+	var sticker_health_before: float = float(root_node.call("get_patch_health_for_test", hint_sticker))
+	root_node.call("apply_tool_to_patch_for_test", "sponge", hint_sticker, 0.5)
+	var sticker_health_after: float = float(root_node.call("get_patch_health_for_test", hint_sticker))
+	if sticker_health_after >= sticker_health_before:
+		_fail("sponge should reduce sticker health")
+		return
+	if String(root_node.call("get_patch_state_for_test", hint_sticker)) != "loosened":
+		_fail("sponge should loosen sticker")
 		return
 
 	# --- scrub drag trail builds while washing and fades once the pointer lifts ---
