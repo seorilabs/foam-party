@@ -5,7 +5,7 @@ const TOOL_AIR := "air"
 const TOOL_WATER := "water"
 const TOOL_SOAP := "soap"
 const TOOL_SPONGE := "sponge"
-const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug"]
+const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop"]
 const CAR_TYPES := ["compact", "sports", "truck"]
 const CLEAN_DAMAGE_RATE := 72.0
 const AUDIO_MIX_RATE := 22050
@@ -65,6 +65,7 @@ const DAILY_MISSION_POOL := [
 	{"type": "mud", "label": "흙탕물 %d개 씻기", "target": 15},
 	{"type": "oil", "label": "오일 %d개 청소하기", "target": 15},
 	{"type": "bug", "label": "벌레 자국 %d개 닦기", "target": 12},
+	{"type": "poop", "label": "새똥 %d개 닦기", "target": 10},
 ]
 const DAILY_MISSION_REWARD := 50
 
@@ -1692,6 +1693,8 @@ func apply_foam_bomb() -> bool:
 			patch.state = STATE_LOOSENED
 		elif patch.kind == "mud":
 			patch.state = STATE_SOAPED
+		elif patch.kind == "poop":
+			patch.state = STATE_LOOSENED
 		var center := _patch_center(patch)
 		for bubble_index in range(3):
 			var offset := Vector2(rng.randf_range(-patch.radius, patch.radius), rng.randf_range(-patch.radius, patch.radius))
@@ -1763,7 +1766,7 @@ func _spawn_dirt() -> void:
 			health_base_min = 80.0
 			health_base_max = 135.0
 		"truck":
-			type_pool = ["mud", "mud", "bug", "leaf", "mud", "bug", "dust", "oil", "leaf"]
+			type_pool = ["mud", "mud", "bug", "leaf", "mud", "poop", "dust", "oil", "leaf"]
 			radius_min = 15.0
 			radius_max = 28.0
 			health_base_min = 85.0
@@ -1781,6 +1784,8 @@ func _spawn_dirt() -> void:
 		var health := rng.randf_range(health_base_min, health_base_max) * health_scale
 		if kind == "oil" or kind == "bug":
 			health += 25.0 * health_scale
+		elif kind == "poop":
+			health += 15.0 * health_scale
 		var patch := DirtPatch.new(kind, base_position + jitter, radius, health, rng.randf_range(0.0, 10.0))
 		dirt_patches.append(patch)
 
@@ -1837,6 +1842,13 @@ func _tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 			if not soaped:
 				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
 			return false
+		"poop":
+			if tool_id == TOOL_AIR:
+				return true
+			var poop_activated: bool = patch.soap > 0.25 or patch.state in [STATE_LOOSENED, STATE_RUNOFF]
+			if not poop_activated:
+				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
+			return false
 	return false
 
 
@@ -1855,6 +1867,10 @@ func _recommended_tool(patch: DirtPatch) -> String:
 		"oil", "bug":
 			if patch.soap > 0.25 or patch.looseness > 0.35:
 				return TOOL_SPONGE
+			return TOOL_SOAP
+		"poop":
+			if patch.soap > 0.25 or patch.state in [STATE_LOOSENED, STATE_RUNOFF]:
+				return TOOL_WATER
 			return TOOL_SOAP
 	return TOOL_WATER
 
@@ -1963,6 +1979,16 @@ func _apply_water_to_patch(patch: DirtPatch, delta: float, proximity: float) -> 
 			patch.state = STATE_WET
 			patch.health -= 0.08 * proximity * delta * wr
 			patch.soap = max(0.0, patch.soap - delta * proximity * 0.12)
+	elif patch.kind == "poop":
+		if patch.soap > 0.25 or patch.state in [STATE_LOOSENED, STATE_RUNOFF]:
+			var rinse_power: float = max(patch.soap, 0.3) * (0.9 + patch.looseness * 0.5)
+			patch.state = STATE_RUNOFF
+			patch.health -= rinse_power * 2.2 * proximity * delta * wr
+			patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.45)
+			patch.soap = max(0.0, patch.soap - delta * proximity * 0.55)
+		else:
+			patch.state = STATE_WET
+			patch.health -= 0.04 * proximity * delta * wr
 	else:
 		patch.state = STATE_WET
 		patch.health -= 0.45 * proximity * delta * wr
@@ -1980,6 +2006,11 @@ func _apply_soap_to_patch(patch: DirtPatch, delta: float, proximity: float) -> v
 		patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.42)
 		patch.state = STATE_SOAPED
 		patch.health -= 0.12 * proximity * delta * sr
+	elif patch.kind == "poop":
+		patch.soap = min(1.0, patch.soap + delta * proximity * 2.0)
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.2)
+		patch.state = STATE_LOOSENED if patch.looseness > 0.5 else STATE_SOAPED
+		patch.health -= 0.06 * proximity * delta * sr
 	else:
 		patch.soap = min(0.45, patch.soap + delta * proximity * 0.25)
 
@@ -2008,6 +2039,14 @@ func _apply_sponge_to_patch(patch: DirtPatch, delta: float, source_point: Vector
 		patch.health -= 0.45 * proximity * delta * spr
 	elif patch.kind == "leaf":
 		patch.health -= 0.2 * proximity * delta * spr
+	elif patch.kind == "poop":
+		if patch.soap > 0.25 or patch.looseness > 0.35:
+			patch.state = STATE_LOOSENED
+			patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.8)
+			patch.health -= (0.8 + patch.soap * 0.6) * proximity * delta * spr
+			patch.soap = max(0.0, patch.soap - delta * proximity * 0.18)
+		else:
+			patch.health -= 0.08 * proximity * delta * spr
 
 
 func _update_dirt_motion(delta: float) -> void:
@@ -2056,6 +2095,8 @@ func _runoff_cleanup_rate(patch: DirtPatch) -> float:
 		return 0.42 + patch.wetness * 0.25
 	if patch.kind == "oil" or patch.kind == "bug":
 		return patch.soap * 0.18 + patch.looseness * 0.32
+	if patch.kind == "poop":
+		return patch.soap * 0.22 + patch.looseness * 0.28
 	return 0.08
 
 
@@ -2876,6 +2917,8 @@ func _draw_dirt() -> void:
 			_draw_oil_patch(center, patch.radius, strength)
 		elif patch.kind == "bug":
 			_draw_bug_patch(center, patch.radius, strength, patch.seed_offset)
+		elif patch.kind == "poop":
+			_draw_poop_patch(center, patch.radius, strength, patch.seed_offset)
 
 		if patch.wetness > 0.18:
 			_draw_wet_gloss(center, patch.radius, patch.wetness)
@@ -2992,6 +3035,19 @@ func _draw_bug_patch(center: Vector2, radius: float, strength: float, seed_value
 		var angle := seed_value + float(index) * TAU / 8.0
 		draw_line(center, center + Vector2.from_angle(angle) * radius, color, 4.0 * strength)
 	draw_circle(center + Vector2(-radius * 0.15, -radius * 0.1), radius * 0.18, Color(0.1, 0.05, 0.03, 0.8 * strength))
+
+
+func _draw_poop_patch(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
+	var s := clampf(strength, 0.0, 1.0)
+	var blob_color := Color(0.95, 0.93, 0.88, 0.90 * s)
+	draw_circle(center, radius * (0.75 + s * 0.28), blob_color)
+	draw_circle(center + Vector2(radius * 0.08, -radius * 0.06), radius * 0.35, Color(0.78, 0.82, 0.22, 0.68 * s))
+	var drop_color := Color(0.92, 0.90, 0.84, 0.78 * s)
+	for index in range(6):
+		var angle := seed_value + float(index) * TAU / 6.0
+		var dist: float = 0.55 + 0.28 * abs(sin(seed_value + float(index) * 0.71))
+		var drop_r: float = radius * (0.12 + 0.14 * abs(cos(seed_value + float(index) * 1.13)))
+		draw_circle(center + Vector2(cos(angle), sin(angle)) * radius * dist, max(2.0, drop_r), drop_color)
 
 
 func _draw_flying_trail(patch: DirtPatch, center: Vector2, strength: float) -> void:
