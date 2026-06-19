@@ -1654,10 +1654,10 @@ func _calc_coin_reward(stars: int) -> int:
 
 
 func _calc_level_milestone_bonus(level: int) -> int:
-	if level % 5 == 0:
-		var step: int = level / 5
-		return 50 + step * 25
-	return 0
+	if level <= 0 or level % 5 != 0:
+		return 0
+	var step := int(level / 5)
+	return 50 + step * 25
 
 
 func _set_car_palette() -> void:
