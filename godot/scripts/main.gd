@@ -1767,7 +1767,7 @@ func _spawn_dirt() -> void:
 			health_base_min = 80.0
 			health_base_max = 135.0
 		"truck":
-			type_pool = ["mud", "sticker", "bug", "leaf", "mud", "poop", "dust", "oil", "leaf"]
+			type_pool = ["mud", "mud", "bug", "leaf", "mud", "poop", "dust", "sticker", "leaf"]
 			radius_min = 15.0
 			radius_max = 28.0
 			health_base_min = 85.0
@@ -1997,7 +1997,6 @@ func _apply_water_to_patch(patch: DirtPatch, delta: float, proximity: float) -> 
 			patch.state = STATE_WET
 			patch.health -= 0.04 * proximity * delta * wr
 	elif patch.kind == "sticker":
-		patch.state = STATE_WET
 		patch.health -= 0.03 * proximity * delta * wr
 	else:
 		patch.state = STATE_WET

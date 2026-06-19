@@ -239,7 +239,7 @@ func _run_smoke() -> void:
 		if not root_node.has_method(hint_method):
 			_fail("hint helper API missing: " + hint_method)
 			return
-	root_node.call("reset_game", 3)
+	root_node.call("reset_game", 2)
 	var hint_leaf: int = root_node.call("get_patch_index_by_kind_for_test", "leaf")
 	var hint_oil: int = root_node.call("get_patch_index_by_kind_for_test", "oil")
 	if hint_leaf < 0 or hint_oil < 0:
