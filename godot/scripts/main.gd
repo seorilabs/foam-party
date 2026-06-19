@@ -206,6 +206,39 @@ var upgrade_water := 0
 var upgrade_soap := 0
 var upgrade_sponge := 0
 var show_upgrade_panel := false
+var show_skin_panel := false
+var _skin_panel_tab := 0
+var skin_water := "classic"
+var skin_air := "classic"
+var skin_soap := "classic"
+var skin_sponge := "classic"
+var owned_skins: Dictionary = {"classic": true}
+var _nozzle_skins: Dictionary = {
+	"water": [
+		{"id": "classic",  "name": "Classic",  "cost": 0,   "color": Color(0.29, 0.65, 1.0)},
+		{"id": "coral",    "name": "Coral",    "cost": 80,  "color": Color(1.0, 0.42, 0.32)},
+		{"id": "mint",     "name": "Mint",     "cost": 80,  "color": Color(0.22, 0.88, 0.68)},
+		{"id": "gold",     "name": "Gold",     "cost": 150, "color": Color(1.0, 0.82, 0.20)},
+	],
+	"air": [
+		{"id": "classic",  "name": "Classic",  "cost": 0,   "color": Color(0.27, 0.38, 0.43)},
+		{"id": "cobalt",   "name": "Cobalt",   "cost": 80,  "color": Color(0.18, 0.38, 0.92)},
+		{"id": "violet",   "name": "Violet",   "cost": 80,  "color": Color(0.62, 0.22, 0.90)},
+		{"id": "gold",     "name": "Gold",     "cost": 150, "color": Color(1.0, 0.72, 0.15)},
+	],
+	"soap": [
+		{"id": "classic",  "name": "Classic",  "cost": 0,   "color": Color(1.0, 1.0, 1.0)},
+		{"id": "pink",     "name": "Pink",     "cost": 80,  "color": Color(1.0, 0.58, 0.78)},
+		{"id": "lavender", "name": "Lavender", "cost": 80,  "color": Color(0.74, 0.52, 1.0)},
+		{"id": "gold",     "name": "Gold",     "cost": 150, "color": Color(1.0, 0.82, 0.20)},
+	],
+	"sponge": [
+		{"id": "classic",  "name": "Classic",  "cost": 0,   "color": Color(1.0, 0.62, 0.35)},
+		{"id": "lime",     "name": "Lime",     "cost": 80,  "color": Color(0.42, 0.90, 0.28)},
+		{"id": "purple",   "name": "Purple",   "cost": 80,  "color": Color(0.62, 0.28, 0.92)},
+		{"id": "gold",     "name": "Gold",     "cost": 150, "color": Color(1.0, 0.82, 0.20)},
+	],
+}
 var _main_save_dirty := false
 var _daily_save_timer: Timer = null
 
@@ -297,6 +330,15 @@ func _load_progress() -> void:
 		upgrade_water = clampi(int(config.get_value("upgrades", "water", 0)), 0, UPGRADE_MAX_LEVEL)
 		upgrade_soap = clampi(int(config.get_value("upgrades", "soap", 0)), 0, UPGRADE_MAX_LEVEL)
 		upgrade_sponge = clampi(int(config.get_value("upgrades", "sponge", 0)), 0, UPGRADE_MAX_LEVEL)
+		skin_water = String(config.get_value("skins", "water", "classic"))
+		skin_air = String(config.get_value("skins", "air", "classic"))
+		skin_soap = String(config.get_value("skins", "soap", "classic"))
+		skin_sponge = String(config.get_value("skins", "sponge", "classic"))
+		var raw_owned: Variant = config.get_value("skins", "owned", {})
+		owned_skins = {"classic": true}
+		if raw_owned is Dictionary:
+			for k in (raw_owned as Dictionary):
+				owned_skins[String(k)] = true
 		var stored_best: Variant = config.get_value("game", "best_times", {})
 		if stored_best is Dictionary:
 			best_times = {}
@@ -362,6 +404,11 @@ func _save_progress() -> Error:
 	config.set_value("upgrades", "water", upgrade_water)
 	config.set_value("upgrades", "soap", upgrade_soap)
 	config.set_value("upgrades", "sponge", upgrade_sponge)
+	config.set_value("skins", "water", skin_water)
+	config.set_value("skins", "air", skin_air)
+	config.set_value("skins", "soap", skin_soap)
+	config.set_value("skins", "sponge", skin_sponge)
+	config.set_value("skins", "owned", owned_skins)
 	return config.save(SAVE_PATH)
 
 
@@ -1172,6 +1219,8 @@ func _draw() -> void:
 		_draw_title_screen()
 		if show_upgrade_panel:
 			_draw_upgrade_panel()
+		if show_skin_panel:
+			_draw_skin_panel()
 	else:
 		_draw_wash_trail()
 		_draw_tool_cursor()
@@ -1540,11 +1589,18 @@ func _handle_tap(point: Vector2) -> bool:
 		if show_upgrade_panel:
 			_handle_upgrade_panel_tap(point)
 			return true
+		if show_skin_panel:
+			_handle_skin_panel_tap(point)
+			return true
 		if _get_start_rect().has_point(point):
 			start_game()
 			_play_ui_select()
 		elif _get_upgrade_btn_rect().has_point(point):
 			show_upgrade_panel = true
+			queue_redraw()
+			_play_ui_select()
+		elif _get_skin_btn_rect().has_point(point):
+			show_skin_panel = true
 			queue_redraw()
 			_play_ui_select()
 		elif _get_sound_rect().has_point(point):
@@ -3087,7 +3143,7 @@ func _draw_water_gun(point: Vector2, time_now: float, alpha_scale: float) -> voi
 	draw_line(grip, grip + Vector2(4.0, 20.0), Color(0.22, 0.28, 0.31, alpha_scale), 9.0)
 	draw_circle(grip + Vector2(-2.0, -4.0), 10.0, Color(1.0, 0.83, 0.29, alpha_scale))
 	draw_circle(grip + Vector2(-2.0, -4.0), 10.0, Color(0.07, 0.2, 0.27, alpha_scale), false, 2.5)
-	draw_circle(nozzle, 5.5, Color(0.29, 0.65, 1.0, alpha_scale))
+	draw_circle(nozzle, 5.5, _active_skin_color(TOOL_WATER, alpha_scale))
 
 
 func _draw_air_blower(point: Vector2, time_now: float, alpha_scale: float) -> void:
@@ -3103,7 +3159,7 @@ func _draw_air_blower(point: Vector2, time_now: float, alpha_scale: float) -> vo
 	draw_circle(body, 17.0, Color(1.0, 0.62, 0.35, alpha_scale))
 	draw_circle(body, 17.0, Color(0.07, 0.2, 0.27, alpha_scale), false, 3.0)
 	draw_arc(body, 10.0, 0.0, TAU, 14, Color(0.07, 0.2, 0.27, alpha_scale * 0.6), 2.0)
-	draw_circle(nozzle, 6.5, Color(0.27, 0.38, 0.43, alpha_scale))
+	draw_circle(nozzle, 6.5, _active_skin_color(TOOL_AIR, alpha_scale))
 
 
 func _draw_foam_bottle(point: Vector2, time_now: float, alpha_scale: float) -> void:
@@ -3124,7 +3180,7 @@ func _draw_foam_bottle(point: Vector2, time_now: float, alpha_scale: float) -> v
 	draw_colored_polygon(body, Color(0.93, 0.91, 0.65, alpha_scale))
 	_draw_closed_outline(body, Color(0.07, 0.2, 0.27, alpha_scale), 2.5)
 	draw_line(bottle_top, nozzle, Color(0.55, 0.62, 0.66, alpha_scale), 7.0)
-	draw_circle(nozzle, 6.0, Color(1.0, 1.0, 1.0, alpha_scale))
+	draw_circle(nozzle, 6.0, _active_skin_color(TOOL_SOAP, alpha_scale))
 	draw_circle(nozzle, 6.0, Color(0.07, 0.2, 0.27, alpha_scale), false, 2.0)
 
 
@@ -3137,7 +3193,7 @@ func _draw_sponge_tool(point: Vector2, time_now: float, alpha_scale: float) -> v
 	var top_half := Vector2(26.0, 8.0)
 	var body := _rotated_rect_points(point, half, angle)
 	var cap := _rotated_rect_points(point + Vector2(0.0, -10.0).rotated(angle), top_half, angle)
-	draw_colored_polygon(body, Color(1.0, 0.62, 0.35, alpha_scale))
+	draw_colored_polygon(body, _active_skin_color(TOOL_SPONGE, alpha_scale))
 	draw_colored_polygon(cap, Color(1.0, 0.84, 0.31, alpha_scale))
 	_draw_closed_outline(body, Color(0.07, 0.2, 0.27, alpha_scale), 3.0)
 	if is_washing:
@@ -3217,6 +3273,10 @@ func _draw_title_screen() -> void:
 	draw_style_box(_style("upg_shadow", Color(0.18, 0.25, 0.55, 0.9), 12.0), Rect2(upg_rect.position + Vector2(0.0, 4.0), upg_rect.size))
 	draw_style_box(_style("upg_btn", Color(0.33, 0.53, 0.95, 1.0), 12.0), upg_rect)
 	draw_string(font, Vector2(upg_rect.position.x, upg_rect.position.y + 28.0), "Upgrades", HORIZONTAL_ALIGNMENT_CENTER, upg_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
+	var skin_rect := _get_skin_btn_rect()
+	draw_style_box(_style("skin_shadow", Color(0.28, 0.12, 0.48, 0.9), 12.0), Rect2(skin_rect.position + Vector2(0.0, 4.0), skin_rect.size))
+	draw_style_box(_style("skin_btn", Color(0.58, 0.28, 0.88, 1.0), 12.0), skin_rect)
+	draw_string(font, Vector2(skin_rect.position.x, skin_rect.position.y + 28.0), "스킨", HORIZONTAL_ALIGNMENT_CENTER, skin_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
 	var version_y := minf(826.0, DESIGN_SIZE.y - _safe_area_design_insets().w - 12.0)
 	draw_string(font, Vector2(0.0, version_y), "v0.1", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 12, Color(1.0, 1.0, 1.0, 0.5))
 
@@ -3934,3 +3994,191 @@ func _draw_upgrade_panel() -> void:
 			var btn_col := Color("#39d98a") if affordable else Color("#8fc4b4")
 			draw_style_box(_style("upg_buy_%d" % idx, btn_col, 10.0), buy_rect)
 			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), "%d coins" % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 14, Color("#0d2a3b") if affordable else Color("#4a7a6a"))
+
+
+func _get_skin_btn_rect() -> Rect2:
+	return Rect2(95.0, 652.0, 200.0, 44.0)
+
+
+func _active_skin_color(tool_key: String, alpha: float = 1.0) -> Color:
+	var sid: String
+	if tool_key == TOOL_WATER:
+		sid = skin_water
+	elif tool_key == TOOL_AIR:
+		sid = skin_air
+	elif tool_key == TOOL_SOAP:
+		sid = skin_soap
+	else:
+		sid = skin_sponge
+	var skins: Array = _nozzle_skins.get(tool_key, [])
+	for s in skins:
+		if s["id"] == sid:
+			var c: Color = s["color"]
+			c.a = alpha
+			return c
+	if not skins.is_empty():
+		var c: Color = skins[0]["color"]
+		c.a = alpha
+		return c
+	return Color(0.5, 0.5, 0.5, alpha)
+
+
+func _skin_tab_rect(panel: Rect2, tab_idx: int) -> Rect2:
+	var tab_w: float = (panel.size.x - 20.0) / 4.0
+	return Rect2(panel.position.x + 10.0 + tab_idx * tab_w, panel.position.y + 74.0, tab_w, 34.0)
+
+
+func _skin_card_rect(panel: Rect2, card_idx: int) -> Rect2:
+	var col: int = card_idx % 2
+	var row: int = card_idx / 2
+	var card_w: float = (panel.size.x - 28.0 - 8.0) / 2.0
+	var card_h := 118.0
+	var x: float = panel.position.x + 14.0 + float(col) * (card_w + 8.0)
+	var y: float = panel.position.y + 116.0 + float(row) * (card_h + 8.0)
+	return Rect2(x, y, card_w, card_h)
+
+
+func _skin_buy_rect(card: Rect2) -> Rect2:
+	return Rect2(card.position.x + 8.0, card.position.y + card.size.y - 38.0, card.size.x - 16.0, 30.0)
+
+
+func _handle_skin_panel_tap(point: Vector2) -> void:
+	var panel := Rect2(15.0, 88.0, 360.0, 362.0)
+	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
+	if close_rect.has_point(point):
+		show_skin_panel = false
+		queue_redraw()
+		_play_ui_select()
+		return
+	var tab_keys := ["water", "air", "soap", "sponge"]
+	for t in range(4):
+		if _skin_tab_rect(panel, t).has_point(point):
+			_skin_panel_tab = t
+			queue_redraw()
+			_play_ui_select()
+			return
+	var tool_key: String = tab_keys[_skin_panel_tab]
+	var skins: Array = _nozzle_skins.get(tool_key, [])
+	for ci in range(skins.size()):
+		if _skin_buy_rect(_skin_card_rect(panel, ci)).has_point(point):
+			_try_buy_or_select_skin(tool_key, ci)
+			return
+
+
+func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
+	var skins: Array = _nozzle_skins.get(tool_key, [])
+	if skin_idx < 0 or skin_idx >= skins.size():
+		return
+	var skin: Dictionary = skins[skin_idx]
+	var sid: String = skin["id"]
+	var cost: int = skin["cost"]
+	if owned_skins.get(sid, false):
+		if tool_key == TOOL_WATER:
+			skin_water = sid
+		elif tool_key == TOOL_AIR:
+			skin_air = sid
+		elif tool_key == TOOL_SOAP:
+			skin_soap = sid
+		else:
+			skin_sponge = sid
+		_save_progress()
+		queue_redraw()
+		_play_ui_select()
+		return
+	if coins < cost:
+		return
+	coins -= cost
+	owned_skins[sid] = true
+	if tool_key == TOOL_WATER:
+		skin_water = sid
+	elif tool_key == TOOL_AIR:
+		skin_air = sid
+	elif tool_key == TOOL_SOAP:
+		skin_soap = sid
+	else:
+		skin_sponge = sid
+	if _save_progress() != OK:
+		coins += cost
+		owned_skins.erase(sid)
+		if tool_key == TOOL_WATER:
+			skin_water = "classic"
+		elif tool_key == TOOL_AIR:
+			skin_air = "classic"
+		elif tool_key == TOOL_SOAP:
+			skin_soap = "classic"
+		else:
+			skin_sponge = "classic"
+		return
+	_play_ui_select()
+	queue_redraw()
+
+
+func _draw_skin_panel() -> void:
+	var font: Font = _font()
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.05, 0.18, 0.72))
+	var panel := Rect2(15.0, 88.0, 360.0, 362.0)
+	draw_style_box(_style("skin_panel_shadow", Color(0.08, 0.02, 0.22, 0.5), 22.0), Rect2(panel.position + Vector2(0.0, 6.0), panel.size))
+	draw_style_box(_style("skin_panel_bg", Color("#f5f0ff"), 22.0), panel)
+
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 48.0), "노즐 스킨", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#2a0d50"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 70.0), "Coins: %d" % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#7a3ac1"))
+
+	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
+	draw_style_box(_style("skin_close_bg", Color("#e8d8f8"), 10.0), close_rect)
+	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 26.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 18, Color("#2a0d50"))
+
+	var tab_keys := ["water", "air", "soap", "sponge"]
+	var tab_labels := ["Water", "Air", "Soap", "Sponge"]
+	for t in range(4):
+		var tr: Rect2 = _skin_tab_rect(panel, t)
+		var is_active: bool = _skin_panel_tab == t
+		var tab_col := Color("#7a35c8") if is_active else Color("#d0b8f0")
+		draw_style_box(_style("skin_tab_%d_%s" % [t, str(is_active)], tab_col, 8.0), tr)
+		var lbl_col := Color(1.0, 1.0, 1.0) if is_active else Color("#4a2a7a")
+		draw_string(font, Vector2(tr.position.x, tr.position.y + 22.0), tab_labels[t], HORIZONTAL_ALIGNMENT_CENTER, tr.size.x, 12, lbl_col)
+
+	var tool_key: String = tab_keys[_skin_panel_tab]
+	var active_sid: String
+	if tool_key == TOOL_WATER:
+		active_sid = skin_water
+	elif tool_key == TOOL_AIR:
+		active_sid = skin_air
+	elif tool_key == TOOL_SOAP:
+		active_sid = skin_soap
+	else:
+		active_sid = skin_sponge
+
+	var skins: Array = _nozzle_skins.get(tool_key, [])
+	for ci in range(skins.size()):
+		var skin: Dictionary = skins[ci]
+		var sid: String = skin["id"]
+		var skin_name: String = skin["name"]
+		var cost: int = skin["cost"]
+		var col: Color = skin["color"]
+		var is_owned: bool = owned_skins.get(sid, false)
+		var is_selected: bool = sid == active_sid
+		var card: Rect2 = _skin_card_rect(panel, ci)
+
+		var card_bg := Color("#e8d8f8") if is_selected else Color("#f0e8ff")
+		var border_col := Color("#7a35c8") if is_selected else Color("#c8a8f0")
+		draw_style_box(_style("skin_card_%d_%d_%s" % [ci, int(is_selected), sid], card_bg, 12.0, border_col, 2), card)
+
+		var circle_center := Vector2(card.position.x + card.size.x * 0.5, card.position.y + 38.0)
+		draw_circle(circle_center, 24.0, col)
+		draw_arc(circle_center, 24.0, 0.0, TAU, 24, Color(0.0, 0.0, 0.0, 0.18), 2.0)
+
+		var name_col := Color("#2a0d50") if is_owned else Color("#5a4a7a")
+		draw_string(font, Vector2(card.position.x, card.position.y + 74.0), skin_name, HORIZONTAL_ALIGNMENT_CENTER, card.size.x, 12, name_col)
+
+		var buy_rect: Rect2 = _skin_buy_rect(card)
+		if is_selected:
+			draw_style_box(_style("skin_sel_bg", Color("#7a35c8"), 8.0), buy_rect)
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), "선택됨", HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 12, Color(1.0, 1.0, 1.0))
+		elif is_owned:
+			draw_style_box(_style("skin_own_bg", Color("#39d98a"), 8.0), buy_rect)
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), "선택", HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 12, Color("#0d2a1a"))
+		else:
+			var affordable: bool = coins >= cost
+			var btn_c := Color("#a855f7") if affordable else Color("#c8a8f0")
+			draw_style_box(_style("skin_buy_%d_%d_%s" % [ci, int(affordable), sid], btn_c, 8.0), buy_rect)
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), "%d coins" % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 11, Color(1.0, 1.0, 1.0) if affordable else Color("#6a4a8a"))
