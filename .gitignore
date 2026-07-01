@@ -2,8 +2,12 @@
 .godot/
 godot/.godot/
 godot/build/
+godot/android/
 build/
 tmp/
+apps/ait/dist/
+apps/ait/.granite/
+apps/ait/*.ait
 *.tmp
 app-store/**/*.import
 node_modules/

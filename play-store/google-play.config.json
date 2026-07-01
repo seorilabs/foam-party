@@ -1,0 +1,40 @@
+{
+  "packageName": "com.seorilabs.foamparty",
+  "defaultLanguage": "ko-KR",
+  "appType": "game",
+  "freeOrPaid": "free",
+  "developerAccount": "company",
+  "contactEmail": "cs@seorilabs.com",
+  "privacyPolicyUrl": "https://www.seorilabs.com/privacy/",
+  "playAppSigning": {
+    "mode": "play-app-signing-with-upload-key",
+    "uploadKeyAlias": "keystore-detected",
+    "note": "업로드 keystore/alias/비밀번호는 repo 밖(org/repo secret)에서 주입한다. 재사용 워크플로우가 GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 를 복원하고 alias 를 keystore 에서 자동 탐지한다. keystore 자체는 절대 커밋하지 않는다."
+  },
+  "release": {
+    "versionName": "0.1.0",
+    "versionCode": 1,
+    "aabPath": "build/android/foam-party.aab",
+    "minimumTargetSdk": 35,
+    "track": "internal",
+    "releaseNotes": {
+      "ko-KR": "폼 파티 내부 테스트 빌드입니다. 세차·거품 놀이 게임 플레이와 기본 진행, 저장, UI 흐름을 확인합니다.",
+      "en-US": "Internal testing build of Foam Party. Verifies core wash/foam gameplay, progression, save, and UI flow."
+    }
+  },
+  "storeListing": {
+    "appName": {
+      "ko-KR": "폼 파티",
+      "en-US": "Foam Party"
+    }
+  },
+  "automation": {
+    "developerApiAuth": "GitHub Actions OIDC + Google Cloud Workload Identity Federation",
+    "workloadIdentityProviderVariable": "GOOGLE_WORKLOAD_IDENTITY_PROVIDER",
+    "serviceAccountEmailVariable": "GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL",
+    "workflow": ".github/workflows/deploy-google-play.yml",
+    "reusableWorkflow": "seorilabs/.github/.github/workflows/godot-deploy-google-play.yml@main",
+    "versionScript": "tools/set_google_play_version_code.py",
+    "uploadScript": "tools/upload_google_play_internal.py"
+  }
+}

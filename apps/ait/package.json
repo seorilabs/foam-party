@@ -1,0 +1,20 @@
+{
+  "name": "foam-party-ait",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AppsInToss web wrapper for the Godot Foam Party build.",
+  "scripts": {
+    "build:web": "bash ./scripts/build-web.sh",
+    "dev": "granite dev",
+    "lint": "tsc --noEmit",
+    "build": "ait build",
+    "deploy": "ait deploy"
+  },
+  "dependencies": {
+    "@apps-in-toss/web-framework": "2.9.2"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
