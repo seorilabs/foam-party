@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "72898706664",
+    "project_id": "foam-party",
+    "storage_bucket": "foam-party.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:72898706664:android:456c2bdc38879e37bc5d5d",
+        "android_client_info": {
+          "package_name": "com.seorilabs.foamparty"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_XZQA3OYaTyhGaitOns7XyKDpIzWTxjA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
