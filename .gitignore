@@ -9,3 +9,4 @@ app-store/**/*.import
 node_modules/
 AGENTS.local.md
 AGENT.local.md
+packages/product-core/src/**/*.gd.uid
