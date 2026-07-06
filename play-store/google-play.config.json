@@ -1,0 +1,191 @@
+{
+  "packageName": "com.seorilabs.foamparty",
+  "defaultLanguage": "en-US",
+  "appType": "game",
+  "freeOrPaid": "free",
+  "contactEmail": "cs@seorilabs.com",
+  "privacyPolicyUrl": "https://www.seorilabs.com/privacy/",
+  "storeListing": {
+    "appName": {
+      "en-US": "Foam Party"
+    },
+    "shortDescription": {
+      "en-US": "Wash messy cars with water, soap, air, and sponge tools in quick casual levels"
+    },
+    "fullDescription": {
+      "en-US": "Foam Party is a casual car wash game built for short mobile sessions.\n\nClean each car by choosing the right tool for the mess. Rinse mud with water, lift stubborn grime with soap and sponge work, and use air to clear the last droplets. Keep your combo alive, finish faster, earn more stars, and unlock the next car.\n\nFeatures:\n- Simple one-hand washing controls\n- Water, soap, sponge, and air tools with different effects\n- Dirt states that react to the way you clean\n- Combos, best times, star goals, coins, and foam bomb boosts\n- Local progress save for offline play\n\nFoam Party is designed as a light, colorful arcade cleaning loop without account setup."
+    },
+    "video": {},
+    "lastApplied": {
+      "appliedAt": "2026-06-18T22:12:38+09:00",
+      "verifiedAt": "2026-06-18T22:12:38+09:00",
+      "editId": "03659063204766094046",
+      "credential": "seorilabs-play-publisher@seorilabs-gws.iam.gserviceaccount.com",
+      "changesNotSentForReview": "omitted-after-api-rejection",
+      "fields": [
+        "details.defaultLanguage",
+        "details.contactEmail",
+        "listing.en-US",
+        "images.icon",
+        "images.featureGraphic",
+        "images.phoneScreenshots",
+        "images.sevenInchScreenshots",
+        "images.tenInchScreenshots"
+      ]
+    }
+  },
+  "assets": {
+    "playIcon": "play-store/assets/icon-512.png",
+    "featureGraphic": "play-store/assets/feature-graphic-1024x500.png",
+    "phoneScreenshots": [
+      "play-store/screenshots/phone/shot_title.png",
+      "play-store/screenshots/phone/shot_tutorial.png",
+      "play-store/screenshots/phone/shot_default.png",
+      "play-store/screenshots/phone/shot_water.png",
+      "play-store/screenshots/phone/shot_soap.png",
+      "play-store/screenshots/phone/shot_sponge.png",
+      "play-store/screenshots/phone/shot_combo.png",
+      "play-store/screenshots/phone/shot_complete.png"
+    ],
+    "sevenInchTabletScreenshots": [
+      "play-store/screenshots/tablet-7/shot_title.png",
+      "play-store/screenshots/tablet-7/shot_tutorial.png",
+      "play-store/screenshots/tablet-7/shot_default.png",
+      "play-store/screenshots/tablet-7/shot_water.png",
+      "play-store/screenshots/tablet-7/shot_soap.png",
+      "play-store/screenshots/tablet-7/shot_sponge.png",
+      "play-store/screenshots/tablet-7/shot_combo.png",
+      "play-store/screenshots/tablet-7/shot_complete.png"
+    ],
+    "tenInchTabletScreenshots": [
+      "play-store/screenshots/tablet-10/shot_title.png",
+      "play-store/screenshots/tablet-10/shot_tutorial.png",
+      "play-store/screenshots/tablet-10/shot_default.png",
+      "play-store/screenshots/tablet-10/shot_water.png",
+      "play-store/screenshots/tablet-10/shot_soap.png",
+      "play-store/screenshots/tablet-10/shot_sponge.png",
+      "play-store/screenshots/tablet-10/shot_combo.png",
+      "play-store/screenshots/tablet-10/shot_complete.png"
+    ]
+  },
+  "contentDeclarations": {
+    "dataSafety": "submitted-in-play-console: AdMob and Firebase Analytics build basis, user confirmed Google Play review request on 2026-06-18",
+    "contentRating": "submitted-in-play-console: user confirmed Google Play review request on 2026-06-18",
+    "targetAudience": "submitted-in-play-console: user confirmed Google Play review request on 2026-06-18",
+    "ads": "yes",
+    "koreaDistribution": "included-in-worldwide-launch: production country availability includes KR",
+    "koreaGameRating": "submitted-in-play-console: user confirmed Google Play review request on 2026-06-18",
+    "reviewRequest": {
+      "submittedAt": "2026-06-18T22:23:57+09:00",
+      "submittedBy": "user",
+      "status": "submitted-to-google-play-review",
+      "policyCorrectnessEvidence": "manual-console-submission-confirmed-by-user; exact Data Safety CSV/export is not stored in repo"
+    }
+  },
+  "release": {
+    "track": "internal",
+    "name": "foam-party 0.1.0 (3) internal",
+    "versionName": "0.1.0",
+    "versionCode": 3,
+    "aabPath": "build/android/foam-party-internal.aab",
+    "minimumTargetSdk": 35,
+    "signing": "play-app-signing-with-upload-key",
+    "uploadKeyAlias": "seorilabs-upload",
+    "releaseNotes": {
+      "en-US": "Internal testing build for Foam Party.\n\n- Keeps the tool hint message visible above the car on shorter screens\n- Fixes mobile sound/help button taps\n- Improves safe-area layout for top status and bottom tool UI"
+    },
+    "lastBuild": {
+      "builtAt": "2026-06-18T23:30:00+09:00",
+      "aabPath": "build/android/foam-party-internal.aab",
+      "size": "34M",
+      "status": "built",
+      "verification": [
+        "jarsigner: jar verified",
+        "AAB contains base/lib/arm64-v8a",
+        "AAB contains AdMob and Firebase artifacts"
+      ]
+    },
+    "lastInternalUpload": {
+      "uploadedAt": "2026-06-18T23:38:37+09:00",
+      "status": "completed",
+      "track": "internal",
+      "versionCode": 3,
+      "editId": "01104709446132396381",
+      "verifiedAt": "2026-06-18T23:38:37+09:00",
+      "credential": "seorilabs-play-publisher@seorilabs-gws.iam.gserviceaccount.com"
+    },
+    "productionDraft": {
+      "createdAt": "2026-06-18T22:12:38+09:00",
+      "reviewRequestedAt": "2026-06-18T22:23:57+09:00",
+      "verifiedAt": "2026-06-18T22:23:57+09:00",
+      "track": "production",
+      "name": "Foam Party 0.1.0 (1)",
+      "versionCode": 1,
+      "status": "completed",
+      "editId": "15986281661735417806",
+      "apiReadbackEditId": "07907892941145573073",
+      "releaseNotes": {
+        "en-US": "Initial release of Foam Party.\n\n- Wash messy cars with water, soap, air, and sponge tools\n- Earn stars, coins, and best times across quick levels\n- Use the foam bomb boost for tougher messes"
+      },
+      "launchCountries": "worldwide",
+      "countryAvailabilityStatus": "api-readback: restOfWorld=true and 176 explicit countries returned, including KR, US, and JP",
+      "playReviewStatus": "review-request-sent-by-user; Android Publisher track readback does not expose the human review queue state separately"
+    }
+  },
+  "adMob": {
+    "publisherId": "pub-2444587584524186",
+    "androidAppId": "ca-app-pub-2444587584524186~8642747667",
+    "androidRewardedAdUnits": {
+      "foam_bomb_free": "ca-app-pub-2444587584524186/5440739953",
+      "coin_double": "확정 필요",
+      "star_rescue": "확정 필요"
+    },
+    "runtimeStatus": "foam_bomb_free only. coin_double/star_rescue are hidden in release until ad unit IDs are confirmed",
+    "lastLocalVerification": "Android Gradle Debug APK includes com.google.android.gms.ads.APPLICATION_ID ca-app-pub-2444587584524186~8642747667 and Google Ads SDK components. Release AAB and device QA pending"
+  },
+  "firebase": {
+    "projectId": "foam-party",
+    "projectNumber": "72898706664",
+    "androidConfigFile": "godot/google-services.json",
+    "iosConfigFile": "godot/GoogleService-Info.plist",
+    "androidAppId": "1:72898706664:android:456c2bdc38879e37bc5d5d",
+    "iosAppId": "1:72898706664:ios:8291a7901762222abc5d5d",
+    "analyticsPropertyId": "542197312",
+    "analyticsAccountId": "396259050",
+    "androidStreamId": "15110441380",
+    "iosStreamId": "15110375615",
+    "enabledModules": [
+      "Core",
+      "Analytics"
+    ],
+    "runtimeStatus": "SDK and google-services.json included. Android runtime initializes when Godotx Firebase singletons are available",
+    "lastLocalVerification": "Android Gradle Debug APK after config includes GodotxFirebaseCore/GodotxFirebaseAnalytics plugin metadata, FirebaseInitProvider, firebase-common 22.0.1, firebase-analytics 23.0.0, and generated Firebase resources for google_app_id, gcm_defaultSenderId, google_storage_bucket, and project_id. Release AAB includes Firebase artifacts and google-services.json.",
+    "lastFirebaseReadback": {
+      "checkedAt": "2026-06-18T22:12:38+09:00",
+      "appsStatus": "Android and iOS apps ACTIVE in Firebase CLI",
+      "androidConfigMatchesLocal": true,
+      "analyticsPropertyLinked": true,
+      "eventDeliveryStatus": "not-confirmed",
+      "eventDeliveryReason": "Google Analytics Data API is disabled for project foam-party, no BigQuery Analytics export dataset was visible, and no Android device was connected over ADB for DebugView/logcat verification."
+    }
+  },
+  "manualEvidence": {
+    "playConsoleAppShell": "created-in-play-console: 2026-06-16",
+    "launchLanguage": "English / en-US",
+    "pricingDecision": "free: 2026-06-16"
+  },
+  "notes": [
+    "사용자가 2026-06-16에 Google Play Android app shell 생성 완료를 공유했다.",
+    "Play Console 앱 이름은 Foam Party, 패키지는 com.seorilabs.foamparty, 출시 기본 언어는 영어로 확인했다.",
+    "초기 Google Play 가격은 무료로 확정했다. Google Play는 앱이 무료로 제공된 뒤 같은 packageName을 유료 앱으로 전환할 수 없으므로, 유료 판매가 필요하면 별도 packageName의 새 앱이 필요하다.",
+    "Android release build는 x64 Linux 경로를 사용한다. Seorilabs RPI ARC runner로 AAB/APK release build를 보내지 않는다.",
+    "AdMob Android app ID와 foam_bomb_free rewarded ad unit ID를 반영했다. Google Play Data safety는 광고 포함 기준으로 Play Console에서 제출했다.",
+    "Firebase Core/Analytics SDK와 Android/iOS config 파일을 반영했다. Google Play Data safety는 제출 완료했고, 실제 기기 Analytics QA는 blocker다.",
+    "Godot Android AdMob/Firebase plugin을 위해 Gradle build preset으로 전환했다. godot/android/build template은 로컬 생성물이므로 tools/install_android_build_template.sh로 재생성한다.",
+    "Google Play internal testing용 signed AAB는 build/android/foam-party-internal.aab로 생성했다. seorilabs-play-publisher service account로 internal track upload를 완료했다. 최신 internal upload는 versionCode 3 completed release다.",
+    "Google Play API-supported store listing fields, icon, feature graphic, phone screenshots, and tablet screenshots were applied and verified through Android Publisher API on 2026-06-18.",
+    "Google Play production release for versionCode 1 has final launch release notes. User confirmed review request submission on 2026-06-18.",
+    "Google Play production country availability readback returned restOfWorld=true and 176 explicit countries including KR, US, and JP.",
+    "Firebase Analytics property and Android/iOS streams are linked, but actual event delivery from a device build is not confirmed yet."
+  ]
+}
