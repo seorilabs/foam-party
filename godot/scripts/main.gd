@@ -11,9 +11,11 @@ const Coaching = preload("res://core/use_cases/coaching.gd")
 const DailyMission = preload("res://core/use_cases/daily_mission.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
 const WashRules = preload("res://core/use_cases/wash_rules.gd")
+const AnalyticsPort = preload("res://core/ports/analytics_port.gd")
 
 # --- godot-layer services ---
 const AudioService = preload("res://scripts/services/audio_service.gd")
+const FirebaseAnalyticsAdapter = preload("res://scripts/services/firebase_analytics_adapter.gd")
 
 const DESIGN_SIZE := Vector2(390.0, 844.0)
 const TOOL_AIR := "air"
@@ -152,6 +154,11 @@ var ui_font: Font
 # _ready(); main triggers sounds through its public methods.
 var audio: AudioService
 
+# Analytics adapter (Firebase). Instantiated in _ready() and always set, so call
+# sites can invoke analytics.log_event(...) unguarded. No-ops when the Firebase
+# singletons are absent (headless / plugin not bundled).
+var analytics: Node = null
+
 var daily_mission_type := ""
 var daily_mission_label := ""
 var daily_mission_target := 0
@@ -223,6 +230,9 @@ func _ready() -> void:
 	audio = AudioService.new()
 	add_child(audio)
 	audio.setup()
+	analytics = FirebaseAnalyticsAdapter.new()
+	add_child(analytics)
+	analytics.setup()
 	_bar_fill_style = StyleBoxFlat.new()
 	_bar_fill_style.bg_color = BAR_COL_START
 	_bar_fill_style.set_corner_radius_all(12)
@@ -357,6 +367,7 @@ func _apply_sound_setting() -> void:
 
 func start_game() -> void:
 	game_state = STATE_PLAYING
+	analytics.log_event("game_start", {"level": str(level_index)})
 	if not tutorial_seen:
 		show_tutorial = true
 	queue_redraw()
@@ -650,6 +661,7 @@ func reset_game(new_level: int) -> void:
 	_set_car_palette()
 	_spawn_dirt()
 	_update_clean_progress()
+	analytics.log_event("level_start", {"level": str(level_index), "car_type": car_type})
 	queue_redraw()
 
 
@@ -1077,6 +1089,7 @@ func apply_foam_bomb() -> bool:
 		return false
 	coins -= BOMB_COST
 	audio.play_bomb()
+	analytics.log_event("foam_bomb_use", {"level": str(level_index)})
 	_save_progress()
 	return true
 
@@ -1401,6 +1414,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				daily_mission_progress = daily_mission_target
 				daily_mission_claimed = true
 				coins += DAILY_MISSION_REWARD
+				analytics.log_event("daily_mission_claim", {"mission_type": daily_mission_type, "reward": str(DAILY_MISSION_REWARD)})
 				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
 				var daily_err := _save_daily()
 				if daily_err != OK:
@@ -1636,6 +1650,14 @@ func _update_clean_progress() -> void:
 		coins += coin_reward
 		total_stars += earned_stars
 		_register_best_time()
+		analytics.log_event("level_complete", {
+			"level": str(level_index),
+			"stars": str(earned_stars),
+			"time_sec": str(int(level_time)),
+			"best_combo": str(best_combo),
+			"coins_earned": str(coin_reward),
+			"new_record": str(is_new_record),
+		})
 		_save_progress()
 		_stop_tool_loop()
 		_play_completion_sound()
@@ -3238,6 +3260,7 @@ func _try_buy_upgrade(idx: int) -> void:
 		else:
 			upgrade_sponge -= 1
 		return
+	analytics.log_event("upgrade_purchase", {"tool": UPGRADE_KEYS[idx], "level": str(lvl + 1), "cost": str(cost)})
 	_play_ui_select()
 	queue_redraw()
 
@@ -3397,6 +3420,7 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 			queue_redraw()
 			return
 		queue_redraw()
+		analytics.log_event("skin_select", {"tool": tool_key, "skin_id": sid})
 		_play_ui_select()
 		return
 
@@ -3424,6 +3448,7 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 			skin_sponge = prev_sid
 		queue_redraw()
 		return
+	analytics.log_event("skin_purchase", {"tool": tool_key, "skin_id": sid, "cost": str(cost)})
 	_play_ui_select()
 	queue_redraw()
 
