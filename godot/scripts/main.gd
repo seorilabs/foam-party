@@ -1,20 +1,31 @@
 extends Control
 
+# --- product-core (pure gameplay rules), referenced via res://core symlink ---
+const GameConfig = preload("res://core/domain/game_config.gd")
+const DirtPatch = preload("res://core/domain/dirt_patch.gd")
+const WashParticle = preload("res://core/domain/wash_particle.gd")
+const SkinCatalog = preload("res://core/domain/skin_catalog.gd")
+const Scoring = preload("res://core/use_cases/scoring.gd")
+const Economy = preload("res://core/use_cases/economy.gd")
+const Coaching = preload("res://core/use_cases/coaching.gd")
+const DailyMission = preload("res://core/use_cases/daily_mission.gd")
+const BestTime = preload("res://core/use_cases/best_time.gd")
+
 const DESIGN_SIZE := Vector2(390.0, 844.0)
 const TOOL_AIR := "air"
 const TOOL_WATER := "water"
 const TOOL_SOAP := "soap"
 const TOOL_SPONGE := "sponge"
-const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop", "sticker"]
-const CAR_TYPES := ["compact", "sports", "truck"]
-const CLEAN_DAMAGE_RATE := 72.0
+const DIRT_TYPES := GameConfig.DIRT_TYPES
+const CAR_TYPES := GameConfig.CAR_TYPES
+const CLEAN_DAMAGE_RATE := GameConfig.CLEAN_DAMAGE_RATE
 const AUDIO_MIX_RATE := 22050
 const POP_NOTES := [523.25, 659.25, 783.99, 880.0, 1046.5]
-const COMBO_WINDOW := 2.5
-const STAR3_TIME := 75.0
-const STAR3_COMBO := 4
-const STAR2_TIME := 140.0
-const STAR_WARN_SECONDS := 15.0
+const COMBO_WINDOW := GameConfig.COMBO_WINDOW
+const STAR3_TIME := GameConfig.STAR3_TIME
+const STAR3_COMBO := GameConfig.STAR3_COMBO
+const STAR2_TIME := GameConfig.STAR2_TIME
+const STAR_WARN_SECONDS := GameConfig.STAR_WARN_SECONDS
 const GRADE_SLOT_EARNED := "earned"
 const GRADE_SLOT_TARGET := "target"
 const GRADE_SLOT_LOCKED := "locked"
@@ -22,13 +33,13 @@ const BAR_COL_START := Color(0.286, 0.655, 1.0)   # #49a7ff
 const BAR_COL_END   := Color(0.224, 0.851, 0.541)  # #39d98a
 const SAVE_PATH := "user://foam_party_save.cfg"
 const DAILY_SAVE_PATH := "user://foam_party_daily.cfg"
-const BOMB_COST := 40
-const UPGRADE_COSTS := [[80, 160, 280], [80, 160, 280], [80, 160, 280]]
-const UPGRADE_MULTS := [1.0, 1.3, 1.6, 2.0]
-const UPGRADE_KEYS := ["water", "soap", "sponge"]
-const UPGRADE_NAMES := ["고압수 강화", "비누 강화", "스펀지 강화"]
-const UPGRADE_DESCS := ["흙탕물·먼지 제거 속도 향상", "얼룩 분리 속도 향상", "닦는 속도 향상"]
-const UPGRADE_MAX_LEVEL := 3
+const BOMB_COST := GameConfig.BOMB_COST
+const UPGRADE_COSTS := GameConfig.UPGRADE_COSTS
+const UPGRADE_MULTS := GameConfig.UPGRADE_MULTS
+const UPGRADE_KEYS := GameConfig.UPGRADE_KEYS
+const UPGRADE_NAMES := GameConfig.UPGRADE_NAMES
+const UPGRADE_DESCS := GameConfig.UPGRADE_DESCS
+const UPGRADE_MAX_LEVEL := GameConfig.UPGRADE_MAX_LEVEL
 const STATE_TITLE := "title"
 const STATE_PLAYING := "playing"
 const GAMEPLAY_SCALE := 1.16
@@ -59,61 +70,8 @@ const STYLE_BUBBLE := "bubble"
 const STYLE_FOAM := "foam"
 const STYLE_SPARKLE := "sparkle"
 const STYLE_CONFETTI := "confetti"
-const DAILY_MISSION_POOL := [
-	{"type": "leaf", "label": "낙엽 %d개 날리기", "target": 20},
-	{"type": "dust", "label": "먼지 %d개 제거하기", "target": 20},
-	{"type": "mud", "label": "흙탕물 %d개 씻기", "target": 15},
-	{"type": "oil", "label": "오일 %d개 청소하기", "target": 15},
-	{"type": "bug", "label": "벌레 자국 %d개 닦기", "target": 12},
-	{"type": "poop", "label": "새똥 %d개 닦기", "target": 10},
-	{"type": "sticker", "label": "스티커 %d개 떼기", "target": 8},
-]
-const DAILY_MISSION_REWARD := 50
-
-class DirtPatch:
-	var kind: String
-	var position: Vector2
-	var radius: float
-	var health: float
-	var max_health: float
-	var soap: float = 0.0
-	var wetness: float = 0.0
-	var looseness: float = 0.0
-	var runoff: float = 0.0
-	var seed_offset: float
-	var drift: Vector2 = Vector2.ZERO
-	var velocity: Vector2 = Vector2.ZERO
-	var state: String = "stuck"
-	var resist_time: float = 0.0
-	var hint_time: float = 0.0
-	var hint_tool: String = ""
-	var shake_x: float = 0.0
-
-	func _init(new_kind: String, new_position: Vector2, new_radius: float, new_health: float, new_seed: float) -> void:
-		kind = new_kind
-		position = new_position
-		radius = new_radius
-		health = new_health
-		max_health = new_health
-		seed_offset = new_seed
-
-
-class WashParticle:
-	var position: Vector2
-	var velocity: Vector2
-	var ttl: float
-	var radius: float
-	var color: Color
-	var style: String
-
-	func _init(new_position: Vector2, new_velocity: Vector2, new_ttl: float, new_radius: float, new_color: Color, new_style: String) -> void:
-		position = new_position
-		velocity = new_velocity
-		ttl = new_ttl
-		radius = new_radius
-		color = new_color
-		style = new_style
-
+const DAILY_MISSION_POOL := GameConfig.DAILY_MISSION_POOL
+const DAILY_MISSION_REWARD := GameConfig.DAILY_MISSION_REWARD
 
 var selected_tool: String = TOOL_WATER
 var dirt_patches: Array = []
@@ -132,7 +90,7 @@ var _trail_has_last := false
 const TRAIL_LIFETIME := 0.4
 const TRAIL_MIN_GAP := 7.0
 const TRAIL_MAX_POINTS := 16
-const COMBO_BONUS_AMOUNTS := {5: 5, 10: 10, 15: 15, 20: 20}
+const COMBO_BONUS_AMOUNTS := GameConfig.COMBO_BONUS_AMOUNTS
 var clean_progress := 0.0
 var initial_dirt_total := 1.0
 var level_index := 1
@@ -215,32 +173,7 @@ var skin_air := "classic"
 var skin_soap := "classic"
 var skin_sponge := "classic"
 var owned_skins: Dictionary = {"classic": true}
-var _nozzle_skins: Dictionary = {
-	"water": [
-		{"id": "classic",  "name": "Classic",  "cost": 0,   "color": Color(0.29, 0.65, 1.0)},
-		{"id": "coral",    "name": "Coral",    "cost": 80,  "color": Color(1.0, 0.42, 0.32)},
-		{"id": "mint",     "name": "Mint",     "cost": 80,  "color": Color(0.22, 0.88, 0.68)},
-		{"id": "gold",     "name": "Gold",     "cost": 150, "color": Color(1.0, 0.82, 0.20)},
-	],
-	"air": [
-		{"id": "classic",  "name": "Classic",  "cost": 0,   "color": Color(0.27, 0.38, 0.43)},
-		{"id": "cobalt",   "name": "Cobalt",   "cost": 80,  "color": Color(0.18, 0.38, 0.92)},
-		{"id": "violet",   "name": "Violet",   "cost": 80,  "color": Color(0.62, 0.22, 0.90)},
-		{"id": "gold",     "name": "Gold",     "cost": 150, "color": Color(1.0, 0.72, 0.15)},
-	],
-	"soap": [
-		{"id": "classic",  "name": "Classic",  "cost": 0,   "color": Color(1.0, 1.0, 1.0)},
-		{"id": "pink",     "name": "Pink",     "cost": 80,  "color": Color(1.0, 0.58, 0.78)},
-		{"id": "lavender", "name": "Lavender", "cost": 80,  "color": Color(0.74, 0.52, 1.0)},
-		{"id": "gold",     "name": "Gold",     "cost": 150, "color": Color(1.0, 0.82, 0.20)},
-	],
-	"sponge": [
-		{"id": "classic",  "name": "Classic",  "cost": 0,   "color": Color(1.0, 0.62, 0.35)},
-		{"id": "lime",     "name": "Lime",     "cost": 80,  "color": Color(0.42, 0.90, 0.28)},
-		{"id": "purple",   "name": "Purple",   "cost": 80,  "color": Color(0.62, 0.28, 0.92)},
-		{"id": "gold",     "name": "Gold",     "cost": 150, "color": Color(1.0, 0.82, 0.20)},
-	],
-}
+var _nozzle_skins: Dictionary = SkinCatalog.catalog()
 var _main_save_dirty := false
 var _daily_save_timer: Timer = null
 
@@ -1725,14 +1658,11 @@ func apply_foam_bomb() -> bool:
 
 
 func _calc_coin_reward(stars: int) -> int:
-	return 20 + stars * 10 + min(best_combo, 10) * 2
+	return Economy.calc_coin_reward(stars, best_combo)
 
 
 func _calc_level_milestone_bonus(level: int) -> int:
-	if level <= 0 or level % 5 != 0:
-		return 0
-	var step := int(level / 5)
-	return 50 + step * 25
+	return Economy.calc_level_milestone_bonus(level)
 
 
 func _set_car_palette() -> void:
@@ -1840,61 +1770,18 @@ func _apply_tool_at(point: Vector2, delta: float) -> void:
 
 # Decides whether the current tool is the wrong choice for this patch right now.
 func _tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
-	match patch.kind:
-		"mud":
-			# Air does nothing; a dry scrub is premature (rinse or soap it first).
-			# Water and soap are both valid mud paths, so they are never flagged.
-			if tool_id == TOOL_AIR:
-				return true
-			if tool_id == TOOL_SPONGE:
-				return patch.wetness < 0.2 and patch.soap < 0.15
-			return false
-		"dust":
-			return tool_id == TOOL_SOAP
-		"leaf":
-			return tool_id != TOOL_AIR
-		"oil", "bug":
-			if tool_id == TOOL_AIR:
-				return true
-			var soaped: bool = patch.soap > 0.25 or patch.looseness > 0.35
-			if not soaped:
-				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
-			return false
-		"poop":
-			if tool_id == TOOL_AIR:
-				return true
-			var poop_activated: bool = patch.soap > 0.25 or patch.state in [STATE_LOOSENED, STATE_RUNOFF]
-			if not poop_activated:
-				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
-			return false
-		"sticker":
-			return tool_id != TOOL_SPONGE
-	return false
+	return Coaching.tool_misapplied(tool_id, patch)
 
 
 # The tool currently being coached on screen, or "" when no hint is active.
 func _active_hint_tool() -> String:
-	if _hint_patch != null and is_instance_valid(_hint_patch) and _hint_patch.hint_time > 0.0 and not _is_patch_removed(_hint_patch):
-		return _hint_patch.hint_tool
-	return ""
+	var patch_active := _hint_patch != null and is_instance_valid(_hint_patch) and not _is_patch_removed(_hint_patch)
+	return Coaching.active_hint_tool(_hint_patch, patch_active)
 
 
 # The tool the player should reach for next on this patch.
 func _recommended_tool(patch: DirtPatch) -> String:
-	match patch.kind:
-		"leaf":
-			return TOOL_AIR
-		"oil", "bug":
-			if patch.soap > 0.25 or patch.looseness > 0.35:
-				return TOOL_SPONGE
-			return TOOL_SOAP
-		"poop":
-			if patch.soap > 0.25 or patch.state in [STATE_LOOSENED, STATE_RUNOFF]:
-				return TOOL_WATER
-			return TOOL_SOAP
-		"sticker":
-			return TOOL_SPONGE
-	return TOOL_WATER
+	return Coaching.recommended_tool(patch)
 
 
 func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
@@ -2135,7 +2022,7 @@ func _patch_center(patch: DirtPatch) -> Vector2:
 
 
 func _is_light_dirt(kind: String) -> bool:
-	return kind == "leaf" or kind == "dust"
+	return Coaching.is_light_dirt(kind)
 
 
 func _push_direction(patch: DirtPatch, source_point: Vector2) -> Vector2:
@@ -2345,15 +2232,7 @@ func _draw_wash_trail() -> void:
 
 
 func _tool_radius(tool_id: String) -> float:
-	if tool_id == TOOL_AIR:
-		return 68.0
-	if tool_id == TOOL_WATER:
-		return 55.0
-	if tool_id == TOOL_SOAP:
-		return 60.0
-	if tool_id == TOOL_SPONGE:
-		return 38.0
-	return 48.0
+	return Coaching.tool_radius(tool_id)
 
 
 func _spawn_tool_particles(point: Vector2, delta: float) -> void:
@@ -2471,55 +2350,33 @@ func _update_clean_progress() -> void:
 # Star time threshold tightens 1.5% per level after the first (floor at 60% of base).
 # This ensures experienced players face a gradually rising skill ceiling.
 func _star_time_threshold(tier: int) -> float:
-	var base := STAR3_TIME if tier == 3 else STAR2_TIME
-	return base * maxf(0.6, 1.0 - float(max(0, level_index - 1)) * 0.015)
+	return Scoring.star_time_threshold(tier, level_index)
 
 
 func _calc_stars() -> int:
-	if level_time <= _star_time_threshold(3) and best_combo >= STAR3_COMBO:
-		return 3
-	if level_time <= _star_time_threshold(2):
-		return 2
-	return 1
+	return Scoring.calc_stars(level_time, best_combo, level_index)
 
 
 # Live state of one star slot in the HUD grade tracker (0 = first star).
 # earned: counted in the grade right now. target: still reachable but a
 # condition is unmet (3rd star needs the combo gate). locked: no longer reachable.
 func _grade_slot_state(slot_index: int) -> String:
-	match slot_index:
-		0:
-			return GRADE_SLOT_EARNED
-		1:
-			return GRADE_SLOT_EARNED if level_time <= _star_time_threshold(2) else GRADE_SLOT_LOCKED
-		2:
-			if level_time > _star_time_threshold(3):
-				return GRADE_SLOT_LOCKED
-			return GRADE_SLOT_EARNED if best_combo >= STAR3_COMBO else GRADE_SLOT_TARGET
-	return GRADE_SLOT_LOCKED
+	return Scoring.grade_slot_state(slot_index, level_time, best_combo, level_index, GRADE_SLOT_EARNED, GRADE_SLOT_TARGET, GRADE_SLOT_LOCKED)
 
 
 # Seconds until the next star is lost, or -1 once only the floor star remains.
 func _grade_time_to_downgrade() -> float:
-	if level_time <= _star_time_threshold(3):
-		return _star_time_threshold(3) - level_time
-	if level_time <= _star_time_threshold(2):
-		return _star_time_threshold(2) - level_time
-	return -1.0
+	return Scoring.grade_time_to_downgrade(level_time, level_index)
 
 
 # Star slot (0-based) whose threshold is approaching next, or -1 when none.
 func _grade_at_risk_slot() -> int:
-	if level_time <= _star_time_threshold(3):
-		return 2
-	if level_time <= _star_time_threshold(2):
-		return 1
-	return -1
+	return Scoring.grade_at_risk_slot(level_time, level_index)
 
 
 func _register_best_time() -> void:
 	var previous_best: float = _best_time_for_level(level_index)
-	is_new_record = previous_best <= 0.0 or level_time < previous_best
+	is_new_record = BestTime.is_new_record(previous_best, level_time)
 	if is_new_record:
 		best_times[level_index] = level_time
 		record_pop_time = float(Time.get_ticks_msec()) / 1000.0
@@ -2528,7 +2385,7 @@ func _register_best_time() -> void:
 
 
 func _best_time_for_level(level: int) -> float:
-	return float(best_times.get(level, 0.0))
+	return BestTime.best_time(best_times, level)
 
 
 func _check_progress_milestone() -> void:
@@ -3428,12 +3285,10 @@ func _today_string() -> String:
 
 func _generate_daily_mission(today: String) -> void:
 	daily_mission_date = today
-	var day_hash := absi(today.hash())
-	var pick := day_hash % DAILY_MISSION_POOL.size()
-	var m: Dictionary = DAILY_MISSION_POOL[pick]
+	var m := DailyMission.mission_for(today)
 	daily_mission_type = m["type"]
 	daily_mission_target = m["target"]
-	daily_mission_label = m["label"] % daily_mission_target
+	daily_mission_label = m["label"]
 	daily_mission_progress = 0
 	daily_mission_claimed = false
 
@@ -4037,7 +3892,7 @@ func _upgrade_mult(key: String) -> float:
 		lvl = upgrade_soap
 	else:
 		lvl = upgrade_sponge
-	return UPGRADE_MULTS[clampi(lvl, 0, UPGRADE_MAX_LEVEL)]
+	return Economy.upgrade_mult(lvl)
 
 
 func _upgrade_row_y(panel: Rect2, idx: int) -> float:
@@ -4064,11 +3919,9 @@ func _handle_upgrade_panel_tap(point: Vector2) -> void:
 
 func _try_buy_upgrade(idx: int) -> void:
 	var lvl := upgrade_water if idx == 0 else (upgrade_soap if idx == 1 else upgrade_sponge)
-	if lvl >= UPGRADE_MAX_LEVEL:
+	if not Economy.can_buy_upgrade(idx, lvl, coins):
 		return
-	var cost: int = UPGRADE_COSTS[idx][lvl]
-	if coins < cost:
-		return
+	var cost: int = Economy.upgrade_cost(idx, lvl)
 	coins -= cost
 	if idx == 0:
 		upgrade_water += 1
@@ -4206,12 +4059,12 @@ func _handle_skin_panel_tap(point: Vector2) -> void:
 
 
 func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
-	var skins: Array = _nozzle_skins.get(tool_key, [])
-	if skin_idx < 0 or skin_idx >= skins.size():
+	var intent := Economy.resolve_skin_purchase(_nozzle_skins, tool_key, skin_idx, owned_skins, coins)
+	var action: String = intent["action"]
+	if action == "deny":
 		return
-	var skin: Dictionary = skins[skin_idx]
-	var sid: String = skin["id"]
-	var cost: int = skin["cost"]
+	var sid: String = intent["id"]
+	var cost: int = intent["cost"]
 
 	var prev_sid: String
 	if tool_key == TOOL_WATER:
@@ -4223,7 +4076,7 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 	else:
 		prev_sid = skin_sponge
 
-	if owned_skins.get(sid, false):
+	if action == "select":
 		if tool_key == TOOL_WATER:
 			skin_water = sid
 		elif tool_key == TOOL_AIR:
@@ -4247,8 +4100,7 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 		_play_ui_select()
 		return
 
-	if coins < cost:
-		return
+	# action == "buy"
 	coins -= cost
 	owned_skins[sid] = true
 	if tool_key == TOOL_WATER:
