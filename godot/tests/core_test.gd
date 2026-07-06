@@ -165,6 +165,36 @@ func _run_core_tests() -> void:
 		_fail("missing level should report zero best time")
 		return
 
+	# --- Wash rules: deterministic patch mutation (lift/mult injected) ---
+	var WashRules: GDScript = load("res://core/use_cases/wash_rules.gd")
+	if WashRules == null:
+		_fail("wash_rules failed to load through res://core symlink")
+		return
+	var mud = DirtPatch.new("mud", Vector2(100.0, 100.0), 20.0, 100.0, 0.5)
+	WashRules.apply_water(mud, 0.5, 1.0, 1.0)
+	if mud.health >= 100.0 or mud.wetness <= 0.0:
+		_fail("water on mud should reduce health and wet it")
+		return
+	if String(mud.state) != "runoff" and String(mud.state) != "wet":
+		_fail("water on mud should move it to a wet/runoff state")
+		return
+	var leaf2 = DirtPatch.new("leaf", Vector2(100.0, 100.0), 18.0, 100.0, 0.5)
+	WashRules.apply_air(leaf2, 0.5, Vector2(100.0, 140.0), 1.0, 0.0)
+	if String(leaf2.state) != "flying" or leaf2.health >= 100.0:
+		_fail("air on leaf should send it flying and reduce health")
+		return
+	if absf(float(WashRules.runoff_cleanup_rate(mud)) - (0.42 + mud.wetness * 0.25)) > 0.0001:
+		_fail("mud runoff cleanup rate formula changed")
+		return
+	var fresh = DirtPatch.new("dust", Vector2.ZERO, 10.0, 100.0, 0.1)
+	if bool(WashRules.is_patch_removed(fresh)):
+		_fail("a full-health patch should not be removed")
+		return
+	fresh.health = 0.0
+	if not bool(WashRules.is_patch_removed(fresh)):
+		_fail("a zero-health patch should be removed")
+		return
+
 	print("CORE TESTS PASSED")
 	quit(0)
 
