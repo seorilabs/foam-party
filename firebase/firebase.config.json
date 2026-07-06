@@ -1,0 +1,47 @@
+{
+  "projectId": "foam-party",
+  "projectNumber": "72898706664",
+  "displayName": "Bubble Bubble Foam Party",
+  "enabledModules": [
+    "Core",
+    "Analytics"
+  ],
+  "android": {
+    "appId": "1:72898706664:android:456c2bdc38879e37bc5d5d",
+    "packageName": "com.seorilabs.foamparty",
+    "configFile": "godot/google-services.json",
+    "state": "ACTIVE"
+  },
+  "ios": {
+    "appId": "1:72898706664:ios:8291a7901762222abc5d5d",
+    "bundleId": "com.seorilabs.foamparty",
+    "configFile": "godot/GoogleService-Info.plist",
+    "plistAnalyticsEnabled": false,
+    "state": "ACTIVE"
+  },
+  "analytics": {
+    "propertyId": "542197312",
+    "accountId": "396259050",
+    "androidStreamId": "15110441380",
+    "iosStreamId": "15110375615",
+    "linked": true,
+    "eventDeliveryStatus": "not-confirmed",
+    "eventDeliveryReason": "Google Analytics Data API is disabled for project foam-party, no BigQuery Analytics export dataset was visible, and no Android device was connected over ADB for DebugView/logcat verification."
+  },
+  "lastFirebaseCliReadback": {
+    "date": "2026-06-18",
+    "commands": [
+      "firebase apps:list --project foam-party --json",
+      "firebase apps:sdkconfig android 1:72898706664:android:456c2bdc38879e37bc5d5d --project foam-party --json",
+      "GET https://firebase.googleapis.com/v1beta1/projects/foam-party/analyticsDetails"
+    ],
+    "status": "passed",
+    "androidConfigMatchesLocal": true
+  },
+  "notes": [
+    "Do not store service account JSON, private keys, or Admin SDK credentials in the client repo.",
+    "The mobile config files are client app configuration files, not Admin SDK credentials.",
+    "iOS GoogleService-Info.plist contains the legacy/generated IS_ANALYTICS_ENABLED=false flag. Do not treat that flag alone as proof that current Firebase Analytics collection is disabled; verify event delivery in Firebase DebugView before release.",
+    "Enable analyticsdata.googleapis.com and grant Analytics property read access to the automation service account before using GA Realtime API as an automated event-delivery gate."
+  ]
+}

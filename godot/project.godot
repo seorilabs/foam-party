@@ -6,6 +6,13 @@ config/name="Foam Party"
 run/main_scene="res://scenes/main.tscn"
 config/icon="res://assets/AppIcon.png"
 config/features=PackedStringArray("4.6", "Mobile")
+boot_splash/bg_color=Color(0.21, 0.69, 0.74, 1)
+boot_splash/show_image=false
+
+[audio]
+
+general/ios/session_category=3
+general/ios/mix_with_others=false
 
 [display]
 
@@ -21,3 +28,7 @@ window/stretch/aspect="expand"
 renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true
 textures/canvas_textures/default_texture_filter=0
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godotx_firebase/plugin.cfg")
