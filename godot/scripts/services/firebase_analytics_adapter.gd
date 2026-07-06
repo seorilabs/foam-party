@@ -62,10 +62,16 @@ func _on_firebase_analytics_initialized(success: bool) -> void:
 	if success:
 		for e in _pending:
 			_emit(e[0], e[1])  # flush buffered events
-		_pending.clear()
+	# Drop the buffer either way: on success it has been flushed; on failure the
+	# events can never be delivered, so retaining them would leak indefinitely.
+	_pending.clear()
 
 
 func log_event(event_name: String, params: Dictionary = {}) -> void:
+	# True no-op when Firebase is not running (headless / plugin not bundled):
+	# do not even buffer, so there is zero side-effect in that environment.
+	if not _firebase_runtime_enabled:
+		return
 	if not _firebase_analytics_initialized:
 		_pending.append([event_name, params])  # buffer until init (don't lose startup events)
 		if _pending.size() > 64:

@@ -195,6 +195,39 @@ func _run_core_tests() -> void:
 		_fail("a zero-health patch should be removed")
 		return
 
+	# --- Analytics seam: port no-op contract + adapter buffer/flush (no Firebase) ---
+	var AnalyticsPort: GDScript = load("res://core/ports/analytics_port.gd")
+	if AnalyticsPort == null:
+		_fail("analytics_port failed to load through res://core symlink")
+		return
+	var port = AnalyticsPort.new()
+	port.log_event("noop_check", {"a": "1"})  # base contract: must not raise
+	var FirebaseAdapter: GDScript = load("res://scripts/services/firebase_analytics_adapter.gd")
+	if FirebaseAdapter == null:
+		_fail("firebase_analytics_adapter failed to load")
+		return
+	var adapter = FirebaseAdapter.new()
+	# Firebase not running (headless): log_event must be a TRUE no-op — no buffering.
+	adapter.log_event("headless_event", {})
+	if not adapter._pending.is_empty():
+		_fail("adapter must not buffer when Firebase runtime is disabled")
+		adapter.free()
+		return
+	# Firebase running but analytics not yet initialized: events buffer...
+	adapter._firebase_runtime_enabled = true
+	adapter.log_event("buffered_event", {"k": "v"})
+	if adapter._pending.size() != 1:
+		_fail("adapter should buffer events before analytics init")
+		adapter.free()
+		return
+	# ...and the buffer is flushed+cleared once analytics reports ready.
+	adapter._on_firebase_analytics_initialized(true)
+	if not adapter._pending.is_empty():
+		_fail("adapter should clear its buffer after init")
+		adapter.free()
+		return
+	adapter.free()
+
 	print("CORE TESTS PASSED")
 	quit(0)
 
