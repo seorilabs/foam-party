@@ -32,7 +32,7 @@ def has_placeholder(value):
 
 def parse_android_release_preset():
     text = EXPORT_PRESETS.read_text(encoding="utf-8")
-    match = re.search(r'\[preset\.(\d+)\]\n\nname="Android Release".*?\[preset\.\1\.options\]\n\n(?P<options>.*?)(?=\n\[preset\.|\Z)', text, re.S)
+    match = re.search(r'\[preset\.(\d+)\]\n\nname="Android".*?\[preset\.\1\.options\]\n\n(?P<options>.*?)(?=\n\[preset\.|\Z)', text, re.S)
     if not match:
         return None
     options = {}
