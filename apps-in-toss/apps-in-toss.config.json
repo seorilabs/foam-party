@@ -1,0 +1,33 @@
+{
+  "app": {
+    "appName": "foam-party",
+    "appNameStatus": "확정 필요: 등록 후 수정 불가라 콘솔 등록 직전 최종 확정",
+    "displayName": "폼 파티",
+    "displayNameEnglish": "Foam Party",
+    "appType": "game",
+    "category": "게임 > 캐주얼",
+    "deliveryShape": "Godot Web export wrapper"
+  },
+  "registration": {
+    "source": "apps-in-toss/registration.md",
+    "subtitle": "거품으로 즐기는 세차 게임",
+    "supportEmail": "cs@seorilabs.com",
+    "supportPhone": "확정 필요",
+    "leaderboard": false,
+    "gradeClassification": "확정 필요: 오픈마켓 자체등급분류(경로 A) 또는 게임위 증명서(경로 B). 오픈마켓 미출시로 현재 제출 불가"
+  },
+  "assets": {
+    "logo": "apps-in-toss/assets/foam-party-logo-600.png",
+    "thumbnail": "apps-in-toss/assets/foam-party-thumbnail-1932x828.png",
+    "screenshots": [
+      "apps-in-toss/assets/screenshots/foam-party-start-636x1048.png",
+      "apps-in-toss/assets/screenshots/foam-party-main-636x1048.png",
+      "apps-in-toss/assets/screenshots/foam-party-result-636x1048.png"
+    ]
+  },
+  "release": {
+    "aitPath": "확정 필요",
+    "sandboxQa": "확정 필요",
+    "registrationImages": "apps-in-toss/assets/ 제작본, 콘솔 업로드 미진행"
+  }
+}

@@ -1791,16 +1791,24 @@ func _spawn_record_burst() -> void:
 
 
 func _draw_background() -> void:
-	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color("#87e3e9"))
-	draw_rect(Rect2(0.0, 0.0, DESIGN_SIZE.x, 155.0), Color("#9ff0ef"))
-	draw_rect(Rect2(0.0, 620.0, DESIGN_SIZE.x, 224.0), Color("#6dd0d1"))
+	var overhang := canvas_origin / maxf(canvas_scale, 0.001)
+	var bg_left := -overhang.x
+	var bg_top := -overhang.y
+	var bg_width := DESIGN_SIZE.x + overhang.x * 2.0
+	var bg_bottom := DESIGN_SIZE.y + overhang.y
+	draw_rect(Rect2(bg_left, bg_top, bg_width, bg_bottom - bg_top), Color("#87e3e9"))
+	draw_rect(Rect2(bg_left, bg_top, bg_width, 155.0 - bg_top), Color("#9ff0ef"))
+	draw_rect(Rect2(bg_left, 620.0, bg_width, bg_bottom - 620.0), Color("#6dd0d1"))
 
+	var line_slope := 28.0 / DESIGN_SIZE.x
 	for y_index in range(0, 7):
 		var y := 638.0 + float(y_index) * 32.0
-		draw_line(Vector2(0.0, y), Vector2(DESIGN_SIZE.x, y + 28.0), Color(1.0, 1.0, 1.0, 0.18), 1.0)
-	for x_index in range(0, 8):
+		draw_line(Vector2(bg_left, y + bg_left * line_slope), Vector2(bg_left + bg_width, y + (bg_left + bg_width) * line_slope), Color(1.0, 1.0, 1.0, 0.18), 1.0)
+	var x_start := int(floor((bg_left - 50.0) / 58.0))
+	var x_end := int(ceil((bg_left + bg_width + 30.0) / 58.0))
+	for x_index in range(x_start, x_end):
 		var x := float(x_index) * 58.0 - 30.0
-		draw_line(Vector2(x, 620.0), Vector2(x + 80.0, DESIGN_SIZE.y), Color(0.0, 0.0, 0.0, 0.08), 1.0)
+		draw_line(Vector2(x, 620.0), Vector2(x + 80.0, bg_bottom), Color(0.0, 0.0, 0.0, 0.08), 1.0)
 
 	draw_circle(Vector2(68.0, 170.0), 48.0, Color(1.0, 1.0, 1.0, 0.18))
 	draw_circle(Vector2(345.0, 197.0), 28.0, Color(1.0, 1.0, 1.0, 0.13))
