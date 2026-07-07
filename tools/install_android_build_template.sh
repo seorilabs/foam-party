@@ -6,7 +6,11 @@ GODOT_BIN="${GODOT_BIN:-godot}"
 
 RAW_VERSION="$("${GODOT_BIN}" --headless --version)"
 TEMPLATE_VERSION="$(printf "%s" "${RAW_VERSION}" | sed -E 's/\.(official|custom_build)\..*$//')"
-TEMPLATE_ZIP="${HOME}/Library/Application Support/Godot/export_templates/${TEMPLATE_VERSION}/android_source.zip"
+case "$(uname -s)" in
+  Darwin) TEMPLATE_BASE="${HOME}/Library/Application Support/Godot/export_templates" ;;
+  *)      TEMPLATE_BASE="${XDG_DATA_HOME:-${HOME}/.local/share}/godot/export_templates" ;;
+esac
+TEMPLATE_ZIP="${TEMPLATE_BASE}/${TEMPLATE_VERSION}/android_source.zip"
 
 if [ ! -f "${TEMPLATE_ZIP}" ]; then
   echo "Missing Android source template: ${TEMPLATE_ZIP}" >&2
