@@ -1,5 +1,4 @@
-# Deploy All — 릴리즈 태그 1개를 해석해 AIT/Google Play 를 한 번에 배포.
-# (App Store는 Godot iOS 재사용 워크플로우 도입 후 추가 예정; iOS는 Xcode Cloud 경로)
+# Deploy All — 릴리즈 태그 1개를 해석해 AIT/Google Play/App Store 를 한 번에 배포.
 name: Deploy All
 
 on:
@@ -14,6 +13,9 @@ on:
         type: boolean
         default: true
       deploy_google_play:
+        type: boolean
+        default: true
+      deploy_app_store:
         type: boolean
         default: true
       memo:
@@ -73,4 +75,14 @@ jobs:
     with:
       release_tag: ${{ needs.resolve.outputs.tag }}
       version_name: ${{ needs.resolve.outputs.version_name }}
+      upload: true
+
+  app-store:
+    name: Deploy App Store
+    needs: resolve
+    if: ${{ inputs.deploy_app_store }}
+    uses: ./.github/workflows/deploy-app-store.yml
+    secrets: inherit
+    with:
+      release_tag: ${{ needs.resolve.outputs.tag }}
       upload: true
