@@ -16,6 +16,7 @@ const AnalyticsPort = preload("res://core/ports/analytics_port.gd")
 # --- godot-layer services ---
 const AudioService = preload("res://scripts/services/audio_service.gd")
 const FirebaseAnalyticsAdapter = preload("res://scripts/services/firebase_analytics_adapter.gd")
+const I18n = preload("res://scripts/services/i18n.gd")
 
 const DESIGN_SIZE := Vector2(390.0, 844.0)
 const TOOL_AIR := "air"
@@ -41,8 +42,6 @@ const BOMB_COST := GameConfig.BOMB_COST
 const UPGRADE_COSTS := GameConfig.UPGRADE_COSTS
 const UPGRADE_MULTS := GameConfig.UPGRADE_MULTS
 const UPGRADE_KEYS := GameConfig.UPGRADE_KEYS
-const UPGRADE_NAMES := GameConfig.UPGRADE_NAMES
-const UPGRADE_DESCS := GameConfig.UPGRADE_DESCS
 const UPGRADE_MAX_LEVEL := GameConfig.UPGRADE_MAX_LEVEL
 const STATE_TITLE := "title"
 const STATE_PLAYING := "playing"
@@ -142,11 +141,8 @@ var persistence_enabled := true
 var last_particle_spawn := 0.0
 var car_color := Color("#ffcf5a")
 var car_type := "compact"
-var car_type_labels := {
-	"compact": "시티",
-	"sports": "스포츠",
-	"truck": "트럭",
-}
+# Localized at runtime in _rebuild_i18n_labels() (device language -> ko/en).
+var car_type_labels: Dictionary = {}
 var canvas_origin := Vector2.ZERO
 var canvas_scale := 1.0
 var ui_font: Font
@@ -183,12 +179,8 @@ var _main_save_dirty := false
 var _daily_save_timer: Timer = null
 
 var tool_ids := [TOOL_AIR, TOOL_WATER, TOOL_SOAP, TOOL_SPONGE]
-var tool_labels := {
-	TOOL_AIR: "바람",
-	TOOL_WATER: "고압수",
-	TOOL_SOAP: "비누",
-	TOOL_SPONGE: "스펀지",
-}
+# Localized at runtime in _rebuild_i18n_labels() (device language -> ko/en).
+var tool_labels: Dictionary = {}
 var tool_colors := {
 	TOOL_AIR: Color("#b7f0ff"),
 	TOOL_WATER: Color("#49a7ff"),
@@ -196,6 +188,9 @@ var tool_colors := {
 	TOOL_SPONGE: Color("#ff9f5a"),
 }
 var style_cache: Dictionary = {}
+# Lazily loaded flat-vector art assets (res://assets/art/*.png). Keyed by base
+# name; missing/unimported textures fall back to null so procedural draws still work.
+var art_tex: Dictionary = {}
 var _hint_pill_box: StyleBoxFlat
 var _hint_shadow_box: StyleBoxFlat
 var _tool_hint_box: StyleBoxFlat
@@ -216,6 +211,8 @@ func _ready() -> void:
 	rng.seed = 42690
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	persistence_enabled = DisplayServer.get_name() != "headless" and OS.get_environment("FOAM_DISABLE_SAVE") != "1"
+	I18n.setup()
+	_rebuild_i18n_labels()
 	_setup_font()
 	_build_car_shapes()
 	_load_progress()
@@ -446,7 +443,24 @@ func _notification(what: int) -> void:
 			_daily_progress_dirty = true
 
 
+func _rebuild_i18n_labels() -> void:
+	tool_labels = {
+		TOOL_AIR: tr("TOOL_AIR"),
+		TOOL_WATER: tr("TOOL_WATER"),
+		TOOL_SOAP: tr("TOOL_SOAP"),
+		TOOL_SPONGE: tr("TOOL_SPONGE"),
+	}
+	car_type_labels = {
+		"compact": tr("CAR_COMPACT"),
+		"sports": tr("CAR_SPORTS"),
+		"truck": tr("CAR_TRUCK"),
+	}
+
+
 func _setup_font() -> void:
+	# Godot Web/AIT canvas cannot rely on SystemFont OS-name fallback for Korean,
+	# so bundle Do Hyeon (OFL) as the primary UI font. Keep a SystemFont fallback
+	# for the few decorative glyphs Do Hyeon lacks on native platforms.
 	var system_font := SystemFont.new()
 	system_font.font_names = PackedStringArray([
 		"Apple SD Gothic Neo",
@@ -456,13 +470,42 @@ func _setup_font() -> void:
 		"Malgun Gothic",
 		"Arial Unicode MS",
 	])
-	ui_font = system_font
+	var bundled: FontFile = load("res://assets/fonts/DoHyeon-Regular.ttf")
+	if bundled != null:
+		bundled.fallbacks = [system_font]
+		ui_font = bundled
+	else:
+		ui_font = system_font
 
 
 func _font() -> Font:
 	if ui_font != null:
 		return ui_font
 	return get_theme_default_font()
+
+
+# Lazy texture loader for the flat-vector art assets. Caches the result (including
+# a null miss) so a missing/unimported asset never breaks the frame or retries.
+func _tex(name: String) -> Texture2D:
+	if art_tex.has(name):
+		return art_tex[name]
+	var tex: Texture2D = load("res://assets/art/%s.png" % name) as Texture2D
+	art_tex[name] = tex
+	return tex
+
+
+# Draw an art texture centered at `center`, scaled so its longest edge is `size`.
+func _draw_tex_centered(name: String, center: Vector2, size: float, modulate := Color.WHITE) -> bool:
+	var tex := _tex(name)
+	if tex == null:
+		return false
+	var src := tex.get_size()
+	if src.x <= 0.0 or src.y <= 0.0:
+		return false
+	var scale := size / maxf(src.x, src.y)
+	var draw_size := src * scale
+	draw_texture_rect(tex, Rect2(center - draw_size * 0.5, draw_size), false, modulate)
+	return true
 
 
 func _style(key: String, bg: Color, corner: float, border: Color = Color(0.0, 0.0, 0.0, 0.0), border_width: int = 0) -> StyleBoxFlat:
@@ -1393,13 +1436,13 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		_trigger_combo_milestone_flash(combo_count)
 		var _cheer := ""
 		if combo_count == STAR3_COMBO:
-			_cheer = "Nice!"
+			_cheer = tr("CHEER_NICE")
 		elif combo_count == 6:
-			_cheer = "Keep going!"
+			_cheer = tr("CHEER_KEEP")
 		elif combo_count == 8:
-			_cheer = "Spotless!"
+			_cheer = tr("CHEER_SPOTLESS")
 		elif combo_count >= 10 and combo_count % 5 == 0:
-			_cheer = "WOW!"
+			_cheer = tr("CHEER_WOW")
 		if _cheer != "":
 			_customer_cheer_text = _cheer
 			_customer_cheer_time = combo_pop_time
@@ -1714,7 +1757,7 @@ func _best_time_for_level(level: int) -> float:
 
 func _check_progress_milestone() -> void:
 	const THRESHOLDS := [0.25, 0.50, 0.75]
-	const MESSAGES := ["25%! Great start!", "Halfway clean!", "Almost done!"]
+	var MESSAGES := [tr("MILESTONE_25"), tr("MILESTONE_50"), tr("MILESTONE_75")]
 	const HUES := [0.55, 0.35, 0.08]
 	const TEXT_COLORS := [Color(0.08, 0.72, 0.72), Color(0.14, 0.70, 0.28), Color(0.85, 0.48, 0.08)]
 	if _progress_milestone_hit >= THRESHOLDS.size() or completed:
@@ -1829,8 +1872,9 @@ func _draw_status() -> void:
 		title_size -= 1
 	draw_string(font, Vector2(32.0, card.position.y + 32.0), "Foam Party", HORIZONTAL_ALIGNMENT_LEFT, title_width, title_size, Color("#0d3b55"))
 	draw_style_box(_style("coin_chip", Color("#fff3cf"), 14.0), coin_chip)
-	draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#ffce3d"))
-	draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#9a7400"), false, 1.5)
+	if not _draw_tex_centered("coin", coin_chip.position + Vector2(16.0, 14.0), 22.0):
+		draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#ffce3d"))
+		draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#9a7400"), false, 1.5)
 	var coin_text := "%d" % coins
 	var coin_text_width := coin_chip.size.x - 38.0
 	var coin_font_size := 14
@@ -1867,14 +1911,21 @@ func _draw_status() -> void:
 
 func _tool_hint() -> String:
 	if selected_tool == TOOL_AIR:
-		return "낙엽을 날려요"
+		return tr("HINT_AIR")
 	if selected_tool == TOOL_WATER:
-		return "오물을 씻어요"
+		return tr("HINT_WATER")
 	if selected_tool == TOOL_SOAP:
-		return "얼룩을 불려요"
+		return tr("HINT_SOAP")
 	if selected_tool == TOOL_SPONGE:
-		return "오물을 닦아요"
+		return tr("HINT_SPONGE")
 	return ""
+
+
+# Localized daily-mission label rendered from the mission type + target so it
+# follows the active locale (the persisted `daily_mission_label` stays for save
+# compatibility but does not drive display).
+func _daily_mission_display_label() -> String:
+	return tr("DM_" + daily_mission_type.to_upper()) % daily_mission_target
 
 
 func _build_car_shapes() -> void:
@@ -2551,7 +2602,7 @@ func _draw_title_screen() -> void:
 	draw_circle(Vector2(220.0, 296.0), 20.0, Color(1.0, 1.0, 1.0, 0.28))
 	draw_string(font, Vector2(2.0, 332.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color("#0d3b55"))
 	draw_string(font, Vector2(0.0, 328.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color.WHITE)
-	draw_string(font, Vector2(0.0, 368.0), "거품 팡팡 세차 게임", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 18, Color("#0d3b55"))
+	draw_string(font, Vector2(0.0, 368.0), tr("TITLE_SUBTITLE"), HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 18, Color("#0d3b55"))
 
 	# 타이틀 데일리 미션 카드 — 시작 전에 오늘 할 일을 보여준다
 	if not daily_mission_type.is_empty():
@@ -2564,13 +2615,13 @@ func _draw_title_screen() -> void:
 		var dm_bg_col := Color(0.05, 0.26, 0.18, 0.72) if dm_claimed else Color(0.05, 0.20, 0.32, 0.72)
 		draw_style_box(_style(dm_bg_key, dm_bg_col, 14.0), dm_rect)
 		draw_string(font, Vector2(dm_rect.position.x + 12.0, dm_rect.position.y + 18.0),
-			"오늘의 미션", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.6, 0.85, 1.0, 0.8))
+			tr("DM_HEADER"), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.6, 0.85, 1.0, 0.8))
 		draw_string(font, Vector2(dm_rect.position.x, dm_rect.position.y + 18.0),
-			"+%d 코인" % DAILY_MISSION_REWARD, HORIZONTAL_ALIGNMENT_RIGHT, dm_rect.size.x - 10.0, 11,
+			tr("DM_REWARD") % DAILY_MISSION_REWARD, HORIZONTAL_ALIGNMENT_RIGHT, dm_rect.size.x - 10.0, 11,
 			Color(1.0, 0.85, 0.25, 0.9))
 		var mission_col := Color(0.72, 1.0, 0.78) if dm_claimed else Color(0.90, 0.96, 1.0)
 		draw_string(font, Vector2(dm_rect.position.x + 12.0, dm_rect.position.y + 40.0),
-			daily_mission_label, HORIZONTAL_ALIGNMENT_LEFT, dm_rect.size.x - 24.0, 14, mission_col)
+			_daily_mission_display_label(), HORIZONTAL_ALIGNMENT_LEFT, dm_rect.size.x - 24.0, 14, mission_col)
 		var dm_bar_margin := 12.0
 		var dm_bar_rect := Rect2(dm_rect.position.x + dm_bar_margin, dm_rect.position.y + 52.0,
 			dm_rect.size.x - dm_bar_margin * 2.0, 6.0)
@@ -2582,7 +2633,7 @@ func _draw_title_screen() -> void:
 			var fill_w := maxf(8.0, dm_bar_rect.size.x * dm_fill)
 			draw_style_box(_style(bar_fill_key, bar_fill_col, 3.0),
 				Rect2(dm_bar_rect.position, Vector2(fill_w, dm_bar_rect.size.y)))
-		var count_text := "완료! ✓" if dm_claimed else "%d / %d" % [dm_prog, daily_mission_target]
+		var count_text := tr("DM_DONE") if dm_claimed else "%d / %d" % [dm_prog, daily_mission_target]
 		var count_col := Color("#39d98a") if dm_claimed else Color(0.7, 0.9, 1.0)
 		draw_string(font, Vector2(dm_rect.position.x, dm_rect.position.y + 74.0),
 			count_text, HORIZONTAL_ALIGNMENT_RIGHT, dm_rect.size.x - 12.0, 12, count_col)
@@ -2590,20 +2641,20 @@ func _draw_title_screen() -> void:
 	var start_rect := _get_start_rect()
 	draw_style_box(_style("start_shadow", Color("#1f8a55"), 16.0), Rect2(start_rect.position + Vector2(0.0, 5.0), start_rect.size))
 	draw_style_box(_style("start_button", Color("#39d98a"), 16.0), start_rect)
-	var start_label := "세차 시작"
+	var start_label := tr("START")
 	if level_index > 1:
-		start_label = "이어하기 · %s %02d" % [car_type_labels[car_type], level_index]
+		start_label = tr("CONTINUE") % [car_type_labels[car_type], level_index]
 	draw_string(font, Vector2(start_rect.position.x, start_rect.position.y + 38.0), start_label, HORIZONTAL_ALIGNMENT_CENTER, start_rect.size.x, 19, Color("#0d3b2a"))
 
-	draw_string(font, Vector2(0.0, 578.0), "코인 %d  ·  별 %d" % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
+	draw_string(font, Vector2(0.0, 578.0), tr("COIN_STAR") % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
 	var upg_rect := _get_upgrade_btn_rect()
 	draw_style_box(_style("upg_shadow", Color(0.18, 0.25, 0.55, 0.9), 12.0), Rect2(upg_rect.position + Vector2(0.0, 4.0), upg_rect.size))
 	draw_style_box(_style("upg_btn", Color(0.33, 0.53, 0.95, 1.0), 12.0), upg_rect)
-	draw_string(font, Vector2(upg_rect.position.x, upg_rect.position.y + 28.0), "업그레이드", HORIZONTAL_ALIGNMENT_CENTER, upg_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
+	draw_string(font, Vector2(upg_rect.position.x, upg_rect.position.y + 28.0), tr("BTN_UPGRADE"), HORIZONTAL_ALIGNMENT_CENTER, upg_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
 	var skin_rect := _get_skin_btn_rect()
 	draw_style_box(_style("skin_shadow", Color(0.28, 0.12, 0.48, 0.9), 12.0), Rect2(skin_rect.position + Vector2(0.0, 4.0), skin_rect.size))
 	draw_style_box(_style("skin_btn", Color(0.58, 0.28, 0.88, 1.0), 12.0), skin_rect)
-	draw_string(font, Vector2(skin_rect.position.x, skin_rect.position.y + 28.0), "스킨", HORIZONTAL_ALIGNMENT_CENTER, skin_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
+	draw_string(font, Vector2(skin_rect.position.x, skin_rect.position.y + 28.0), tr("BTN_SKIN"), HORIZONTAL_ALIGNMENT_CENTER, skin_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
 	var version_y := minf(826.0, DESIGN_SIZE.y - _safe_area_design_insets().w - 12.0)
 	draw_string(font, Vector2(0.0, version_y), "v0.1", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 12, Color(1.0, 1.0, 1.0, 0.5))
 
@@ -2649,8 +2700,8 @@ func _draw_daily_mission() -> void:
 		draw_style_box(_style("dm_bar_fill", fill_col, 2.0),
 			Rect2(bar_rect.position, Vector2(fill_w, bar_rect.size.y)))
 
-	var label_text := daily_mission_label
-	var count_text := "완료!" if claimed else "%d/%d" % [progress, daily_mission_target]
+	var label_text := _daily_mission_display_label()
+	var count_text := tr("DM_DONE") if claimed else "%d/%d" % [progress, daily_mission_target]
 	var text_y := rect.position.y + 18.0
 	var label_col := Color(0.7, 1.0, 0.75) if claimed else Color(0.85, 0.95, 1.0)
 	var count_col := Color("#39d98a") if claimed else Color(0.7, 0.9, 1.0)
@@ -2664,7 +2715,7 @@ func _draw_daily_mission() -> void:
 		if age < 2.8:
 			var alpha := clampf(1.0 - (age - 1.6) / 1.2, 0.0, 1.0)
 			var rise := age * 26.0
-			var pop_text := "+%d 코인!  데일리 미션 클리어!" % DAILY_MISSION_REWARD
+			var pop_text := tr("DM_CLEAR_POP") % DAILY_MISSION_REWARD
 			draw_string(font, Vector2(14.0, top_y - 14.0 - rise),
 				pop_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.9, 0.3, alpha))
 		else:
@@ -2696,13 +2747,13 @@ func _draw_tutorial() -> void:
 	var panel := Rect2(30.0, 176.0, 330.0, 452.0)
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 44.0), "세차 가이드", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 44.0), tr("TUT_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
 
 	var rows := [
-		[TOOL_AIR, "바람", "낙엽과 먼지를 날려요"],
-		[TOOL_WATER, "고압수", "흙탕물과 비누를 씻어요"],
-		[TOOL_SOAP, "비누", "기름때와 벌레 자국을 불려요"],
-		[TOOL_SPONGE, "스펀지", "불린 얼룩을 닦아요"],
+		[TOOL_AIR, tr("TOOL_AIR"), tr("TUT_AIR")],
+		[TOOL_WATER, tr("TOOL_WATER"), tr("TUT_WATER")],
+		[TOOL_SOAP, tr("TOOL_SOAP"), tr("TUT_SOAP")],
+		[TOOL_SPONGE, tr("TOOL_SPONGE"), tr("TUT_SPONGE")],
 	]
 	for row_index in range(rows.size()):
 		var row: Array = rows[row_index]
@@ -2712,8 +2763,8 @@ func _draw_tutorial() -> void:
 		draw_string(font, Vector2(panel.position.x + 92.0, row_y - 2.0), row[1], HORIZONTAL_ALIGNMENT_LEFT, 200.0, 17, Color("#123246"))
 		draw_string(font, Vector2(panel.position.x + 92.0, row_y + 20.0), row[2], HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 116.0, 13, Color("#2c6b78"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 410.0), "콤보를 이어가면 별 3개! 거품 폭탄: %d 코인" % BOMB_COST, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#2c6b78"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 436.0), "탭하여 시작!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 16, Color("#1f8a55"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 410.0), tr("TUT_TIP") % BOMB_COST, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 436.0), tr("TUT_START"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 16, Color("#1f8a55"))
 
 
 func _draw_bomb_button() -> void:
@@ -2732,7 +2783,7 @@ func _draw_bomb_button() -> void:
 	draw_circle(rect.position + Vector2(22.0, 17.0), 9.0, Color(1.0, 1.0, 1.0, 0.95))
 	draw_circle(rect.position + Vector2(32.0, 12.0), 6.0, Color(1.0, 1.0, 1.0, 0.8))
 	draw_circle(rect.position + Vector2(30.0, 22.0), 4.5, Color(1.0, 1.0, 1.0, 0.8))
-	draw_string(font, Vector2(rect.position.x + 42.0, rect.position.y + 20.0), "거품", HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 11, Color("#123246"))
+	draw_string(font, Vector2(rect.position.x + 42.0, rect.position.y + 20.0), tr("BOMB_LABEL"), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 11, Color("#123246"))
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
 	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
 	draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
@@ -2785,16 +2836,16 @@ func _draw_grade_tracker() -> void:
 		if _grade_slot_state(at_risk) == GRADE_SLOT_TARGET:
 			# Star is reachable but not yet earned: keep nudging the combo gate
 			# so the player races the clock and the combo.
-			text = "Combo x%d! %ds" % [STAR3_COMBO, secs]
+			text = tr("GRADE_COMBO_URGENT") % [STAR3_COMBO, secs]
 		else:
-			text = "Keep star %d: %ds" % [at_risk + 1, secs]
+			text = tr("GRADE_KEEP_STAR") % [at_risk + 1, secs]
 		col = Color(1.0, 0.74, 0.36)
 		col.a = blink
 	elif _grade_slot_state(2) == GRADE_SLOT_TARGET:
-		text = "Combo x%d for 3 stars" % STAR3_COMBO
+		text = tr("GRADE_COMBO_FOR3") % STAR3_COMBO
 		col = Color(1.0, 0.88, 0.55)
 	else:
-		text = "Time %s" % _format_time(level_time)
+		text = tr("GRADE_TIME") % _format_time(level_time)
 	draw_string(font, Vector2(rect.position.x, line_y), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 12, col)
 
 
@@ -2869,14 +2920,14 @@ func _draw_customer_patience() -> void:
 	var mood_label: String
 	var mood_col := Color(0.86, 0.93, 0.97)
 	if patience > 0.65:
-		mood_label = "만족!"
+		mood_label = tr("MOOD_HAPPY")
 	elif patience > 0.35:
-		mood_label = "보통..."
+		mood_label = tr("MOOD_OK")
 	elif patience > 0.1:
-		mood_label = "서둘러!"
+		mood_label = tr("MOOD_HURRY")
 	else:
 		var blink := 0.55 + 0.45 * sin(time_now * 8.0)
-		mood_label = "화났어요!"
+		mood_label = tr("MOOD_ANGRY")
 		mood_col = Color(1.0, 0.62, 0.40, blink)
 	draw_string(font, Vector2(rect.position.x + 48.0, rect.position.y + rect.size.y - 8.0),
 		mood_label, HORIZONTAL_ALIGNMENT_CENTER, 62.0, 12, mood_col)
@@ -2922,14 +2973,14 @@ func _draw_combo_badge() -> void:
 		var halo_rect := Rect2(Vector2(195.0, badge_center_y) - halo_size * 0.5, halo_size)
 		draw_style_box(_style("combo_halo", Color(1.0, 0.78, 0.22, halo), 24.0), halo_rect)
 	draw_style_box(_style(style_key, bg, 18.0), badge)
-	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), "콤보 x%d" % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
+	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), tr("COMBO_BADGE") % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
 	if _combo_bonus_time >= 0.0:
 		var _age := float(Time.get_ticks_msec()) / 1000.0 - _combo_bonus_time
 		if _age < 1.2:
 			var _alpha := 1.0 - _age / 1.2
 			var _rise := _age * 38.0
 			draw_string(_font(), Vector2(badge.position.x + 4.0, badge.position.y - _rise - 14.0),
-				"+%d 코인!" % _combo_bonus_amount, HORIZONTAL_ALIGNMENT_LEFT,
+				tr("COIN_GAIN") % _combo_bonus_amount, HORIZONTAL_ALIGNMENT_LEFT,
 				-1, 16, Color(1.0, 0.85, 0.2, _alpha))
 	# Circular timer ring — sweeps clockwise from top as the combo window drains.
 	var fill_frac := clampf(combo_timer / COMBO_WINDOW, 0.0, 1.0)
@@ -2954,16 +3005,16 @@ func _trigger_combo_milestone_flash(count: int) -> void:
 	# ×4 콤보: 노란색 플래시 / ×6: 주황색 / ×8: 빨간색 / ×10+: 레인보우(보라)
 	if count == 4:
 		_combo_milestone_flash_color = Color(1.0, 0.92, 0.22, 0.0)
-		_combo_milestone_fanfare = "콤보 x4!"
+		_combo_milestone_fanfare = tr("COMBO_FAN_4")
 	elif count == 6:
 		_combo_milestone_flash_color = Color(1.0, 0.58, 0.12, 0.0)
-		_combo_milestone_fanfare = "콤보 x6!"
+		_combo_milestone_fanfare = tr("COMBO_FAN_6")
 	elif count == 8:
 		_combo_milestone_flash_color = Color(1.0, 0.22, 0.22, 0.0)
-		_combo_milestone_fanfare = "콤보 x8!"
+		_combo_milestone_fanfare = tr("COMBO_FAN_8")
 	elif count >= 10 and count % 5 == 0:
 		_combo_milestone_flash_color = Color(0.72, 0.22, 1.0, 0.0)
-		_combo_milestone_fanfare = "최대 콤보 x%d!" % count
+		_combo_milestone_fanfare = tr("COMBO_FAN_MAX") % count
 	else:
 		return
 	_combo_milestone_count = count
@@ -3075,7 +3126,20 @@ func _draw_toolbar() -> void:
 		draw_string(font, visual_rect.position + Vector2(0.0, visual_rect.size.y - 9.0), tool_labels[tool_id], HORIZONTAL_ALIGNMENT_CENTER, visual_rect.size.x, 14, Color("#123246") if is_selected else Color(0.85, 0.93, 0.97))
 
 
+const _TOOL_ICON_TEX := {
+	TOOL_AIR: "tool_air",
+	TOOL_WATER: "tool_water",
+	TOOL_SOAP: "tool_soap",
+	TOOL_SPONGE: "tool_sponge",
+}
+
+
 func _draw_tool_icon(tool_id: String, center: Vector2) -> void:
+	# Prefer the flat-vector art asset; fall back to the procedural glyph if the
+	# texture is missing (e.g. not yet imported on a headless build).
+	var tex_name: String = _TOOL_ICON_TEX.get(tool_id, "")
+	if tex_name != "" and _draw_tex_centered(tex_name, center + Vector2(0.0, 2.0), 46.0):
+		return
 	if tool_id == TOOL_AIR:
 		for index in range(3):
 			var y := -10.0 + float(index) * 10.0
@@ -3121,12 +3185,13 @@ func _draw_completion_panel() -> void:
 				pop_scale = 1.0 + 0.6 * (1.0 - reveal_age / STAR_REVEAL_POP_DUR)
 			else:
 				pop_scale = 1.0 + sin(time_now * 4.0 + float(index) * 0.9) * 0.08
-			_draw_star(star_center, 17.0 * pop_scale, Color("#ffce3d"), Color("#e0a818"))
+			if not _draw_tex_centered("star", star_center, 42.0 * pop_scale):
+				_draw_star(star_center, 17.0 * pop_scale, Color("#ffce3d"), Color("#e0a818"))
 		elif index >= earned_stars or reveal_age < 0.0:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), "완전 청소!", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), "%s %02d · %s · 최고 콤보 x%d" % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), tr("COMPLETE_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), tr("COMPLETE_SUB") % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
 
 	var record_seconds: float = _best_time_for_level(level_index)
 	if is_new_record:
@@ -3134,32 +3199,33 @@ func _draw_completion_panel() -> void:
 		var record_color := Color("#e0a818").lerp(Color("#fff3cf"), 0.5 + 0.5 * sin(time_now * 6.0))
 		_draw_star(Vector2(panel.position.x + 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
 		_draw_star(Vector2(panel.position.x + panel.size.x - 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
-		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), "신기록! %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), tr("NEW_RECORD") % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
 	elif record_seconds > 0.0:
-		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), "최고 기록 %s" % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), tr("BEST_RECORD") % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
 
 	var reward_chip := Rect2(panel.position.x + panel.size.x - 106.0, panel.position.y - 14.0, 96.0, 30.0)
 	draw_style_box(_style("reward_chip", Color("#ffce3d"), 15.0), reward_chip)
-	draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#fff3cf"))
-	draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#9a7400"), false, 1.5)
-	draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 21.0), "+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 15, Color("#6b5200"))
+	if not _draw_tex_centered("coin", reward_chip.position + Vector2(16.0, 15.0), 24.0):
+		draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#fff3cf"))
+		draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#9a7400"), false, 1.5)
+	draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 21.0), "+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 15, Color("#6b5200"))  # numeric only, locale-neutral
 
 	if _level_milestone_bonus > 0:
 		var time_now2 := float(Time.get_ticks_msec()) / 1000.0
 		var milestone_chip := Rect2(panel.position.x + 10.0, panel.position.y - 14.0, 106.0, 30.0)
 		var chip_color := Color("#a855f7").lerp(Color("#ec4899"), 0.5 + 0.5 * sin(time_now2 * 3.0))
 		draw_style_box(_style("milestone_chip", chip_color, 15.0), milestone_chip)
-		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), "Lv.%d 이정표! +%d" % [level_index, _level_milestone_bonus], HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x, 13, Color("#fff0ff"))
+		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), tr("MILESTONE_CHIP") % [level_index, _level_milestone_bonus], HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x, 13, Color("#fff0ff"))
 
 	var retry_rect := _get_retry_rect()
 	draw_style_box(_style("retry_shadow", Color("#246076"), 14.0), Rect2(retry_rect.position + Vector2(0.0, 4.0), retry_rect.size))
 	draw_style_box(_style("retry_button", Color("#7fd6e6"), 14.0), retry_rect)
-	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), "↺ 다시 세차", HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, 16, Color("#0d3b55"))
+	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), tr("RETRY"), HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, 16, Color("#0d3b55"))
 
 	var next_rect := _get_next_rect()
 	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))
 	draw_style_box(_style("next_button", Color("#39d98a"), 14.0), next_rect)
-	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), "다음 차 ▶", HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
+	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), tr("NEXT"), HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
 
 
 func _format_time(seconds_value: float) -> String:
@@ -3280,8 +3346,8 @@ func _draw_upgrade_panel() -> void:
 	draw_style_box(_style("upg_panel_shadow", Color(0.02, 0.06, 0.22, 0.5), 22.0), Rect2(panel.position + Vector2(0.0, 6.0), panel.size))
 	draw_style_box(_style("upg_panel", Color("#f0f6ff"), 22.0), panel)
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 50.0), "업그레이드 상점", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#0d2a50"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 74.0), "코인: %d" % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#3a7fc1"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 50.0), tr("UPG_SHOP_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#0d2a50"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 74.0), tr("COINS_LABEL") % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#3a7fc1"))
 
 	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
 	draw_style_box(_style("upg_close_bg", Color("#e0e9f5"), 10.0), close_rect)
@@ -3297,8 +3363,9 @@ func _draw_upgrade_panel() -> void:
 		draw_style_box(_style("upg_row_%d" % idx, Color("#ddeaf8"), 14.0), row_rect)
 
 		draw_circle(Vector2(panel.position.x + 48.0, row_y + 53.0), 22.0, tool_col[idx])
-		draw_string(font, Vector2(panel.position.x + 80.0, row_y + 28.0), UPGRADE_NAMES[idx], HORIZONTAL_ALIGNMENT_LEFT, 200.0, 16, Color("#0d2a50"))
-		draw_string(font, Vector2(panel.position.x + 80.0, row_y + 50.0), UPGRADE_DESCS[idx], HORIZONTAL_ALIGNMENT_LEFT, 190.0, 12, Color("#2c6b78"))
+		var upg_key: String = String(UPGRADE_KEYS[idx]).to_upper()
+		draw_string(font, Vector2(panel.position.x + 80.0, row_y + 28.0), tr("UPG_NAME_" + upg_key), HORIZONTAL_ALIGNMENT_LEFT, 200.0, 16, Color("#0d2a50"))
+		draw_string(font, Vector2(panel.position.x + 80.0, row_y + 50.0), tr("UPG_DESC_" + upg_key), HORIZONTAL_ALIGNMENT_LEFT, 190.0, 12, Color("#2c6b78"))
 
 		for dot_idx in range(UPGRADE_MAX_LEVEL):
 			var dot_x := panel.position.x + 80.0 + float(dot_idx) * 22.0
@@ -3311,13 +3378,13 @@ func _draw_upgrade_panel() -> void:
 		var buy_rect := _upgrade_buy_rect(panel, idx)
 		if lvl >= UPGRADE_MAX_LEVEL:
 			draw_style_box(_style("upg_max_bg", Color("#b8cfe0"), 10.0), buy_rect)
-			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), "최대", HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 15, Color("#6a8aaa"))
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), tr("MAX"), HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 15, Color("#6a8aaa"))
 		else:
 			var cost: int = UPGRADE_COSTS[idx][lvl]
 			var affordable: bool = coins >= cost
 			var btn_col := Color("#39d98a") if affordable else Color("#8fc4b4")
 			draw_style_box(_style("upg_buy_%d" % idx, btn_col, 10.0), buy_rect)
-			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), "%d 코인" % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 14, Color("#0d2a3b") if affordable else Color("#4a7a6a"))
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), tr("COST_COIN") % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 14, Color("#0d2a3b") if affordable else Color("#4a7a6a"))
 
 
 func _get_skin_btn_rect() -> Rect2:
@@ -3468,15 +3535,15 @@ func _draw_skin_panel() -> void:
 	draw_style_box(_style("skin_panel_shadow", Color(0.08, 0.02, 0.22, 0.5), 22.0), Rect2(panel.position + Vector2(0.0, 6.0), panel.size))
 	draw_style_box(_style("skin_panel_bg", Color("#f5f0ff"), 22.0), panel)
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 48.0), "노즐 스킨", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#2a0d50"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 70.0), "코인: %d" % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#7a3ac1"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 48.0), tr("SKIN_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#2a0d50"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 70.0), tr("COINS_LABEL") % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#7a3ac1"))
 
 	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
 	draw_style_box(_style("skin_close_bg", Color("#e8d8f8"), 10.0), close_rect)
 	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 26.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 18, Color("#2a0d50"))
 
 	var tab_keys: Array = [TOOL_WATER, TOOL_AIR, TOOL_SOAP, TOOL_SPONGE]
-	var tab_labels := ["고압수", "바람", "비누", "스펀지"]
+	var tab_labels := [tr("TOOL_WATER"), tr("TOOL_AIR"), tr("TOOL_SOAP"), tr("TOOL_SPONGE")]
 	for t in range(4):
 		var tr: Rect2 = _skin_tab_rect(panel, t)
 		var is_active: bool = _skin_panel_tab == t
@@ -3500,7 +3567,6 @@ func _draw_skin_panel() -> void:
 	for ci in range(skins.size()):
 		var skin: Dictionary = skins[ci]
 		var sid: String = skin["id"]
-		var skin_name: String = skin["name"]
 		var cost: int = skin["cost"]
 		var col: Color = skin["color"]
 		var is_owned: bool = owned_skins.get(sid, false)
@@ -3516,17 +3582,17 @@ func _draw_skin_panel() -> void:
 		draw_arc(circle_center, 24.0, 0.0, TAU, 24, Color(0.0, 0.0, 0.0, 0.18), 2.0)
 
 		var name_col := Color("#2a0d50") if is_owned else Color("#5a4a7a")
-		draw_string(font, Vector2(card.position.x, card.position.y + 74.0), skin_name, HORIZONTAL_ALIGNMENT_CENTER, card.size.x, 12, name_col)
+		draw_string(font, Vector2(card.position.x, card.position.y + 74.0), tr("SKIN_" + sid.to_upper()), HORIZONTAL_ALIGNMENT_CENTER, card.size.x, 12, name_col)
 
 		var buy_rect: Rect2 = _skin_buy_rect(card)
 		if is_selected:
 			draw_style_box(_style("skin_sel_bg", Color("#7a35c8"), 8.0), buy_rect)
-			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), "선택됨", HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 12, Color(1.0, 1.0, 1.0))
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), tr("SKIN_SELECTED"), HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 12, Color(1.0, 1.0, 1.0))
 		elif is_owned:
 			draw_style_box(_style("skin_own_bg", Color("#39d98a"), 8.0), buy_rect)
-			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), "선택", HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 12, Color("#0d2a1a"))
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), tr("SKIN_SELECT"), HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 12, Color("#0d2a1a"))
 		else:
 			var affordable: bool = coins >= cost
 			var btn_c := Color("#a855f7") if affordable else Color("#c8a8f0")
 			draw_style_box(_style("skin_buy_%d_%d_%s" % [ci, int(affordable), sid], btn_c, 8.0), buy_rect)
-			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), "%d 코인" % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 11, Color(1.0, 1.0, 1.0) if affordable else Color("#6a4a8a"))
+			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), tr("COST_COIN") % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 11, Color(1.0, 1.0, 1.0) if affordable else Color("#6a4a8a"))

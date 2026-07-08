@@ -1,0 +1,73 @@
+{
+  "style": "style/style-guide.md",
+  "anchor": {
+    "path": "style/anchor.png",
+    "prompt": "a chubby glossy car-wash spray bottle full of blue cleaning soap with a white pump trigger and a couple of soap foam bubbles, flat vector with thick navy outline"
+  },
+  "model": "gemini-3-pro-image",
+  "out_dir": ".",
+  "assets": [
+    {
+      "name": "tool_water",
+      "size": 256,
+      "prompt": "a glossy pressurized water spray icon: a bright blue water droplet with a small burst of high-pressure spray lines, flat vector, thick navy outline"
+    },
+    {
+      "name": "tool_air",
+      "size": 256,
+      "prompt": "an air blower icon: three curved white-and-pale-blue wind gust swooshes puffing to the side, flat vector, thick navy outline"
+    },
+    {
+      "name": "tool_soap",
+      "size": 256,
+      "prompt": "a soap foam icon: a cluster of three round glossy soap bubbles in white and pale blue with tiny shine dots, flat vector, thick navy outline"
+    },
+    {
+      "name": "tool_sponge",
+      "size": 256,
+      "prompt": "a cleaning sponge icon: a chunky rounded orange sponge with a soft yellow scrub layer, flat vector, thick navy outline"
+    },
+    {
+      "name": "coin",
+      "size": 256,
+      "prompt": "a single shiny round gold coin with a soft foam-bubble emblem embossed in the center, warm gold with a lighter rim, flat vector, thick navy outline"
+    },
+    {
+      "name": "star",
+      "size": 256,
+      "prompt": "a plump rounded five-pointed reward star in warm gold with a soft highlight, flat vector, thick navy outline"
+    },
+    {
+      "name": "ribbon",
+      "size": 256,
+      "prompt": "a first-place award ribbon rosette: a round pleated gold-and-teal medallion with a scalloped edge and two short straight ribbon tails hanging straight down, front view, no text, flat vector, thick navy outline"
+    },
+    {
+      "name": "dirt_mud",
+      "size": 256,
+      "prompt": "a blobby splat of brown mud grime with a few small clumps and speckles, chunky irregular silhouette, flat vector, thick navy outline"
+    },
+    {
+      "name": "dirt_grime",
+      "size": 256,
+      "prompt": "a smudge of grey-green oily grime with soft blobby edges and a few dark specks, flat vector, thin navy outline"
+    },
+    {
+      "name": "foam_cluster",
+      "size": 256,
+      "prompt": "a fluffy cluster of white soap foam bubbles piled together with pale blue shading and tiny shine dots, flat vector, thick navy outline"
+    },
+    {
+      "name": "bubble",
+      "size": 192,
+      "prompt": "a single translucent round soap bubble, white and pale blue with a crescent shine highlight, flat vector, thin navy outline"
+    },
+    {
+      "name": "bg_carwash",
+      "size": 2048,
+      "transparent": false,
+      "aspect_ratio": "9:16",
+      "prompt": "a soft flat vector car-wash scene background, mint and teal aqua tones with a lighter top band and a tiled wet floor at the bottom, a few faint water droplets and bubbles floating, clean and airy, no characters, no text, gentle depth"
+    }
+  ]
+}
