@@ -7,7 +7,9 @@
 # 를 만들어야 이어지는 archive 단계가 그 scheme(foam-party)을 빌드할 수 있다.
 # (Xcode Cloud 워크플로 container = build/ios/foam-party.xcodeproj)
 #
-# ci_scripts 는 저장소 루트에 둔다(build/ 는 gitignore 대상이라 프로젝트 인접 불가).
+# ci_scripts 는 컨테이너(.xcodeproj) 인접 디렉터리 build/ios/ci_scripts/ 에 둔다.
+# Xcode Cloud 는 ci_scripts 를 프로젝트 인접에서 찾으므로 저장소 루트에 두면 실행되지
+# 않는다(build 3 검증). build/ 는 gitignore 지만 이 경로만 예외로 추적한다.
 # 코드 서명은 Xcode Cloud 매니지드 서명이 처리하므로 여기서 다루지 않는다.
 # Godot 설치 + export templates + import + export 는 build 1003 을 성공적으로 올린
 # org godot-deploy-app-store.yml 과 동일한 방식(특히 templates 경로는 검증된
@@ -20,7 +22,7 @@ GODOT_STATUS="stable"
 BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_STATUS}"
 
 # Xcode Cloud 는 ci_scripts 디렉터리에서 실행한다. 저장소 루트로 이동.
-REPO="${CI_PRIMARY_REPOSITORY_PATH:-$(cd "$(dirname "$0")/.." && pwd)}"
+REPO="${CI_PRIMARY_REPOSITORY_PATH:-$(cd "$(dirname "$0")/../../.." && pwd)}"
 cd "${REPO}"
 
 echo "▸ Node 설치(Homebrew) — 릴리즈 버전 resolver(ci_pre_xcodebuild)용"
