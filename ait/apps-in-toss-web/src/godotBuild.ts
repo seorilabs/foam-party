@@ -10,8 +10,8 @@ export const GODOT_CONFIG = {
   "executable": "/godot/index",
   "experimentalVK": false,
   "fileSizes": {
-    "/godot/index.pck": 0,
-    "/godot/index.wasm": 0
+    "/godot/index.pck": 177632,
+    "/godot/index.wasm": 37700666
   },
   "focusCanvas": true,
   "gdextensionLibs": [],
