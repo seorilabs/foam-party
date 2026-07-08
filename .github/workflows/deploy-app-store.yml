@@ -1,0 +1,50 @@
+# Godot iOS export → Xcode archive → App Store 업로드 — macos-26.
+# 로직은 org 재사용 워크플로우(godot-deploy-app-store.yml)에 있고 여기는 얇은 caller.
+# 서명: Apple Distribution 인증서(org) + App Store provisioning profile(repo secret,
+#   APPLE_PROVISIONING_PROFILE_BASE64, bundle com.seorilabs.foamparty). 업로드: ASC API key(org).
+name: Deploy App Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "업로드할 릴리즈 태그. 비우면 최신 vX.Y.Z."
+        type: string
+        required: false
+        default: ""
+      upload:
+        description: "true면 App Store Connect 업로드(false면 xcarchive 아티팩트만)"
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      release_tag:
+        type: string
+        required: false
+        default: ""
+      upload:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-app-store-${{ inputs.release_tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  app-store:
+    uses: seorilabs/.github/.github/workflows/godot-deploy-app-store.yml@main
+    secrets: inherit
+    with:
+      release_tag: ${{ inputs.release_tag }}
+      upload: ${{ inputs.upload }}
+      project_dir: godot
+      ios_scheme: foam-party
+      ios_bundle_id: com.seorilabs.foamparty
+      ios_export_preset: iOS
+      ios_output: build/ios/foam-party
+      # 프로젝트 config/features("4.6")·다른 배포 caller와 동일하게 4.6.3.stable.
+      godot_version: "4.6.3"
+      godot_status: "stable"
