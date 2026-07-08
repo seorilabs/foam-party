@@ -14,7 +14,7 @@ set -e
 
 REPO="${CI_PRIMARY_REPOSITORY_PATH:-$(cd "$(dirname "$0")/.." && pwd)}"
 
-if [ -z "${CI_TAG}" ]; then
+if [ -z "${CI_TAG:-}" ]; then
   echo "▸ CI_TAG 없음 — 릴리즈 버전 조정 생략(검증/브랜치 빌드는 프로젝트 기본값 유지)"
   exit 0
 fi
@@ -32,11 +32,15 @@ if [ -z "${MARKETING}" ] || [ -z "${BUILD}" ]; then
 fi
 echo "  marketing=${MARKETING} build=${BUILD}"
 
-# Godot iOS export 산출 Info.plist 를 찾아 버전 키를 덮어쓴다.
-# (Godot 은 CFBundleShortVersionString/CFBundleVersion 을 export_presets 기본값으로 굽는다.)
-INFO_PLIST="$(find "${REPO}/build/ios" -name '*-Info.plist' -o -name 'Info.plist' 2>/dev/null | head -n 1)"
+# Godot iOS export 산출 앱 Info.plist 를 찾아 버전 키를 덮어쓴다.
+# Godot 은 앱 메인 plist 를 <export_basename>-Info.plist(= foam-party-Info.plist)로
+# 굽는다. 광고(GADApplicationIdentifier)·프레임워크·PrivacyInfo 등 다른 plist 를
+# 잘못 매칭하지 않도록 정확한 이름만 대상으로 한다.
+INFO_PLIST="$(find "${REPO}/build/ios" -maxdepth 3 -name 'foam-party-Info.plist' 2>/dev/null | head -n 1)"
 if [ -z "${INFO_PLIST}" ] || [ ! -f "${INFO_PLIST}" ]; then
-  echo "  Info.plist 를 build/ios 에서 찾지 못함" >&2
+  echo "  앱 Info.plist(foam-party-Info.plist)를 build/ios 에서 찾지 못함" >&2
+  echo "  build/ios 하위 plist 목록:" >&2
+  find "${REPO}/build/ios" -maxdepth 3 -name '*.plist' >&2 2>/dev/null || true
   exit 1
 fi
 echo "  Info.plist=${INFO_PLIST}"

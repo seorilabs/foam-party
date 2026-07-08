@@ -9,7 +9,9 @@
 #
 # ci_scripts 는 저장소 루트에 둔다(build/ 는 gitignore 대상이라 프로젝트 인접 불가).
 # 코드 서명은 Xcode Cloud 매니지드 서명이 처리하므로 여기서 다루지 않는다.
-# 로직은 org 재사용 워크플로우 godot-deploy-app-store.yml 의 검증된 macOS 단계를 미러링.
+# Godot 설치 + export templates + import + export 는 build 1003 을 성공적으로 올린
+# org godot-deploy-app-store.yml 과 동일한 방식(특히 templates 경로는 검증된
+# scripts/ensure_godot.sh 에 위임)이다.
 
 set -e
 
@@ -26,27 +28,25 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
 brew install node || true
 
-echo "▸ Godot ${GODOT_VERSION}-${GODOT_STATUS} 설치(macOS universal)"
+echo "▸ Godot ${GODOT_VERSION}-${GODOT_STATUS} 설치(macOS universal) → PATH"
 curl -fsSL "${BASE}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_macos.universal.zip" -o /tmp/godot.zip
 unzip -q -o /tmp/godot.zip -d /tmp/godotapp
-GODOT="/tmp/godotapp/Godot.app/Contents/MacOS/Godot"
-"${GODOT}" --version
+mkdir -p "${HOME}/.local/bin"
+ln -sf /tmp/godotapp/Godot.app/Contents/MacOS/Godot "${HOME}/.local/bin/godot"
+PATH="${HOME}/.local/bin:${PATH}"
+export PATH
+godot --version
 
-echo "▸ Godot export templates 확인/설치"
-TDIR="${HOME}/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}"
-if [ -z "$(find "${TDIR}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
-  curl -fsSL -o /tmp/export_templates.tpz "${BASE}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_export_templates.tpz"
-  unzip -q -o /tmp/export_templates.tpz -d /tmp/godot-templates
-  mkdir -p "${TDIR}"
-  mv /tmp/godot-templates/templates/* "${TDIR}/"
-fi
+echo "▸ Godot export templates 설치(검증된 scripts/ensure_godot.sh — macOS 경로 처리 포함)"
+GODOT_VERSION="${GODOT_VERSION}" GODOT_STATUS="${GODOT_STATUS}" \
+  bash scripts/ensure_godot.sh --with-export-templates
 
 echo "▸ Godot 프로젝트 import"
-"${GODOT}" --headless --path godot --import --quit-after 1 || true
+godot --headless --path godot --import --quit-after 1
 
 echo "▸ iOS Xcode 프로젝트 export → build/ios/foam-party.xcodeproj"
 mkdir -p build/ios
-"${GODOT}" --headless --path godot --export-release iOS "${REPO}/build/ios/foam-party.xcodeproj"
+godot --headless --path godot --export-release iOS "${REPO}/build/ios/foam-party.xcodeproj"
 [ -d "${REPO}/build/ios/foam-party.xcodeproj" ] || {
   echo "  Xcode 프로젝트가 생성되지 않음: build/ios/foam-party.xcodeproj" >&2
   exit 1
