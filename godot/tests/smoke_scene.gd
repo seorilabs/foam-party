@@ -29,8 +29,11 @@ func _run_smoke() -> void:
 		return
 
 	var selected_label: String = root_node.call("get_selected_tool_label_for_test")
-	if selected_label != "고압수":
-		_fail("expected Korean default tool label")
+	# The default tool is water; its label is localized (ko/en) via the i18n table,
+	# so assert against the active locale's TOOL_WATER rather than a fixed string.
+	var expected_label := TranslationServer.translate("TOOL_WATER")
+	if selected_label.is_empty() or selected_label != expected_label:
+		_fail("expected localized default tool label (got '%s', want '%s')" % [selected_label, expected_label])
 		return
 
 	var audio_count: int = root_node.call("get_audio_stream_count_for_test")

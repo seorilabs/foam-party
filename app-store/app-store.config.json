@@ -46,8 +46,9 @@
   "build": {
     "godotPreset": "iOS",
     "godotVersion": "4.6.3.stable",
-    "marketingVersion": "0.1.0",
+    "marketingVersion": "0.1.1",
     "buildNumber": "1",
+    "versionNote": "0.1.0 train은 App Store Connect에서 승인/마감되어 새 빌드 제출 불가(90186). 0.1.1로 범프해 재업로드. 한글 폰트(Do Hyeon 번들) + ko/en 런타임 i18n 포함.",
     "teamId": "HCDUXX4Z3X",
     "teamIdStatus": "로컬 Apple Distribution 인증서에서 확인됨",
     "signingIdentity": "Apple Distribution: Seori Labs (HCDUXX4Z3X)",
@@ -104,7 +105,7 @@
     "contentRights": "확정 필요",
     "exportCompliance": "확정 필요",
     "screenshots": "확정 필요",
-    "testFlightUpload": "미진행",
+    "testFlightUpload": "완료: 0.1.1(build 1) 업로드 성공(2026-07-08, Delivery UUID 80359a22-0a78-47b2-a3c6-6df780d04562). ASC 처리 후 TestFlight 노출",
     "buildSelection": "미진행",
     "submitForReview": "미진행"
   },
