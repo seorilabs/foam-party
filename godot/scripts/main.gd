@@ -556,7 +556,7 @@ func _check_star_time_loss() -> void:
 
 
 func _spawn_combo_break_burst() -> void:
-	var badge_center := Vector2(195.0, maxf(134.0, _hud_top_y() + 112.0))
+	var badge_center := Vector2(195.0, _combo_badge_center_y())
 	var fizzle_col := Color(0.68, 0.82, 1.0, 0.88)
 	var count: int = rng.randi_range(4, 6)
 	for _i in range(count):
@@ -650,7 +650,10 @@ func _draw() -> void:
 		_draw_toolbar()
 		_draw_completion_panel()
 		_draw_combo_milestone_flash()
-	_draw_top_buttons()
+	# Title-screen modals draw their own close button; suppress the sound/help
+	# buttons then so they don't overlap the upgrade/skin popup.
+	if not (game_state == STATE_TITLE and (show_upgrade_panel or show_skin_panel)):
+		_draw_top_buttons()
 	if show_tutorial:
 		_draw_tutorial()
 
@@ -937,6 +940,12 @@ func _safe_area_design_insets() -> Vector4:
 
 func _hud_top_y() -> float:
 	return maxf(HUD_TOP_Y, _safe_area_design_insets().y + HUD_SAFE_PADDING)
+
+
+# Combo badge floats just below the status card + mission/customer row so it never
+# overlaps the top HUD. Shared by the badge draw and its break-burst spawn.
+func _combo_badge_center_y() -> float:
+	return _hud_top_y() + 202.0
 
 
 func _top_button_y() -> float:
@@ -1865,12 +1874,7 @@ func _draw_status() -> void:
 	draw_style_box(_style("hud_shadow", Color(0.05, 0.23, 0.33, 0.25), 20.0), Rect2(card.position + Vector2(0.0, 3.0), card.size))
 	draw_style_box(_style("hud_card", Color(0.97, 0.99, 1.0, 0.94), 20.0), card)
 
-	var coin_chip := Rect2(150.0, card.position.y + 10.0, 90.0, 28.0)
-	var title_width := coin_chip.position.x - 32.0 - 8.0
-	var title_size := 19
-	while title_size > 15 and font.get_string_size("Foam Party", HORIZONTAL_ALIGNMENT_LEFT, -1.0, title_size).x > title_width:
-		title_size -= 1
-	draw_string(font, Vector2(32.0, card.position.y + 32.0), "Foam Party", HORIZONTAL_ALIGNMENT_LEFT, title_width, title_size, Color("#0d3b55"))
+	var coin_chip := Rect2(32.0, card.position.y + 10.0, 90.0, 28.0)
 	draw_style_box(_style("coin_chip", Color("#fff3cf"), 14.0), coin_chip)
 	if not _draw_tex_centered("coin", coin_chip.position + Vector2(16.0, 14.0), 22.0):
 		draw_circle(coin_chip.position + Vector2(16.0, 14.0), 8.0, Color("#ffce3d"))
@@ -2678,8 +2682,8 @@ func _draw_daily_mission() -> void:
 	if game_state != STATE_PLAYING or daily_mission_type.is_empty():
 		return
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
-	var top_y := _hud_top_y() + 62.0
-	var rect := Rect2(14.0, top_y, 242.0, 30.0)
+	var top_y := _hud_top_y() + 88.0
+	var rect := Rect2(14.0, top_y, 286.0, 26.0)
 
 	draw_style_box(_style("dm_shadow", Color(0.03, 0.14, 0.2, 0.18), 12.0),
 		Rect2(rect.position + Vector2(0.0, 2.0), rect.size))
@@ -2706,9 +2710,9 @@ func _draw_daily_mission() -> void:
 	var label_col := Color(0.7, 1.0, 0.75) if claimed else Color(0.85, 0.95, 1.0)
 	var count_col := Color("#39d98a") if claimed else Color(0.7, 0.9, 1.0)
 	draw_string(font, Vector2(rect.position.x + 8.0, text_y),
-		label_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 64.0, 11, label_col)
-	draw_string(font, Vector2(rect.position.x + rect.size.x - 6.0, text_y),
-		count_text, HORIZONTAL_ALIGNMENT_RIGHT, -1, 11, count_col)
+		label_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 72.0, 11, label_col)
+	draw_string(font, Vector2(rect.position.x + rect.size.x - 62.0, text_y),
+		count_text, HORIZONTAL_ALIGNMENT_RIGHT, 54.0, 11, count_col)
 
 	if _daily_mission_pop_time >= 0.0:
 		var age := time_now - _daily_mission_pop_time
@@ -2799,7 +2803,7 @@ func _draw_grade_tracker() -> void:
 		return
 	var font: Font = _font()
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
-	var rect := Rect2(14.0, 100.0, 120.0, 56.0)
+	var rect := Rect2(14.0, _hud_top_y() + 120.0, 120.0, 56.0)
 	draw_style_box(_style("grade_shadow", Color(0.03, 0.14, 0.2, 0.22), 16.0), Rect2(rect.position + Vector2(0.0, 2.0), rect.size))
 	draw_style_box(_style("grade_chip", Color(0.03, 0.14, 0.2, 0.66), 16.0), rect)
 
@@ -2858,7 +2862,7 @@ func _draw_customer_patience() -> void:
 		return
 	var patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
-	var rect := Rect2(144.0, 100.0, 110.0, 56.0)
+	var rect := Rect2(142.0, _hud_top_y() + 120.0, 110.0, 56.0)
 
 	draw_style_box(_style("cust_shadow", Color(0.03, 0.14, 0.2, 0.22), 16.0),
 		Rect2(rect.position + Vector2(0.0, 2.0), rect.size))
@@ -2961,7 +2965,7 @@ func _draw_combo_badge() -> void:
 	var pop_amp: float = 0.35 + 0.05 * float(min(combo_count - 2, 8))
 	var pop: float = 1.0 + pop_amp * exp(-(time_now - combo_pop_time) * 6.0)
 	var badge_size := Vector2(118.0, 36.0) * pop
-	var badge_center_y := maxf(134.0, _hud_top_y() + 112.0)
+	var badge_center_y := _combo_badge_center_y()
 	var badge := Rect2(Vector2(195.0, badge_center_y) - badge_size * 0.5, badge_size)
 	var is_hot := combo_count >= STAR3_COMBO
 	var style_key := "combo_hot" if is_hot else "combo_cool"
