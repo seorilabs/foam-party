@@ -12,7 +12,7 @@
 
 set -e
 
-REPO="${CI_PRIMARY_REPOSITORY_PATH:-$(cd "$(dirname "$0")/.." && pwd)}"
+REPO="${CI_PRIMARY_REPOSITORY_PATH:-$(cd "$(dirname "$0")/../../.." && pwd)}"
 
 if [ -z "${CI_TAG:-}" ]; then
   echo "▸ CI_TAG 없음 — 릴리즈 버전 조정 생략(검증/브랜치 빌드는 프로젝트 기본값 유지)"
