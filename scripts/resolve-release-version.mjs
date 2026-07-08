@@ -7,6 +7,7 @@
 // App Store 워크플로우(godot-deploy-app-store.yml)와 Xcode Cloud ci_pre_xcodebuild.sh 가
 // `--tag <tag> --github-output` 로 호출한다.
 import { appendFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const GOOGLE_PLAY_MAX_VERSION_CODE = 2100000000;
 const VERSION_SEGMENT_BASE = 1000;
@@ -60,8 +61,9 @@ function parseReleaseTag(tag) {
   };
 }
 
-function resolveReleaseVersion(args) {
-  const { releaseTag, major, minor, patch } = parseReleaseTag(readReleaseTag(args));
+// Pure core: tag string → market version fields. Exported for tests.
+export function resolveReleaseVersionForTag(tag) {
+  const { releaseTag, major, minor, patch } = parseReleaseTag(tag);
   const buildNumber = major * 1_000_000 + minor * VERSION_SEGMENT_BASE + patch;
   if (buildNumber <= 0) {
     throw new Error(`build_number must be positive (App Store CFBundleVersion), got: ${buildNumber} from ${releaseTag}`);
@@ -81,6 +83,10 @@ function resolveReleaseVersion(args) {
     apple_marketing_version: versionName,
     apple_build_number: String(buildNumber),
   };
+}
+
+function resolveReleaseVersion(args) {
+  return resolveReleaseVersionForTag(readReleaseTag(args));
 }
 
 function writeGithubOutput(values) {
@@ -107,13 +113,16 @@ function writeGithubStepSummary(values) {
   );
 }
 
-try {
-  const args = parseArgs(process.argv.slice(2));
-  const values = resolveReleaseVersion(args);
-  if (args.get('github-output')) writeGithubOutput(values);
-  if (args.get('github-step-summary')) writeGithubStepSummary(values);
-  if (!args.get('quiet')) console.log(JSON.stringify(values, null, 2));
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+// Run the CLI only when invoked directly (not when imported by tests).
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  try {
+    const args = parseArgs(process.argv.slice(2));
+    const values = resolveReleaseVersion(args);
+    if (args.get('github-output')) writeGithubOutput(values);
+    if (args.get('github-step-summary')) writeGithubStepSummary(values);
+    if (!args.get('quiet')) console.log(JSON.stringify(values, null, 2));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 }

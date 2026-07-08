@@ -45,6 +45,9 @@ jobs:
       ios_bundle_id: com.seorilabs.foamparty
       ios_export_preset: iOS
       ios_output: build/ios/foam-party
+      # 이 스크립트로 태그 → CFBundleShortVersionString(marketing)/CFBundleVersion(build) 산출.
+      # (org 워크플로우 기본값과 동일하나 계약을 명시해 빌드번호 경로를 문서화.)
+      version_script: scripts/resolve-release-version.mjs
       # 프로젝트 config/features("4.6")·다른 배포 caller와 동일하게 4.6.3.stable.
       godot_version: "4.6.3"
       godot_status: "stable"
