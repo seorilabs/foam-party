@@ -1,0 +1,18 @@
+{
+  "style": "style/style-guide.md",
+  "anchor": {
+    "path": "style/anchor.png",
+    "prompt": "car-wash spray bottle style anchor"
+  },
+  "model": "gemini-3-pro-image",
+  "out_dir": "icon-src",
+  "assets": [
+    {
+      "name": "app_icon",
+      "size": 1024,
+      "transparent": false,
+      "aspect_ratio": "1:1",
+      "prompt": "a mobile game app icon, full-bleed SQUARE, the mint-to-teal (#9ff0ef to #6dd0d1) radial gradient background completely fills the entire square edge to edge and into all four corners, NO rounded corners, NO white border, NO padding, NO frame. Centered subject filling ~85%: a big bold cluster of glossy round soap-foam bubbles piled together in white and pale blue, distinct overlapping spherical bubbles with thick navy #123246 outlines, soft cel shading and bright shine highlights, one large sparkling blue water droplet (#49a7ff) as the front focal point, a few tiny floating bubbles around, cheerful squeaky-clean car-wash mood, flat vector illustration, no text, no lettering"
+    }
+  ]
+}
