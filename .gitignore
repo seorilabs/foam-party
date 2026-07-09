@@ -15,3 +15,6 @@ node_modules/
 AGENTS.local.md
 AGENT.local.md
 packages/product-core/src/**/*.gd.uid
+
+# icon generation source (raw Gemini output)
+godot/assets/art/icon-src/

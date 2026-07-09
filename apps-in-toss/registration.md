@@ -44,11 +44,11 @@
 | 항목 | 값 | 비고 |
 | --- | --- | --- |
 | 카테고리 | 게임 > 캐주얼 | 웹보드 게임 아님 (체크 불필요) |
-| 앱 로고 | `apps-in-toss/assets/foam-party-logo-600.png` | 600×600 PNG, 배경색 필수(투명 불가), 라운드 마스크 금지 |
+| 앱 로고 | `apps-in-toss/assets/foam-party-logo-600.png` | 600×600 PNG, 배경색 필수(투명 불가), 라운드 마스크 금지. **2026-07-09 신규 아이콘(폼/거품 클로즈업 flat-vector)으로 교체** |
 | 썸네일 | `apps-in-toss/assets/foam-party-thumbnail-1932x828.png` | 1932×828 PNG, 핵심 플레이 화면 |
-| 스크린샷 1 | `apps-in-toss/assets/screenshots/foam-party-start-636x1048.png` | 세로형 636×1048, 시작 화면 |
-| 스크린샷 2 | `apps-in-toss/assets/screenshots/foam-party-main-636x1048.png` | 세차 플레이 (핵심 인터랙션) |
-| 스크린샷 3 | `apps-in-toss/assets/screenshots/foam-party-result-636x1048.png` | 별점/코인 결과 화면 |
+| 스크린샷 1 | `apps-in-toss/assets/screenshots/foam-party-start-636x1048.png` | 세로형 636×1048, 시작 화면. **2026-07-09 갱신 UI 재캡처** |
+| 스크린샷 2 | `apps-in-toss/assets/screenshots/foam-party-main-636x1048.png` | 세차 플레이 (핵심 인터랙션). **갱신 UI 재캡처** |
+| 스크린샷 3 | `apps-in-toss/assets/screenshots/foam-party-result-636x1048.png` | 별점/코인 결과 화면. **갱신 UI 재캡처** |
 | 리더보드 | 미사용 | MVP는 점수 랭킹 없음. 도입 시 점수 단위/정렬 정책 등록 |
 
 ## 4. 게임 등급분류 (출시 gate, 필수)
