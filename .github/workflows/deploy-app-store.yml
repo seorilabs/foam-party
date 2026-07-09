@@ -1,53 +1,28 @@
-# Godot iOS export → Xcode archive → App Store 업로드 — macos-26.
-# 로직은 org 재사용 워크플로우(godot-deploy-app-store.yml)에 있고 여기는 얇은 caller.
-# 서명: Apple Distribution 인증서(org) + App Store provisioning profile(repo secret,
-#   APPLE_PROVISIONING_PROFILE_BASE64, bundle com.seorilabs.foamparty). 업로드: ASC API key(org).
-name: Deploy App Store
+# App Store(iOS) 배포는 GitHub Actions macOS 로 빌드하지 않는다(액션 미닛 쿼타).
+# Xcode Cloud 로 빌드/업로드하며, 트리거는 Backoffice(ASC ciBuildRuns)에서 태그 대상으로
+# 수행한다(repo 는 XCODE_CLOUD_APP_STORE_REPOS allowlist 에 포함).
+#
+# 이 파일은 삭제하지 않고 비활성 스텁으로 남긴다: Backoffice 의 마켓 타깃 감지가
+# `.github/workflows/deploy-app-store.yml` 파일 존재로 "appstore" 를 판정하므로(compute.ts
+# pathExists), 파일이 없으면 Backoffice 에서 App Store 배포 옵션이 사라진다.
+# workflow_call 은 제거해 deploy-all 등에서 호출할 수 없고, 수동 dispatch 시 macOS 빌드
+# 없이 즉시 안내 후 실패한다(ARC runner, 쿼타 소모 없음).
+name: Deploy App Store (disabled — use Xcode Cloud)
 
 on:
   workflow_dispatch:
-    inputs:
-      release_tag:
-        description: "업로드할 릴리즈 태그. 비우면 최신 vX.Y.Z."
-        type: string
-        required: false
-        default: ""
-      upload:
-        description: "true면 App Store Connect 업로드(false면 xcarchive 아티팩트만)"
-        type: boolean
-        default: false
-  workflow_call:
-    inputs:
-      release_tag:
-        type: string
-        required: false
-        default: ""
-      upload:
-        type: boolean
-        default: true
 
 permissions:
   contents: read
 
-concurrency:
-  group: deploy-app-store-${{ inputs.release_tag || github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  app-store:
-    uses: seorilabs/.github/.github/workflows/godot-deploy-app-store.yml@main
-    secrets: inherit
-    with:
-      release_tag: ${{ inputs.release_tag }}
-      upload: ${{ inputs.upload }}
-      project_dir: godot
-      ios_scheme: foam-party
-      ios_bundle_id: com.seorilabs.foamparty
-      ios_export_preset: iOS
-      ios_output: build/ios/foam-party
-      # 이 스크립트로 태그 → CFBundleShortVersionString(marketing)/CFBundleVersion(build) 산출.
-      # (org 워크플로우 기본값과 동일하나 계약을 명시해 빌드번호 경로를 문서화.)
-      version_script: scripts/resolve-release-version.mjs
-      # 프로젝트 config/features("4.6")·다른 배포 caller와 동일하게 4.6.3.stable.
-      godot_version: "4.6.3"
-      godot_status: "stable"
+  disabled:
+    name: App Store builds via Xcode Cloud
+    runs-on: ${{ github.event.repository.private && 'seorilabs-rpi-arm64' || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - shell: bash
+        run: |
+          echo "::error::App Store(iOS)는 Xcode Cloud로 빌드합니다. GitHub Actions macOS 빌드는 비활성입니다(액션 미닛 쿼타)."
+          echo "App Store 배포는 Backoffice에서 트리거하세요(ASC ciBuildRuns, 태그 대상)."
+          exit 1
