@@ -360,6 +360,29 @@ func _run_smoke() -> void:
 		_fail("drag trail should fade out after the pointer lifts")
 		return
 
+	# --- wash input is gated to the car/dirt band (WASH_AREA_TOP..BOTTOM) so
+	# top-HUD/toolbar taps never start washing (iOS button/hint regression) ---
+	if not bool(root_node.call("_point_in_wash_area", Vector2(200.0, 500.0))):
+		_fail("a car-area point should be inside the wash band")
+		return
+	if bool(root_node.call("_point_in_wash_area", Vector2(200.0, 150.0))):
+		_fail("a top-HUD point must be outside the wash band")
+		return
+	if bool(root_node.call("_point_in_wash_area", Vector2(200.0, 800.0))):
+		_fail("a below-toolbar point must be outside the wash band")
+		return
+	if bool(root_node.call("_point_in_wash_area", Vector2.ZERO)):
+		_fail("the zero/uninitialized pointer must be outside the wash band")
+		return
+	# A drag update outside the band must not build a wash trail.
+	root_node.set("is_washing", true)
+	root_node.set("pointer_position", Vector2(200.0, 150.0))
+	root_node.call("_update_wash_trail", 0.016)
+	if int(root_node.call("get_wash_trail_count_for_test")) != 0:
+		_fail("washing above the wash band must not build a trail")
+		return
+	root_node.set("is_washing", false)
+
 	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])
 	get_root().remove_child(root_node)
 	root_node.free()
