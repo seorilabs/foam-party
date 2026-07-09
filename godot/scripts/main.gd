@@ -57,6 +57,11 @@ const TOOL_BUTTON_Y := 764.0
 const TOOL_BUTTON_HEIGHT := 72.0
 const TOOL_BUTTON_BOTTOM_PADDING := 12.0
 const TOOLBAR_TOP_GAP := 20.0
+# Washing (bram/water/soap/sponge input) only acts within the car + dirt band,
+# not the top HUD (card/buttons) or below the toolbar. Matches the dirt bounds
+# used by _is_patch_outside_wash_area so a touch can only wash where dirt lives.
+const WASH_AREA_TOP := 300.0
+const WASH_AREA_BOTTOM := 748.0
 const STATE_STUCK := "stuck"
 const STATE_WET := "wet"
 const STATE_SOAPED := "soaped"
@@ -589,8 +594,11 @@ func _input(event: InputEvent) -> void:
 		if button_event.pressed:
 			if _handle_tap(design_point):
 				return
-			pointer_position = design_point
-			is_washing = true
+			# Only start washing inside the car/dirt band; taps in the top HUD or
+			# elsewhere do nothing (and never steal touches from the HUD buttons).
+			if _point_in_wash_area(design_point):
+				pointer_position = design_point
+				is_washing = true
 		else:
 			is_washing = false
 		return
@@ -608,8 +616,9 @@ func _input(event: InputEvent) -> void:
 		if touch_event.pressed:
 			if _handle_tap(touch_point):
 				return
-			pointer_position = touch_point
-			is_washing = true
+			if _point_in_wash_area(touch_point):
+				pointer_position = touch_point
+				is_washing = true
 		else:
 			is_washing = false
 		return
@@ -645,6 +654,7 @@ func _draw() -> void:
 		_draw_grade_tracker()
 		_draw_customer_patience()
 		_draw_daily_mission()
+		_draw_tool_hint()
 		_draw_combo_badge()
 		_draw_bomb_button()
 		_draw_toolbar()
@@ -1064,11 +1074,13 @@ func _handle_tap(point: Vector2) -> bool:
 		_play_ui_select()
 		return true
 
-	if _get_sound_rect().has_point(point):
+	# Grow the hit target beyond the 36px glyph so the top buttons are reliably
+	# tappable on device (small touch targets otherwise miss on iOS).
+	if _get_sound_rect().grow(10.0).has_point(point):
 		_toggle_sound()
 		return true
 
-	if _get_help_rect().has_point(point):
+	if _get_help_rect().grow(10.0).has_point(point):
 		show_tutorial = true
 		is_washing = false
 		_play_ui_select()
@@ -1538,7 +1550,12 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 
 func _is_patch_outside_wash_area(patch: DirtPatch) -> bool:
 	var center := _patch_center(patch)
-	return center.x < -48.0 or center.x > DESIGN_SIZE.x + 48.0 or center.y < 300.0 or center.y > 748.0
+	return center.x < -48.0 or center.x > DESIGN_SIZE.x + 48.0 or center.y < WASH_AREA_TOP or center.y > WASH_AREA_BOTTOM
+
+
+# True when a design-space point is inside the washable car/dirt band.
+func _point_in_wash_area(p: Vector2) -> bool:
+	return p != Vector2.ZERO and p.y >= WASH_AREA_TOP and p.y <= WASH_AREA_BOTTOM
 
 
 func _update_wash_trail(delta: float) -> void:
@@ -1551,7 +1568,7 @@ func _update_wash_trail(delta: float) -> void:
 			wash_trail.remove_at(index)
 
 	var active := is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial
-	var in_play_area := pointer_position.y > 120.0 and pointer_position.y < 744.0 and pointer_position != Vector2.ZERO
+	var in_play_area := _point_in_wash_area(pointer_position)
 	if active and in_play_area:
 		if _trail_has_last:
 			var moved := pointer_position.distance_to(_trail_last_pos)
@@ -1908,6 +1925,12 @@ func _draw_status() -> void:
 			var mc := _progress_milestone_color
 			draw_string(font, Vector2(32.0, bar_rect.position.y - rise), _progress_milestone_text, HORIZONTAL_ALIGNMENT_CENTER, 254.0, 17, Color(mc.r, mc.g, mc.b, alpha))
 
+
+# The selected-tool hint chip. Drawn as its own pass AFTER the car so the car
+# never paints over it (it sits low on screen and, with a bottom safe-area
+# inset, rises into the car's drawn area).
+func _draw_tool_hint() -> void:
+	var font: Font = _font()
 	# Sit above the toolbar PANEL top (_tool_button_y - TOOLBAR_TOP_GAP), not just the
 	# buttons, so a bottom safe-area inset never lets the panel overlap this chip.
 	var hint_rect := Rect2(22.0, minf(696.0, _tool_button_y() - 60.0), 244.0, 30.0)
@@ -2487,7 +2510,7 @@ func _draw_gleam() -> void:
 func _draw_tool_cursor() -> void:
 	if completed:
 		return
-	var in_play_area := pointer_position.y > 120.0 and pointer_position.y < 744.0 and pointer_position != Vector2.ZERO
+	var in_play_area := _point_in_wash_area(pointer_position)
 	if not is_washing and not in_play_area:
 		return
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
