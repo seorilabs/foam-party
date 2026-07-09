@@ -12,10 +12,12 @@ const DailyMission = preload("res://core/use_cases/daily_mission.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
 const WashRules = preload("res://core/use_cases/wash_rules.gd")
 const AnalyticsPort = preload("res://core/ports/analytics_port.gd")
+const AdPort = preload("res://core/ports/ad_port.gd")
 
 # --- godot-layer services ---
 const AudioService = preload("res://scripts/services/audio_service.gd")
 const FirebaseAnalyticsAdapter = preload("res://scripts/services/firebase_analytics_adapter.gd")
+const AdService = preload("res://scripts/services/ad_service.gd")
 const I18n = preload("res://scripts/services/i18n.gd")
 
 const DESIGN_SIZE := Vector2(390.0, 844.0)
@@ -154,6 +156,11 @@ var audio: AudioService
 # sites can invoke analytics.log_event(...) unguarded. No-ops when the Firebase
 # singletons are absent (headless / plugin not bundled).
 var analytics: Node = null
+var ads: Node = null
+# Show a game-over interstitial only every Nth level transition, so ads never
+# interrupt every single completion.
+const INTERSTITIAL_EVERY := 3
+var _level_transitions := 0
 
 var daily_mission_type := ""
 var daily_mission_label := ""
@@ -230,6 +237,10 @@ func _ready() -> void:
 	analytics = FirebaseAnalyticsAdapter.new()
 	add_child(analytics)
 	analytics.setup()
+	ads = AdService.new()
+	add_child(ads)
+	ads.configure(analytics)
+	ads.setup()
 	_bar_fill_style = StyleBoxFlat.new()
 	_bar_fill_style.bg_color = BAR_COL_START
 	_bar_fill_style.set_corner_radius_all(12)
@@ -1054,11 +1065,13 @@ func _handle_tap(point: Vector2) -> bool:
 		return true
 
 	if completed and _get_retry_rect().has_point(point):
+		_maybe_show_game_over_interstitial()
 		reset_game(level_index)
 		_play_ui_select()
 		return true
 
 	if completed and _get_next_rect().has_point(point):
+		_maybe_show_game_over_interstitial()
 		reset_game(level_index + 1)
 		_save_progress()
 		_play_ui_select()
@@ -1076,7 +1089,12 @@ func _handle_tap(point: Vector2) -> bool:
 
 	if not completed and _get_bomb_rect().has_point(point):
 		if coins < BOMB_COST:
-			audio.play_bomb_deny()
+			# Not enough coins: offer a rewarded ad for a free foam bomb when one
+			# is ready; otherwise just deny.
+			if ads != null and ads.is_rewarded_ready("foam_bomb_free"):
+				ads.show_rewarded("foam_bomb_free", _on_foam_bomb_reward)
+			else:
+				audio.play_bomb_deny()
 		else:
 			if apply_foam_bomb():
 				_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
@@ -1115,8 +1133,9 @@ func _toggle_sound() -> void:
 	_save_progress()
 
 
-func apply_foam_bomb() -> bool:
-	if completed or coins < BOMB_COST:
+func apply_foam_bomb(free := false) -> bool:
+	# free=true is granted by a rewarded ad (no coin cost). Otherwise coins pay.
+	if completed or (not free and coins < BOMB_COST):
 		return false
 	var applied := false
 	for raw_patch in dirt_patches:
@@ -1139,11 +1158,28 @@ func apply_foam_bomb() -> bool:
 			particles.append(WashParticle.new(center + offset, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-40.0, -16.0)), rng.randf_range(0.6, 1.1), rng.randf_range(4.0, 9.0), Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85), STYLE_BUBBLE))
 	if not applied:
 		return false
-	coins -= BOMB_COST
+	if not free:
+		coins -= BOMB_COST
 	audio.play_bomb()
-	analytics.log_event("foam_bomb_use", {"level": str(level_index)})
+	analytics.log_event("foam_bomb_use", {"level": str(level_index), "source": "ad" if free else "coins"})
 	_save_progress()
 	return true
+
+
+# Rewarded-ad reward callback for the free foam bomb (AdService → here).
+func _on_foam_bomb_reward() -> void:
+	if apply_foam_bomb(true):
+		_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
+	queue_redraw()
+
+
+# Show a game-over interstitial on level transitions, capped to every Nth one.
+func _maybe_show_game_over_interstitial() -> void:
+	if ads == null:
+		return
+	_level_transitions += 1
+	if _level_transitions % INTERSTITIAL_EVERY == 0:
+		ads.show_interstitial("game_over")
 
 
 func _calc_coin_reward(stars: int) -> int:
@@ -2784,15 +2820,35 @@ func _draw_bomb_button() -> void:
 		var c := rect.get_center()
 		draw_set_transform(c * (1.0 - pop), 0.0, Vector2(pop, pop))
 	var can_afford := coins >= BOMB_COST
-	var bg := Color("#f8f4a6") if can_afford else Color(0.55, 0.6, 0.63, 0.85)
-	draw_style_box(_style("bomb_on" if can_afford else "bomb_off", bg, 14.0), rect)
+	# When coins run short but a rewarded ad is ready, the chip becomes an active
+	# "watch ad for a free foam bomb" affordance instead of a disabled button.
+	var ad_ready: bool = not can_afford and ads != null and ads.is_rewarded_ready("foam_bomb_free")
+	var bg: Color
+	var style_key: String
+	if can_afford:
+		bg = Color("#f8f4a6")
+		style_key = "bomb_on"
+	elif ad_ready:
+		bg = Color("#a8e6c0")
+		style_key = "bomb_ad"
+	else:
+		bg = Color(0.55, 0.6, 0.63, 0.85)
+		style_key = "bomb_off"
+	draw_style_box(_style(style_key, bg, 14.0), rect)
 	draw_circle(rect.position + Vector2(22.0, 17.0), 9.0, Color(1.0, 1.0, 1.0, 0.95))
 	draw_circle(rect.position + Vector2(32.0, 12.0), 6.0, Color(1.0, 1.0, 1.0, 0.8))
 	draw_circle(rect.position + Vector2(30.0, 22.0), 4.5, Color(1.0, 1.0, 1.0, 0.8))
 	draw_string(font, Vector2(rect.position.x + 42.0, rect.position.y + 20.0), tr("BOMB_LABEL"), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 11, Color("#123246"))
-	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
-	draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
-	draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
+	if ad_ready:
+		# Play triangle + "free": tap plays a rewarded ad for a free foam bomb.
+		var tx := rect.position.x + 48.0
+		var ty := rect.position.y + 33.0
+		draw_colored_polygon(PackedVector2Array([Vector2(tx, ty - 6.0), Vector2(tx, ty + 6.0), Vector2(tx + 9.0, ty)]), Color("#123246"))
+		draw_string(font, Vector2(rect.position.x + 60.0, rect.position.y + 38.0), tr("BOMB_FREE"), HORIZONTAL_ALIGNMENT_LEFT, 34.0, 12, Color("#0d3b2a"))
+	else:
+		draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
+		draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
+		draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
 	if pop > 1.001:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 

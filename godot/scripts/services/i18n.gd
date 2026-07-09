@@ -83,6 +83,7 @@ const STRINGS := {
 	"TUT_START": ["탭하여 시작!", "Tap to start!"],
 	# foam bomb
 	"BOMB_LABEL": ["거품", "Foam"],
+	"BOMB_FREE": ["무료", "Free"],
 	# completion panel
 	"COMPLETE_TITLE": ["완전 청소!", "All Clean!"],
 	"COMPLETE_SUB": ["%s %02d ㆍ %s ㆍ 최고 콤보 x%d", "%s %02d ㆍ %s ㆍ Best Combo x%d"],

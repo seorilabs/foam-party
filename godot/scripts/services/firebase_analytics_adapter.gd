@@ -17,10 +17,16 @@ var _firebase_runtime_enabled := false
 var _firebase_core_initialized := false
 var _firebase_analytics_initialized := false
 var _pending: Array = []  # buffer events fired before init, flush on ready
+var _web_firebase: JavaScriptObject = null  # window.__foamPartyFirebase (web/AIT)
 
 
 func setup() -> void:
 	if OS.get_environment("FOAM_FIREBASE_DISABLED") == "1":
+		return
+	# Web/AIT export cannot use the native Firebase plugin, so route analytics to
+	# the JS Firebase bridge installed by the AIT wrapper (firebaseRuntime.ts).
+	if OS.has_feature("web"):
+		_web_firebase = JavaScriptBridge.get_interface("__foamPartyFirebase")
 		return
 	if not _firebase_config_present():
 		return
@@ -68,6 +74,10 @@ func _on_firebase_analytics_initialized(success: bool) -> void:
 
 
 func log_event(event_name: String, params: Dictionary = {}) -> void:
+	# Web/AIT: forward to the JS Firebase bridge (params as a JSON string).
+	if _web_firebase != null:
+		_web_firebase.logEvent(event_name, JSON.stringify(params))
+		return
 	# True no-op when Firebase is not running (headless / plugin not bundled):
 	# do not even buffer, so there is zero side-effect in that environment.
 	if not _firebase_runtime_enabled:
