@@ -236,6 +236,19 @@ func _run_smoke() -> void:
 	if float(root_node.call("get_patch_soap_for_test", bomb_oil_index)) < 0.9:
 		_fail("foam bomb should soap oil patches")
 		return
+	# Ads absent (headless): no rewarded ad is ready, and the coin path is
+	# unaffected — too few coins simply cannot buy a bomb (no ad fallback).
+	var ads_node = root_node.get("ads")
+	if ads_node != null and bool(ads_node.call("is_rewarded_ready", "foam_bomb_free")):
+		_fail("no rewarded ad should be ready in headless")
+		return
+	root_node.set("coins", 10)  # below BOMB_COST (40)
+	if bool(root_node.call("apply_foam_bomb")):
+		_fail("foam bomb must not apply below cost when no ad grants it")
+		return
+	if int(root_node.call("get_coins_for_test")) != 10:
+		_fail("failed foam bomb must not change coins")
+		return
 
 	# --- contextual "use this tool" hint ---
 	for hint_method in ["is_tool_misapplied_for_test", "get_recommended_tool_for_test", "get_patch_hint_time_for_test", "simulate_patch_hint_for_test", "get_patch_count_by_kind_for_test", "spawn_patch_for_test"]:
