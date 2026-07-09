@@ -1,4 +1,6 @@
-# Deploy All — 릴리즈 태그 1개를 해석해 AIT/Google Play/App Store 를 한 번에 배포.
+# Deploy All — 릴리즈 태그 1개를 해석해 AIT/Google Play 를 한 번에 배포.
+# App Store(iOS)는 GitHub Actions macOS(액션 미닛 쿼타)로 빌드하지 않는다. Xcode Cloud
+# 로 빌드/업로드하며, 트리거는 Backoffice(ASC ciBuildRuns)에서 태그 대상으로 수행한다.
 name: Deploy All
 
 on:
@@ -13,9 +15,6 @@ on:
         type: boolean
         default: true
       deploy_google_play:
-        type: boolean
-        default: true
-      deploy_app_store:
         type: boolean
         default: true
       memo:
@@ -75,14 +74,4 @@ jobs:
     with:
       release_tag: ${{ needs.resolve.outputs.tag }}
       version_name: ${{ needs.resolve.outputs.version_name }}
-      upload: true
-
-  app-store:
-    name: Deploy App Store
-    needs: resolve
-    if: ${{ inputs.deploy_app_store }}
-    uses: ./.github/workflows/deploy-app-store.yml
-    secrets: inherit
-    with:
-      release_tag: ${{ needs.resolve.outputs.tag }}
       upload: true
