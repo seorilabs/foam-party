@@ -37,15 +37,13 @@
 
 `tossFullScreenAdRuntime.ts`가 AIT 통합광고 이벤트를 직접 기록. 이름은 `ait_{rewarded|interstitial}_{event}`.
 
-| event_type | 의미 |
-|---|---|
-| `load_requested` / `loaded` / `load_failed` / `load_timeout` | 사전 로드 |
-| `requested` / `show` / `impression` | 표시·노출(수익 발생=impression) |
-| `clicked` / `dismissed` / `failed_to_show` | 상호작용·종료 |
-| `user_earned_reward` | 보상 획득(리워드만) |
-| `show_skipped_not_loaded` / `show_skipped_showing` | 미로드/중복 표시 스킵 |
+| event_type | 출처 | 의미 |
+|---|---|---|
+| `load_requested` / `loaded` / `load_failed` / `load_timeout` | 런타임 `preload` | 사전 로드 |
+| `show_skipped_not_loaded` / `show_skipped_showing` | 런타임 `show` | 미로드/중복 표시 스킵 |
+| SDK `showFullScreenAd` 이벤트 (`requested`·`show`·`impression`·`clicked`·`dismissed`·`failed_to_show`·`user_earned_reward`) | AIT SDK → verbatim forward | SDK가 실제로 보낸 이벤트만 기록됨 |
 
-공통 파라미터: `placement`, `provider`(`toss_ads`), `ad_group_id`, `event_type`.
+즉 show-phase 이벤트는 `logAdEvent(placement, event.type)`로 **SDK가 emit한 그대로** 전달되므로, 특정 event_type의 존재/빈도는 SDK 동작에 따른다. 공통 파라미터: `placement`, `provider`(`toss_ads`), `ad_group_id`, `event_type`.
 
 > 보상 지급은 **`user_earned_reward`에서만**(AIT 정책). `dismissed`만으로 지급 금지.
 

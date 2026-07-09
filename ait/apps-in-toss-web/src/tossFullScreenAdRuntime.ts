@@ -8,11 +8,15 @@ import { loadFullScreenAd, showFullScreenAd } from '@apps-in-toss/web-framework'
 // Rewards are granted ONLY on the 'userEarnedReward' event (never 'dismissed'),
 // per AIT policy. SDK lifecycle events are logged via window.__foamPartyFirebase.
 
-type RewardCallback = (placement: string) => void
+// Terminal result callback: fired EXACTLY ONCE when a rewarded ad flow ends,
+// with earned=true only if the user watched to completion (userEarnedReward).
+// Reporting on the terminal event (not on userEarnedReward directly) gives the
+// Godot side one place to grant the reward and clear its in-flight state.
+type RewardResultCallback = (placement: string, earned: boolean) => void
 
 type FoamPartyAdsBridge = {
   isRewardedReady: (placement: string) => boolean
-  showRewarded: (placement: string, onReward: RewardCallback) => boolean
+  showRewarded: (placement: string, onResult: RewardResultCallback) => boolean
   showInterstitial: (placement: string) => boolean
 }
 
@@ -138,18 +142,18 @@ function isRewardedReady(placement: string): boolean {
   return supported(placement) && !!slot?.loaded && !slot.showing
 }
 
-function showRewarded(placement: string, onReward: RewardCallback): boolean {
+function showRewarded(placement: string, onResult: RewardResultCallback): boolean {
   if (placement !== REWARDED_PLACEMENT) {
     return false
   }
-  return show(placement, onReward)
+  return show(placement, onResult)
 }
 
 function showInterstitial(placement: string): boolean {
   return show(placement, null)
 }
 
-function show(placement: string, onReward: RewardCallback | null): boolean {
+function show(placement: string, onResult: RewardResultCallback | null): boolean {
   if (!supported(placement)) {
     return false
   }
@@ -162,29 +166,43 @@ function show(placement: string, onReward: RewardCallback | null): boolean {
 
   slot.showing = true
   slot.loaded = false
+  // Per-show reward state. `earned` is set on userEarnedReward; `finished`
+  // guards the terminal callback so it fires exactly once for this show.
+  let earned = false
+  let finished = false
+  const finish = () => {
+    if (finished) {
+      return
+    }
+    finished = true
+    slot.showing = false
+    slot.disposeShow?.()
+    slot.disposeShow = null
+    if (onResult) {
+      try {
+        onResult(placement, earned)
+      } catch (error) {
+        recordAdError(placement, 'reward_callback_failed', error)
+      }
+    }
+    preload(placement) // load → show → load
+  }
   slot.disposeShow?.()
   slot.disposeShow = showFullScreenAd({
     options: { adGroupId: adGroupId(placement) },
     onEvent: (event) => {
       logAdEvent(placement, event.type)
       if (event.type === 'userEarnedReward') {
-        // Grant ONLY here — never on 'dismissed' — per AIT rewarded policy.
-        try {
-          onReward?.(placement)
-        } catch (error) {
-          recordAdError(placement, 'reward_callback_failed', error)
-        }
+        // Mark earned; the reward is granted once at the terminal event so the
+        // Godot side always clears its in-flight state (earned or not).
+        earned = true
       } else if (event.type === 'dismissed' || event.type === 'failedToShow') {
-        slot.showing = false
-        slot.disposeShow?.()
-        slot.disposeShow = null
-        preload(placement) // load → show → load
+        finish()
       }
     },
     onError: (error) => {
-      slot.showing = false
       recordAdError(placement, 'show_failed', error)
-      preload(placement)
+      finish()
     },
   })
 

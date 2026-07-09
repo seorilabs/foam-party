@@ -20,13 +20,15 @@ func is_rewarded_ready(_placement: String) -> bool:
 	return false
 
 # Show a rewarded ad. `on_reward` is called (zero args) exactly once iff the user
-# earns the reward. No-op (and on_reward never fires) when not ready/supported.
-func show_rewarded(_placement: String, _on_reward: Callable) -> void:
-	pass
+# earns the reward. Returns true if a show was started. No-op returning false
+# (and on_reward never fires) when not ready/supported or already showing.
+func show_rewarded(_placement: String, _on_reward: Callable) -> bool:
+	return false
 
-# Show a full-screen interstitial for `placement`. Fire-and-forget; no reward.
-func show_interstitial(_placement: String) -> void:
-	pass
+# Show a full-screen interstitial for `placement`. Returns true if a show was
+# started (false when not ready/supported), so callers can retry the cadence.
+func show_interstitial(_placement: String) -> bool:
+	return false
 
 # Called once at startup so adapters can begin preloading inventory.
 func setup() -> void:

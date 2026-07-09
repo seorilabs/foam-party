@@ -25,6 +25,7 @@ var _is_web := false
 var _ads_js: JavaScriptObject = null  # window.__foamPartyAds proxy (web only)
 var _reward_js_cb: JavaScriptObject = null  # kept alive while a rewarded ad shows
 var _pending_reward: Callable = Callable()
+var _rewarded_in_flight := false  # guards against overwriting a live reward flow
 var _admob: Object = null  # native AdMob plugin singleton (Phase 2)
 
 
@@ -56,40 +57,53 @@ func is_rewarded_ready(placement: String) -> bool:
 	return false
 
 
-func show_rewarded(placement: String, on_reward: Callable) -> void:
-	if _analytics != null:
-		_analytics.log_event("ad_rewarded_request", {"placement": placement})
+func show_rewarded(placement: String, on_reward: Callable) -> bool:
+	# One rewarded flow at a time — never overwrite a live reward context.
+	if _rewarded_in_flight:
+		return false
 	if _is_web:
 		if _ads_js == null:
-			return
+			return false
 		_pending_reward = on_reward
+		_rewarded_in_flight = true
 		# Keep the JS callback referenced for the duration of the show call.
 		_reward_js_cb = JavaScriptBridge.create_callback(_on_web_reward)
+		if _analytics != null:
+			_analytics.log_event("ad_rewarded_request", {"placement": placement})
 		_ads_js.showRewarded(placement, _reward_js_cb)
-		return
+		return true
 	# Native AdMob: Phase 2. on_reward never fires (no reward without an ad).
+	return false
 
 
-func show_interstitial(placement: String) -> void:
+func show_interstitial(placement: String) -> bool:
 	if _is_web:
 		if _ads_js == null:
-			return
-		_ads_js.showInterstitial(placement)
+			return false
+		var shown = _ads_js.showInterstitial(placement)
 		if _analytics != null:
 			_analytics.log_event("ad_interstitial_request", {"placement": placement})
-		return
+		return bool(shown)
 	# Native AdMob: Phase 2.
+	return false
 
 
-# JS → Godot reward callback. Args come from the JS runtime as a JS array; the
-# first element is the placement (for logging). Grants the reward exactly once.
+# JS → Godot terminal reward callback. args = [placement, earned]. Fires exactly
+# once when the rewarded flow ends; grants the reward only when earned, and
+# always clears the in-flight state so the next rewarded ad can show.
 func _on_web_reward(args: Array) -> void:
 	var placement := ""
+	var earned := false
 	if args.size() > 0 and args[0] != null:
 		placement = str(args[0])
-	if _analytics != null:
-		_analytics.log_event("ad_rewarded_granted", {"placement": placement})
+	if args.size() > 1 and args[1] != null:
+		earned = bool(args[1])
+	_rewarded_in_flight = false
+	_reward_js_cb = null
 	var cb := _pending_reward
 	_pending_reward = Callable()
-	if cb.is_valid():
-		cb.call()
+	if earned:
+		if _analytics != null:
+			_analytics.log_event("ad_rewarded_granted", {"placement": placement})
+		if cb.is_valid():
+			cb.call()

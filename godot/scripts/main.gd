@@ -1166,20 +1166,26 @@ func apply_foam_bomb(free := false) -> bool:
 	return true
 
 
-# Rewarded-ad reward callback for the free foam bomb (AdService → here).
+# Rewarded-ad reward callback for the free foam bomb (AdService → here). Grants
+# the free bomb, mirroring the coin path's feedback; denies if nothing to clean.
 func _on_foam_bomb_reward() -> void:
 	if apply_foam_bomb(true):
 		_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
+	else:
+		audio.play_bomb_deny()
 	queue_redraw()
 
 
 # Show a game-over interstitial on level transitions, capped to every Nth one.
+# If the ad is not ready on the Nth transition, roll the counter back so the
+# cadence retries on the next transition instead of skipping ahead.
 func _maybe_show_game_over_interstitial() -> void:
 	if ads == null:
 		return
 	_level_transitions += 1
 	if _level_transitions % INTERSTITIAL_EVERY == 0:
-		ads.show_interstitial("game_over")
+		if not ads.show_interstitial("game_over"):
+			_level_transitions -= 1
 
 
 func _calc_coin_reward(stars: int) -> int:
