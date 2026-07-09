@@ -1908,7 +1908,9 @@ func _draw_status() -> void:
 			var mc := _progress_milestone_color
 			draw_string(font, Vector2(32.0, bar_rect.position.y - rise), _progress_milestone_text, HORIZONTAL_ALIGNMENT_CENTER, 254.0, 17, Color(mc.r, mc.g, mc.b, alpha))
 
-	var hint_rect := Rect2(22.0, minf(696.0, _tool_button_y() - 46.0), 244.0, 30.0)
+	# Sit above the toolbar PANEL top (_tool_button_y - TOOLBAR_TOP_GAP), not just the
+	# buttons, so a bottom safe-area inset never lets the panel overlap this chip.
+	var hint_rect := Rect2(22.0, minf(696.0, _tool_button_y() - 60.0), 244.0, 30.0)
 	draw_style_box(_style("hint_bubble", Color(0.03, 0.14, 0.2, 0.78), 15.0), hint_rect)
 	draw_string(font, Vector2(hint_rect.position.x, hint_rect.position.y + 21.0), "%s · %s" % [tool_labels[selected_tool], _tool_hint()], HORIZONTAL_ALIGNMENT_CENTER, hint_rect.size.x, 13, Color(0.93, 0.99, 1.0))
 
@@ -3277,7 +3279,9 @@ func _get_help_rect() -> Rect2:
 
 
 func _get_bomb_rect() -> Rect2:
-	return Rect2(276.0, minf(688.0, _tool_button_y() - 58.0), 92.0, 46.0)
+	# Bottom aligned with the hint chip, above the toolbar PANEL top so a bottom
+	# safe-area inset never lets the panel overlap this chip.
+	return Rect2(276.0, minf(688.0, _tool_button_y() - 76.0), 92.0, 46.0)
 
 
 func _get_upgrade_btn_rect() -> Rect2:
