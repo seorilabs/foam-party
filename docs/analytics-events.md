@@ -7,17 +7,24 @@
 
 즉 게임 로직은 항상 `analytics.log_event(name, params)` 하나만 호출하고, 플랫폼 라우팅은 어댑터가 처리한다.
 
-## 게임 이벤트 (기존)
+## 콘텐츠 이벤트 카탈로그 (Clean Architecture)
 
-| 이벤트 | 주요 파라미터 |
-|---|---|
-| `game_start` | `level` |
-| `level_start` | `level`, `car_type` |
-| `level_complete` | `level`, `stars`, `time_sec`, `best_combo`, `coins_earned`, `new_record` |
-| `foam_bomb_use` | `level`, **`source`**(`coins` \| `ad`) |
-| `daily_mission_claim` | `mission_type`, `reward` |
-| `upgrade_purchase` | `tool`, `level`, `cost` |
-| `skin_select` / `skin_purchase` | `tool`, `skin_id`(, `cost`) |
+콘텐츠 이벤트의 **이름 + 파라미터 스키마 원본은 순수 코어**에 있다: `packages/product-core/src/analytics/content_events.gd`(`res://core/analytics/content_events.gd`). 엔진 의존 없는 빌더가 `{name, params}`를 만들고, `godot/scripts/main.gd`의 `_emit_content(...)`가 `AnalyticsPort`로 포워딩한다. 즉 호출부는 인라인 딕셔너리를 조립하지 않으며, 이벤트 스키마가 한 곳에서만 잠긴다.
+
+- 파라미터 값은 이 경계에서 문자열로 고정한다(`str()`). 다운스트림 BigQuery 집계가 키별 컬럼 타입을 안정적으로 잡게 하기 위함(int↔string 드리프트는 GROUP BY를 깨뜨림).
+- 백오피스는 이 카탈로그와 1:1로 맞춘 `ContentMetricsSource`(GA4/BigQuery 어댑터, 자체 지표 서버로 교체 가능)로 하루 1회 집계한다. 상세: seorilabs-backoffice `src/lib/analytics/content-shapes.ts`, `src/lib/ga4/content-source.ts`.
+
+| 이벤트 | 주요 파라미터 | 콘텐츠 지표 |
+|---|---|---|
+| `game_start` | `level` | 세션 시작 |
+| `level_start` | `level`, `car_type` | 레벨 퍼널(시작) |
+| `level_complete` | `level`, `stars`, `time_sec`, `best_combo`, `coins_earned`, `new_record` | 레벨 퍼널(완료/클리어시간/별), 경제(코인 획득) |
+| `foam_bomb_use` | `level`, **`source`**(`coins` \| `ad`), `cost` | 수익화(폼밤), 경제(코인/광고 소비) |
+| `daily_mission_claim` | `mission_type`, `reward` | 미션·리텐션 훅, 경제(코인 획득) |
+| `upgrade_purchase` | `tool`, `level`, `cost` | 수익화(업그레이드), 경제(코인 소비) |
+| `skin_select` / `skin_purchase` | `tool`, `skin_id`(, `cost`) | 수익화(스킨), 경제(코인 소비) |
+
+> `foam_bomb_use.cost`는 신규(경제 흐름 집계용). `source=ad`면 `cost=0`으로 보고해 코인 소비 합산 시 광고 지급분이 중복되지 않는다.
 
 ## 광고 이벤트 (신규)
 

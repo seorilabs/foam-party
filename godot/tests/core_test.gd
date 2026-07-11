@@ -228,6 +228,50 @@ func _run_core_tests() -> void:
 		return
 	adapter.free()
 
+	# --- Content events: catalog builders produce locked {name, params} schema ---
+	var ContentEvents: GDScript = load("res://core/analytics/content_events.gd")
+	if ContentEvents == null:
+		_fail("content_events failed to load through res://core symlink")
+		return
+	var e_start: Dictionary = ContentEvents.game_start(3)
+	if String(e_start["name"]) != "game_start" or String(e_start["params"]["level"]) != "3":
+		_fail("game_start event schema changed: " + str(e_start))
+		return
+	var e_complete: Dictionary = ContentEvents.level_complete(7, 3, 62, 5, 60, true)
+	if String(e_complete["name"]) != "level_complete":
+		_fail("level_complete event name changed")
+		return
+	var cp: Dictionary = e_complete["params"]
+	if String(cp["level"]) != "7" or String(cp["stars"]) != "3" or String(cp["time_sec"]) != "62" \
+			or String(cp["best_combo"]) != "5" or String(cp["coins_earned"]) != "60" or String(cp["new_record"]) != "true":
+		_fail("level_complete params changed: " + str(cp))
+		return
+	var e_bomb_ad: Dictionary = ContentEvents.foam_bomb_use(4, true, 40)
+	if String(e_bomb_ad["params"]["source"]) != "ad" or String(e_bomb_ad["params"]["cost"]) != "0":
+		_fail("ad-sourced foam bomb should report source=ad and cost 0: " + str(e_bomb_ad))
+		return
+	var e_bomb_coin: Dictionary = ContentEvents.foam_bomb_use(4, false, 40)
+	if String(e_bomb_coin["params"]["source"]) != "coins" or String(e_bomb_coin["params"]["cost"]) != "40":
+		_fail("coin-sourced foam bomb should report source=coins and its coin cost: " + str(e_bomb_coin))
+		return
+	var e_mission: Dictionary = ContentEvents.daily_mission_claim("dust", 50)
+	if String(e_mission["params"]["mission_type"]) != "dust" or String(e_mission["params"]["reward"]) != "50":
+		_fail("daily_mission_claim params changed: " + str(e_mission))
+		return
+	var e_upgrade: Dictionary = ContentEvents.upgrade_purchase("water", 2, 160)
+	if String(e_upgrade["params"]["tool"]) != "water" or String(e_upgrade["params"]["level"]) != "2" or String(e_upgrade["params"]["cost"]) != "160":
+		_fail("upgrade_purchase params changed: " + str(e_upgrade))
+		return
+	var e_skin: Dictionary = ContentEvents.skin_purchase("water", "coral", 80)
+	if String(e_skin["params"]["skin_id"]) != "coral" or String(e_skin["params"]["cost"]) != "80":
+		_fail("skin_purchase params changed: " + str(e_skin))
+		return
+	# Every built event name must be declared in the ALL catalog (backoffice contract).
+	for built in [e_start, e_complete, e_bomb_ad, e_mission, e_upgrade, e_skin]:
+		if not ContentEvents.ALL.has(String(built["name"])):
+			_fail("event not registered in ContentEvents.ALL: " + String(built["name"]))
+			return
+
 	print("CORE TESTS PASSED")
 	quit(0)
 
