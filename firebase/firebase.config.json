@@ -19,11 +19,23 @@
     "plistAnalyticsEnabled": false,
     "state": "ACTIVE"
   },
+  "web": {
+    "appId": "1:72898706664:web:4296a020b468b0e3bc5d5d",
+    "displayName": "Foam Party Web",
+    "measurementId": "G-CJRMGYTSLW",
+    "authDomain": "foam-party.firebaseapp.com",
+    "storageBucket": "foam-party.firebasestorage.app",
+    "configTarget": "ait/apps-in-toss-web/.env (VITE_FIREBASE_*)",
+    "purpose": "AIT/Godot Web export 애널리틱스·Remote Config 브릿지(firebaseRuntime.ts)",
+    "state": "ACTIVE"
+  },
   "analytics": {
     "propertyId": "542197312",
     "accountId": "396259050",
     "androidStreamId": "15110441380",
     "iosStreamId": "15110375615",
+    "webMeasurementId": "G-CJRMGYTSLW",
+    "webStreamId": "확인 필요: GA4 콘솔 또는 analyticsadmin API(analytics.readonly 스코프)로 조회",
     "linked": true,
     "eventDeliveryStatus": "not-confirmed",
     "eventDeliveryReason": "Google Analytics Data API is disabled for project foam-party, no BigQuery Analytics export dataset was visible, and no Android device was connected over ADB for DebugView/logcat verification."
@@ -38,7 +50,18 @@
     "status": "passed",
     "androidConfigMatchesLocal": true
   },
+  "webAppProvisioning": {
+    "date": "2026-07-12",
+    "commands": [
+      "firebase apps:create WEB \"Foam Party Web\" --project foam-party",
+      "firebase apps:sdkconfig WEB 1:72898706664:web:4296a020b468b0e3bc5d5d --project foam-party"
+    ],
+    "reason": "AIT/Godot Web export는 네이티브 Firebase 플러그인을 못 써 firebaseRuntime.ts가 Web SDK로 애널리틱스·Remote Config를 처리한다. Web앱 부재로 VITE_FIREBASE_* 미주입 → firebaseOptions()=null → init skip 상태였음.",
+    "wiredTo": "ait/apps-in-toss-web/.env (gitignore), .env.example 템플릿, granite.config.ts brand.icon 실 URL"
+  },
   "notes": [
+    "AIT web 애널리틱스는 Web앱(1:72898706664:web:...)의 measurementId G-CJRMGYTSLW를 쓴다. .env의 VITE_FIREBASE_API_KEY/PROJECT_ID/APP_ID 3개가 모두 있어야 init된다.",
+    "CI(.ait 배포)에서 Firebase가 활성화되려면 VITE_FIREBASE_* 값을 빌드 env로 주입해야 한다(.env는 gitignore). 로컬 빌드는 ait/apps-in-toss-web/.env로 동작.",
     "Do not store service account JSON, private keys, or Admin SDK credentials in the client repo.",
     "The mobile config files are client app configuration files, not Admin SDK credentials.",
     "iOS GoogleService-Info.plist contains the legacy/generated IS_ANALYTICS_ENABLED=false flag. Do not treat that flag alone as proof that current Firebase Analytics collection is disabled; verify event delivery in Firebase DebugView before release.",
