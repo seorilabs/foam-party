@@ -1,7 +1,7 @@
 {
   "app": {
     "appName": "foam-party",
-    "appNameStatus": "확정 필요: 등록 후 수정 불가라 콘솔 등록 직전 최종 확정",
+    "appNameStatus": "확정 완료: 콘솔 등록 완료 (등록 후 수정 불가)",
     "displayName": "폼 파티",
     "displayNameEnglish": "Foam Party",
     "appType": "game",
@@ -14,7 +14,9 @@
     "supportEmail": "cs@seorilabs.com",
     "supportPhone": "확정 필요",
     "leaderboard": false,
-    "gradeClassification": "확정 필요: 오픈마켓 자체등급분류(경로 A) 또는 게임위 증명서(경로 B). 오픈마켓 미출시로 현재 제출 불가"
+    "gradeClassification": "완료: 게임 등급분류 증빙 제출 완료",
+    "businessRegistration": "완료: 사업자 등록 + 대표관리자 인증 리뷰 통과",
+    "consoleRegistration": "완료: 콘솔 앱정보/이미지 등록 완료"
   },
   "assets": {
     "logo": "apps-in-toss/assets/foam-party-logo-600.png",
@@ -26,8 +28,11 @@
     ]
   },
   "release": {
-    "aitPath": "확정 필요",
-    "sandboxQa": "확정 필요",
-    "registrationImages": "apps-in-toss/assets/ 제작본, 콘솔 업로드 미진행"
+    "aitPath": "CI 산출: ait/apps-in-toss-web/foam-party.ait (Deploy AppsInToss 워크플로우가 Godot Web export → 래퍼 build → ait deploy)",
+    "sandboxQa": "배포 후 확인 예정",
+    "registrationImages": "콘솔 업로드 완료",
+    "brandIcon": "https://static.toss.im/appsintoss/38345/ec558824-cda2-4308-ad78-e2ab45571a15.png (granite.config.ts 반영)",
+    "firebaseWeb": "완료: Web앱 1:72898706664:web:4296a020b468b0e3bc5d5d (measurementId G-CJRMGYTSLW), CI VITE_FIREBASE_* 변수 주입 완료",
+    "adGroupIds": "미설정: VITE_TOSS_INTERSTITIAL_AD_GROUP_ID / VITE_TOSS_REWARDED_AD_GROUP_ID 미주입 시 인앱 광고 비활성(no-op). 콘솔 광고 그룹 ID 확보 후 CI 변수/시크릿 설정 필요"
   }
 }
