@@ -4,8 +4,10 @@ import App from './App.tsx'
 import { installFoamPartyFirebaseBridge } from './firebaseRuntime.ts'
 import { installFoamPartyTossFullScreenAdBridge } from './tossFullScreenAdRuntime.ts'
 import { installFoamPartySafeAreaBridge } from './safeAreaRuntime.ts'
+import { installFoamPartyGraniteNavBridge } from './graniteNavRuntime.ts'
 
 installFoamPartySafeAreaBridge()
+installFoamPartyGraniteNavBridge()
 installFoamPartyFirebaseBridge()
 installFoamPartyTossFullScreenAdBridge()
 

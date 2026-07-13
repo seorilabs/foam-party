@@ -165,6 +165,13 @@ var canvas_scale := 1.0
 # window.__foamPartySafeArea proxy (web/AIT only): CSS-px safe-area insets + viewport
 # size published by the AIT wrapper (safeAreaRuntime.ts). Cached once available.
 var _web_safe_area = null
+# AIT back-button / pause navigation. show_pause = in-level pause menu, show_quit_confirm
+# = "quit app?" dialog. _web_nav bridges to window.__foamPartyNav (setBackHandler/closeApp).
+var show_pause := false
+var show_quit_confirm := false
+var _web_nav = null
+var _back_cb = null
+var _back_registered := false
 var ui_font: Font
 # Procedural audio engine (relocated to AudioService in PR-R3). Instantiated in
 # _ready(); main triggers sounds through its public methods.
@@ -408,8 +415,65 @@ func start_game() -> void:
 	queue_redraw()
 
 
+# Register the Godot back handler with the AIT wrapper once the bridge is present
+# (window.__foamPartyNav, installed before Godot boots). Web/AIT only.
+func _ensure_back_handler() -> void:
+	if _back_registered or not OS.has_feature("web"):
+		return
+	_web_nav = JavaScriptBridge.get_interface("__foamPartyNav")
+	if _web_nav == null:
+		return
+	_back_cb = JavaScriptBridge.create_callback(_on_back_js)
+	_web_nav.setBackHandler(_back_cb)
+	_back_registered = true
+
+
+func _on_back_js(_args: Array) -> void:
+	_on_back_pressed()
+
+
+# Framework back button: dismiss the topmost modal, else pause during a level, else
+# ask before quitting on the title. Mirrors the standard Android back stack.
+func _on_back_pressed() -> void:
+	if show_quit_confirm:
+		show_quit_confirm = false
+	elif show_pause:
+		show_pause = false  # back on the pause menu = resume
+	elif show_tutorial:
+		_dismiss_tutorial()
+	elif show_upgrade_panel:
+		show_upgrade_panel = false
+	elif show_skin_panel:
+		show_skin_panel = false
+	elif game_state == STATE_PLAYING:
+		show_pause = true
+		_play_ui_select()
+	else:
+		show_quit_confirm = true
+		_play_ui_select()
+	queue_redraw()
+
+
+func _go_home() -> void:
+	show_pause = false
+	show_quit_confirm = false
+	is_washing = false
+	game_state = STATE_TITLE
+	_stop_tool_loop()
+	_play_ui_select()
+	queue_redraw()
+
+
+func _quit_app() -> void:
+	if OS.has_feature("web") and _web_nav != null:
+		_web_nav.closeApp()
+	else:
+		get_tree().quit()
+
+
 func _process(delta: float) -> void:
-	if game_state == STATE_PLAYING and not completed and not show_tutorial:
+	_ensure_back_handler()
+	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm:
 		level_time += delta
 		_check_star_time_loss()
 		var _warn_time := _grade_time_to_downgrade()
@@ -693,12 +757,16 @@ func _draw() -> void:
 		_draw_toolbar()
 		_draw_completion_panel()
 		_draw_combo_milestone_flash()
-	# Title-screen modals draw their own close button; suppress the sound/help
-	# buttons then so they don't overlap the upgrade/skin popup.
-	if not (game_state == STATE_TITLE and (show_upgrade_panel or show_skin_panel)):
+	# On AIT/web the top-right corner is a framework touch zone (X button / gestures)
+	# where taps never reach the canvas, so the sound/help buttons live only on native;
+	# web/AIT reaches sound + exit through the back-button pause menu instead.
+	# (Also suppressed behind the title-screen upgrade/skin popups.)
+	if not OS.has_feature("web") and not (game_state == STATE_TITLE and (show_upgrade_panel or show_skin_panel)):
 		_draw_top_buttons()
 	if show_tutorial:
 		_draw_tutorial()
+	_draw_pause_menu()
+	_draw_quit_confirm()
 
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
@@ -1101,6 +1169,34 @@ func _handle_key(keycode: Key) -> void:
 
 
 func _handle_tap(point: Vector2) -> bool:
+	# Quit-confirm and pause are modal: they take taps first and swallow anything
+	# outside their buttons so the game underneath never reacts.
+	if show_quit_confirm:
+		if _quit_yes_rect().has_point(point):
+			_quit_app()
+		elif _quit_no_rect().has_point(point):
+			show_quit_confirm = false
+			_play_ui_select()
+			queue_redraw()
+		return true
+
+	if show_pause:
+		if _pause_button_rect(0).has_point(point):
+			show_pause = false
+			_play_ui_select()
+			queue_redraw()
+		elif _pause_button_rect(1).has_point(point):
+			_toggle_sound()
+			queue_redraw()
+		elif _pause_button_rect(2).has_point(point):
+			_go_home()
+		elif _pause_button_rect(3).has_point(point):
+			show_pause = false
+			show_quit_confirm = true
+			_play_ui_select()
+			queue_redraw()
+		return true
+
 	if show_tutorial:
 		_dismiss_tutorial()
 		return true
@@ -3364,6 +3460,44 @@ func _draw_tool_icon(tool_id: String, center: Vector2) -> void:
 		draw_circle(center + Vector2(12.0, 13.0), 4.0, Color(1.0, 1.0, 1.0, 0.9))
 
 
+func _draw_pause_menu() -> void:
+	if not show_pause:
+		return
+	var font: Font = _font()
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.5))
+	var panel := _pause_panel()
+	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
+	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 46.0), tr("PAUSE_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#123246"))
+	var labels := [tr("RESUME"), tr("SOUND_ON") if sound_enabled else tr("SOUND_OFF"), tr("HOME"), tr("QUIT")]
+	var fills := [Color("#39d98a"), Color("#7fd6e6"), Color("#f8d97a"), Color("#f2a0a0")]
+	var text_cols := [Color("#0d3b2a"), Color("#0d3b55"), Color("#5b4a10"), Color("#5a1616")]
+	for i in range(4):
+		var r := _pause_button_rect(i)
+		draw_style_box(_style("pause_sh_%d" % i, Color(0.0, 0.0, 0.0, 0.18), 14.0), Rect2(r.position + Vector2(0.0, 4.0), r.size))
+		draw_style_box(_style("pause_btn_%d" % i, fills[i], 14.0), r)
+		draw_string(font, Vector2(r.position.x, r.position.y + 33.0), labels[i], HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 17, text_cols[i])
+
+
+func _draw_quit_confirm() -> void:
+	if not show_quit_confirm:
+		return
+	var font: Font = _font()
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.55))
+	var panel := _quit_panel()
+	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 22.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
+	draw_style_box(_style("panel", Color("#f7fbff"), 22.0), panel)
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 62.0), tr("QUIT_CONFIRM"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 18, Color("#123246"))
+	var yes := _quit_yes_rect()
+	draw_style_box(_style("quit_yes_sh", Color("#8a2a2a"), 14.0), Rect2(yes.position + Vector2(0.0, 4.0), yes.size))
+	draw_style_box(_style("quit_yes", Color("#f2857f"), 14.0), yes)
+	draw_string(font, Vector2(yes.position.x, yes.position.y + 30.0), tr("QUIT_YES"), HORIZONTAL_ALIGNMENT_CENTER, yes.size.x, 16, Color("#4a1010"))
+	var no := _quit_no_rect()
+	draw_style_box(_style("quit_no_sh", Color("#246076"), 14.0), Rect2(no.position + Vector2(0.0, 4.0), no.size))
+	draw_style_box(_style("quit_no", Color("#7fd6e6"), 14.0), no)
+	draw_string(font, Vector2(no.position.x, no.position.y + 30.0), tr("QUIT_NO"), HORIZONTAL_ALIGNMENT_CENTER, no.size.x, 16, Color("#0d3b55"))
+
+
 func _draw_completion_panel() -> void:
 	if not completed:
 		return
@@ -3486,6 +3620,35 @@ func _completion_extra() -> float:
 
 func _get_double_rect() -> Rect2:
 	return Rect2(58.0, 352.0, 274.0, 42.0)
+
+
+# Pause menu (centered modal). 4 stacked buttons: resume / sound / home / quit.
+func _pause_panel() -> Rect2:
+	return Rect2(55.0, 250.0, 280.0, 360.0)
+
+
+func _pause_button_rect(index: int) -> Rect2:
+	var panel := _pause_panel()
+	var button_h := 52.0
+	var gap := 14.0
+	var y0 := panel.position.y + 74.0
+	return Rect2(panel.position.x + 24.0, y0 + float(index) * (button_h + gap), panel.size.x - 48.0, button_h)
+
+
+func _quit_panel() -> Rect2:
+	return Rect2(65.0, 348.0, 260.0, 170.0)
+
+
+func _quit_yes_rect() -> Rect2:
+	var panel := _quit_panel()
+	var button_w := (panel.size.x - 52.0) / 2.0
+	return Rect2(panel.position.x + 20.0, panel.position.y + panel.size.y - 62.0, button_w, 46.0)
+
+
+func _quit_no_rect() -> Rect2:
+	var panel := _quit_panel()
+	var button_w := (panel.size.x - 52.0) / 2.0
+	return Rect2(panel.position.x + panel.size.x - 20.0 - button_w, panel.position.y + panel.size.y - 62.0, button_w, 46.0)
 
 
 func _get_retry_rect() -> Rect2:

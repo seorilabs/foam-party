@@ -87,6 +87,16 @@ const STRINGS := {
 	# level-end double-coins rewarded ad
 	"DOUBLE_COINS": ["광고 보고 코인 2배", "Watch ad — 2× coins"],
 	"DOUBLE_DONE": ["코인 2배 획득!", "Coins doubled!"],
+	# pause menu + quit confirm (AIT back button)
+	"PAUSE_TITLE": ["일시정지", "Paused"],
+	"RESUME": ["계속하기", "Resume"],
+	"HOME": ["홈으로", "Home"],
+	"QUIT": ["종료", "Quit"],
+	"SOUND_ON": ["소리 끄기", "Mute"],
+	"SOUND_OFF": ["소리 켜기", "Unmute"],
+	"QUIT_CONFIRM": ["앱을 종료할까요?", "Quit the app?"],
+	"QUIT_YES": ["종료", "Quit"],
+	"QUIT_NO": ["취소", "Cancel"],
 	# completion panel
 	"COMPLETE_TITLE": ["완전 청소!", "All Clean!"],
 	"COMPLETE_SUB": ["%s %02d ㆍ %s ㆍ 최고 콤보 x%d", "%s %02d ㆍ %s ㆍ Best Combo x%d"],
