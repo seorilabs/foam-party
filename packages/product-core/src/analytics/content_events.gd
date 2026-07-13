@@ -23,6 +23,7 @@ const DAILY_MISSION_CLAIM := "daily_mission_claim"
 const UPGRADE_PURCHASE := "upgrade_purchase"
 const SKIN_SELECT := "skin_select"
 const SKIN_PURCHASE := "skin_purchase"
+const REWARD_DOUBLE_COINS := "reward_double_coins"
 
 # Full catalog — used by tests and as the backoffice contract snapshot.
 const ALL := [
@@ -34,6 +35,7 @@ const ALL := [
 	UPGRADE_PURCHASE,
 	SKIN_SELECT,
 	SKIN_PURCHASE,
+	REWARD_DOUBLE_COINS,
 ]
 
 # Foam-bomb coin/ad source labels — shared so the sink and the game agree.
@@ -90,6 +92,13 @@ static func skin_select(tool: String, skin_id: String) -> Dictionary:
 
 static func skin_purchase(tool: String, skin_id: String, cost: int) -> Dictionary:
 	return _event(SKIN_PURCHASE, {"tool": tool, "skin_id": skin_id, "cost": str(cost)})
+
+
+# Level-end rewarded "double coins": the player watched an ad to double the coins
+# earned that level. `bonus` is the extra coins granted (equal to the base
+# level reward), so the economy sink can sum ad-driven coin issuance separately.
+static func reward_double_coins(level: int, bonus: int) -> Dictionary:
+	return _event(REWARD_DOUBLE_COINS, {"level": str(level), "bonus": str(bonus)})
 
 
 static func _event(name: String, params: Dictionary) -> Dictionary:

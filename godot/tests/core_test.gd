@@ -64,11 +64,11 @@ func _run_core_tests() -> void:
 		return
 
 	# --- Economy: coin rewards, upgrade costs, purchase judgement ---
-	if int(Economy.calc_coin_reward(1, 10)) != 50:
-		_fail("1-star clear with max combo bonus should pay 50 coins")
+	if int(Economy.calc_coin_reward(1, 10)) != 44:
+		_fail("1-star clear with max combo bonus should pay 44 coins")
 		return
-	if int(Economy.calc_coin_reward(3, 5)) != 60:
-		_fail("3-star clear should pay 60 coins")
+	if int(Economy.calc_coin_reward(3, 5)) != 50:
+		_fail("3-star clear should pay 50 coins")
 		return
 	if int(Economy.calc_level_milestone_bonus(5)) != 75:
 		_fail("level 5 milestone bonus should be 75")
@@ -76,14 +76,14 @@ func _run_core_tests() -> void:
 	if int(Economy.calc_level_milestone_bonus(3)) != 0:
 		_fail("non-milestone level should give no bonus")
 		return
-	if int(Economy.upgrade_cost(0, 0)) != 80 or int(Economy.upgrade_cost(0, 2)) != 280:
+	if int(Economy.upgrade_cost(0, 0)) != 90 or int(Economy.upgrade_cost(0, 2)) != 320:
 		_fail("upgrade costs should read from the config table")
 		return
-	if not bool(Economy.can_buy_upgrade(0, 0, 80)):
-		_fail("80 coins should afford the first upgrade tier")
+	if not bool(Economy.can_buy_upgrade(0, 0, 90)):
+		_fail("90 coins should afford the first upgrade tier")
 		return
-	if bool(Economy.can_buy_upgrade(0, 0, 79)):
-		_fail("79 coins should not afford the first upgrade tier")
+	if bool(Economy.can_buy_upgrade(0, 0, 89)):
+		_fail("89 coins should not afford the first upgrade tier")
 		return
 	if bool(Economy.can_buy_upgrade(0, 3, 9999)):
 		_fail("a maxed upgrade should never be buyable")
@@ -266,8 +266,12 @@ func _run_core_tests() -> void:
 	if String(e_skin["params"]["skin_id"]) != "coral" or String(e_skin["params"]["cost"]) != "80":
 		_fail("skin_purchase params changed: " + str(e_skin))
 		return
+	var e_double: Dictionary = ContentEvents.reward_double_coins(9, 60)
+	if String(e_double["name"]) != "reward_double_coins" or String(e_double["params"]["level"]) != "9" or String(e_double["params"]["bonus"]) != "60":
+		_fail("reward_double_coins params changed: " + str(e_double))
+		return
 	# Every built event name must be declared in the ALL catalog (backoffice contract).
-	for built in [e_start, e_complete, e_bomb_ad, e_mission, e_upgrade, e_skin]:
+	for built in [e_start, e_complete, e_bomb_ad, e_mission, e_upgrade, e_skin, e_double]:
 		if not ContentEvents.ALL.has(String(built["name"])):
 			_fail("event not registered in ContentEvents.ALL: " + String(built["name"]))
 			return

@@ -174,13 +174,13 @@ func _run_smoke() -> void:
 		return
 	root_node.set("best_combo", 10)
 
-	if int(root_node.call("calc_coin_reward_for_test")) != 50:
-		_fail("expected 50 coins for 1-star clear with max combo bonus")
+	if int(root_node.call("calc_coin_reward_for_test")) != 44:
+		_fail("expected 44 coins for 1-star clear with max combo bonus")
 		return
 	root_node.set("level_time", 60.0)
 	root_node.set("best_combo", 5)
-	if int(root_node.call("calc_coin_reward_for_test")) != 60:
-		_fail("expected 60 coins for 3-star clear")
+	if int(root_node.call("calc_coin_reward_for_test")) != 50:
+		_fail("expected 50 coins for 3-star clear")
 		return
 
 	if String(root_node.call("get_car_type_for_test")) != "compact":
