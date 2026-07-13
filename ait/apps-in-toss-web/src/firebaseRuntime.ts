@@ -66,6 +66,13 @@ function initializeFirebase() {
       return getAnalytics(app)
     })
     .catch(() => null)
+    .then((analytics) => {
+      // One-line diagnostic so the active path is visible in the WebView console
+      // (AIT sandbox / remote DevTools): firebase | mp-fallback | disabled.
+      const mode = analytics != null ? 'firebase' : measurementProtocolEnabled() ? 'mp-fallback' : 'disabled'
+      console.info(`[FoamParty] analytics path: ${mode}`)
+      return analytics
+    })
 }
 
 function firebaseOptions(): FirebaseOptions | null {
@@ -130,8 +137,90 @@ function sendFirebaseEvent(eventName: string, params: EventParams) {
   void analyticsReady.then((analytics) => {
     if (analytics != null) {
       logEvent(analytics, cleanName, params)
+    } else {
+      // Firebase Analytics unavailable in this WebView (isSupported() false /
+      // gtag blocked) — fall back to GA4 Measurement Protocol so collection still
+      // works. Only one path runs per event, so there is no double counting.
+      sendViaMeasurementProtocol(cleanName, params)
     }
   })
+}
+
+// ── GA4 Measurement Protocol fallback ───────────────────────────────────────
+// A plain fetch to GA4 that does not depend on gtag, cookies, IndexedDB, or the
+// Firebase API key — the exact things that can make Firebase Analytics silently
+// no-op inside the AppsInToss WebView. Enabled only when an MP api_secret is set.
+const GA4_MP_ENDPOINT = 'https://www.google-analytics.com/mp/collect'
+
+function mpApiSecret() {
+  return optional(import.meta.env.VITE_GA4_MP_API_SECRET) ?? ''
+}
+
+function mpMeasurementId() {
+  return optional(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) ?? ''
+}
+
+function measurementProtocolEnabled() {
+  return mpApiSecret() !== '' && mpMeasurementId() !== ''
+}
+
+let cachedClientId: string | null = null
+
+function ga4ClientId() {
+  if (cachedClientId != null) {
+    return cachedClientId
+  }
+  const key = 'foam_ga4_client_id'
+  try {
+    const stored = window.localStorage.getItem(key)
+    if (stored) {
+      cachedClientId = stored
+      return stored
+    }
+  } catch {
+    // localStorage blocked — fall through to an in-memory id for this session.
+  }
+  const generated = `${Date.now()}.${Math.floor(Math.random() * 1_000_000_000)}`
+  cachedClientId = generated
+  try {
+    window.localStorage.setItem(key, generated)
+  } catch {
+    // ignore: an in-memory client id still lets events land, just not stitched
+    // across app restarts.
+  }
+  return generated
+}
+
+let cachedSessionId = ''
+
+function ga4SessionId() {
+  if (cachedSessionId === '') {
+    cachedSessionId = String(Date.now())
+  }
+  return cachedSessionId
+}
+
+function sendViaMeasurementProtocol(eventName: string, params: EventParams) {
+  if (!measurementProtocolEnabled()) {
+    return
+  }
+  const url = `${GA4_MP_ENDPOINT}?measurement_id=${encodeURIComponent(mpMeasurementId())}&api_secret=${encodeURIComponent(mpApiSecret())}`
+  const body = JSON.stringify({
+    client_id: ga4ClientId(),
+    events: [
+      {
+        name: eventName,
+        // session_id + engagement_time_msec make GA4 count this as an engaged
+        // session so the event shows in Realtime and standard reports.
+        params: { ...params, session_id: ga4SessionId(), engagement_time_msec: 100 },
+      },
+    ],
+  })
+  try {
+    void fetch(url, { method: 'POST', body, keepalive: true }).catch(() => undefined)
+  } catch {
+    // Network unavailable — drop silently (analytics must never break gameplay).
+  }
 }
 
 function recordError(message: string, paramsJson = '{}') {
