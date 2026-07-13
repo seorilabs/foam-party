@@ -162,6 +162,9 @@ var car_type := "compact"
 var car_type_labels: Dictionary = {}
 var canvas_origin := Vector2.ZERO
 var canvas_scale := 1.0
+# window.__foamPartySafeArea proxy (web/AIT only): CSS-px safe-area insets + viewport
+# size published by the AIT wrapper (safeAreaRuntime.ts). Cached once available.
+var _web_safe_area = null
 var ui_font: Font
 # Procedural audio engine (relocated to AudioService in PR-R3). Instantiated in
 # _ready(); main triggers sounds through its public methods.
@@ -957,6 +960,10 @@ func _safe_area_design_insets() -> Vector4:
 		var parts := debug_insets.split(",", false)
 		if parts.size() == 4:
 			return Vector4(parts[0].to_float(), parts[1].to_float(), parts[2].to_float(), parts[3].to_float())
+	# Web/AIT: Godot cannot read the browser safe area, so the AIT wrapper publishes
+	# it via window.__foamPartySafeArea (CSS px). Convert to design units here.
+	if OS.has_feature("web"):
+		return _web_safe_area_design_insets()
 	_update_canvas_transform()
 	if canvas_scale <= 0.0:
 		return Vector4(0.0, 0.0, 0.0, 0.0)
@@ -978,6 +985,33 @@ func _safe_area_design_insets() -> Vector4:
 	var inset_top := maxf(0.0, (safe_canvas.position.y - canvas_origin.y) / canvas_scale)
 	var inset_right := maxf(0.0, (design_max.x - (safe_canvas.position.x + safe_canvas.size.x)) / canvas_scale)
 	var inset_bottom := maxf(0.0, (design_max.y - (safe_canvas.position.y + safe_canvas.size.y)) / canvas_scale)
+	return Vector4(inset_left, inset_top, inset_right, inset_bottom)
+
+
+# Read the AIT-published safe area (CSS px) and map it into design units. The
+# wrapper mutates a single stable object, so caching the interface is safe; it is
+# re-fetched until present in case Godot boots before the bridge is installed.
+func _web_safe_area_design_insets() -> Vector4:
+	if _web_safe_area == null:
+		_web_safe_area = JavaScriptBridge.get_interface("__foamPartySafeArea")
+	if _web_safe_area == null:
+		return Vector4.ZERO
+	var css_w := float(_web_safe_area.vw)
+	var css_h := float(_web_safe_area.vh)
+	if css_w <= 0.0 or css_h <= 0.0:
+		return Vector4.ZERO
+	# Match _update_canvas_transform: DESIGN_SIZE is min-fit and centered in the
+	# viewport, so a CSS-px inset maps to design units after removing the letterbox
+	# margin and dividing by the fit scale.
+	var s := minf(css_w / DESIGN_SIZE.x, css_h / DESIGN_SIZE.y)
+	if s <= 0.0:
+		return Vector4.ZERO
+	var margin_x := (css_w - DESIGN_SIZE.x * s) * 0.5
+	var margin_y := (css_h - DESIGN_SIZE.y * s) * 0.5
+	var inset_top := maxf(0.0, (float(_web_safe_area.top) - margin_y) / s)
+	var inset_bottom := maxf(0.0, (float(_web_safe_area.bottom) - margin_y) / s)
+	var inset_left := maxf(0.0, (float(_web_safe_area.left) - margin_x) / s)
+	var inset_right := maxf(0.0, (float(_web_safe_area.right) - margin_x) / s)
 	return Vector4(inset_left, inset_top, inset_right, inset_bottom)
 
 
