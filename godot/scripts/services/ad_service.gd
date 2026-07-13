@@ -18,6 +18,7 @@ extends Node
 # counting.
 
 const REWARDED_PLACEMENT_FOAM_BOMB := "foam_bomb_free"
+const REWARDED_PLACEMENT_LEVEL_REWARD := "level_reward_2x"
 const INTERSTITIAL_PLACEMENT_GAME_OVER := "game_over"
 
 var _analytics = null  # AnalyticsPort (log_event); may stay null.

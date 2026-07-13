@@ -27,7 +27,12 @@ declare global {
 }
 
 const REWARDED_PLACEMENT = 'foam_bomb_free'
+const LEVEL_REWARD_PLACEMENT = 'level_reward_2x'
 const INTERSTITIAL_PLACEMENT = 'game_over'
+// All rewarded placements share the load→show→load lifecycle; the ad type is
+// decided by the placement's ad group id, so adding a rewarded placement is just
+// adding its id mapping below.
+const REWARDED_PLACEMENTS = new Set<string>([REWARDED_PLACEMENT, LEVEL_REWARD_PLACEMENT])
 const LOAD_TIMEOUT_MS = 15 * 1000
 
 interface AdSlot {
@@ -48,8 +53,9 @@ export function installFoamPartyTossFullScreenAdBridge() {
     showRewarded,
     showInterstitial,
   }
-  // Preload both placements up front so they are ready when the game asks.
+  // Preload every placement up front so they are ready when the game asks.
   preload(REWARDED_PLACEMENT)
+  preload(LEVEL_REWARD_PLACEMENT)
   preload(INTERSTITIAL_PLACEMENT)
 }
 
@@ -57,6 +63,9 @@ function adGroupId(placement: string): string {
   const env = import.meta.env
   if (placement === REWARDED_PLACEMENT) {
     return env.VITE_TOSS_REWARDED_AD_GROUP_ID?.trim() || ''
+  }
+  if (placement === LEVEL_REWARD_PLACEMENT) {
+    return env.VITE_TOSS_LEVEL_REWARD_AD_GROUP_ID?.trim() || ''
   }
   if (placement === INTERSTITIAL_PLACEMENT) {
     return env.VITE_TOSS_INTERSTITIAL_AD_GROUP_ID?.trim() || ''
@@ -135,7 +144,7 @@ function preload(placement: string) {
 }
 
 function isRewardedReady(placement: string): boolean {
-  if (placement !== REWARDED_PLACEMENT) {
+  if (!REWARDED_PLACEMENTS.has(placement)) {
     return false
   }
   const slot = slots.get(placement)
@@ -143,7 +152,7 @@ function isRewardedReady(placement: string): boolean {
 }
 
 function showRewarded(placement: string, onResult: RewardResultCallback): boolean {
-  if (placement !== REWARDED_PLACEMENT) {
+  if (!REWARDED_PLACEMENTS.has(placement)) {
     return false
   }
   return show(placement, onResult)
@@ -210,7 +219,7 @@ function show(placement: string, onResult: RewardResultCallback | null): boolean
 }
 
 function logAdEvent(placement: string, eventType: string, details: Record<string, number | string> = {}) {
-  const rewarded = placement === REWARDED_PLACEMENT
+  const rewarded = REWARDED_PLACEMENTS.has(placement)
   window.__foamPartyFirebase?.logEvent(
     `ait_${rewarded ? 'rewarded' : 'interstitial'}_${eventNameSuffix(eventType)}`,
     JSON.stringify({

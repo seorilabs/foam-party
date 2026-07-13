@@ -139,6 +139,15 @@ var coins := 0
 var total_stars := 0
 var coin_reward := 0
 var _level_milestone_bonus := 0
+# A: free foam bombs granted via rewarded ad this level (capped by
+# GameConfig.FREE_AD_BOMB_PER_LEVEL). B: _double_claimed is set once the level-end
+# 2x-coins ad has been watched to completion (one grant per level).
+var _free_ad_bombs_used := 0
+var _double_claimed := false
+# Latched once when the level is completed so the completion panel layout does not
+# jitter if ad readiness flips frame-to-frame while the panel is on screen. The
+# button's active/tappable state still tracks live ad readiness (see draw/input).
+var _double_offer_shown := false
 var _star_reveal_times: Array[float] = [-10.0, -10.0, -10.0]
 const STAR_REVEAL_DELAYS: Array[float] = [0.3, 0.75, 1.25]
 const STAR_REVEAL_POP_DUR := 0.5
@@ -695,6 +704,9 @@ func reset_game(new_level: int) -> void:
 	level_index = new_level
 	completed = false
 	completion_burst_done = false
+	_free_ad_bombs_used = 0
+	_double_claimed = false
+	_double_offer_shown = false
 	_gleam_time = -1.0
 	is_washing = false
 	wash_trail.clear()
@@ -1084,6 +1096,11 @@ func _handle_tap(point: Vector2) -> bool:
 			_play_ui_select()
 		return true
 
+	if completed and _double_offer_shown and not _double_claimed and ads != null and ads.is_rewarded_ready("level_reward_2x") and _get_double_rect().has_point(point):
+		_play_ui_select()
+		_try_double_coins()
+		return true
+
 	if completed and _get_retry_rect().has_point(point):
 		_maybe_show_game_over_interstitial()
 		reset_game(level_index)
@@ -1110,18 +1127,20 @@ func _handle_tap(point: Vector2) -> bool:
 		return true
 
 	if not completed and _get_bomb_rect().has_point(point):
-		if coins < BOMB_COST:
-			# Not enough coins: offer a rewarded ad for a free foam bomb when one
-			# is ready; otherwise just deny.
-			if ads != null and ads.is_rewarded_ready("foam_bomb_free"):
-				ads.show_rewarded("foam_bomb_free", _on_foam_bomb_reward)
-			else:
-				audio.play_bomb_deny()
-		else:
+		# A: the free-via-ad bomb is offered whenever rewarded inventory is ready and
+		# the per-level cap is not hit — no longer gated on being out of coins. This
+		# is what actually surfaces the rewarded ad, since a cleared level usually
+		# leaves the player able to afford the coin price.
+		if _free_ad_bomb_available():
+			ads.show_rewarded("foam_bomb_free", _on_foam_bomb_reward)
+		elif coins >= BOMB_COST:
 			if apply_foam_bomb():
 				_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
 			else:
 				audio.play_bomb_deny()
+		else:
+			# No ad ready (or cap reached) and can't afford: deny.
+			audio.play_bomb_deny()
 		return true
 
 	for index in range(tool_ids.size()):
@@ -1168,6 +1187,10 @@ func apply_foam_bomb(free := false) -> bool:
 		patch.soap = 1.0
 		patch.wetness = max(patch.wetness, 0.3)
 		patch.looseness = max(patch.looseness, 0.7)
+		# D: instant partial clean — knock 25% off each patch's remaining health so
+		# the bomb is a real time-saver toward the star-time threshold, not just a
+		# soap primer. Clean progress/removal is driven by patch.health.
+		patch.health = max(0.0, patch.health * 0.75)
 		if patch.kind == "oil" or patch.kind == "bug":
 			patch.state = STATE_LOOSENED
 		elif patch.kind == "mud":
@@ -1188,12 +1211,52 @@ func apply_foam_bomb(free := false) -> bool:
 	return true
 
 
+# A rewarded free bomb is offered while inventory is ready and the per-level cap
+# is not yet reached. Decoupled from the coin balance so the ad actually surfaces.
+func _free_ad_bomb_available() -> bool:
+	return (
+		not completed
+		and _free_ad_bombs_used < GameConfig.FREE_AD_BOMB_PER_LEVEL
+		and ads != null
+		and ads.is_rewarded_ready("foam_bomb_free")
+	)
+
+
 # Rewarded-ad reward callback for the free foam bomb (AdService → here). The
 # reward was genuinely earned, so grant the free bomb. If there is nothing left
 # to clean (rare), no-op silently — never a rejection sound after a watched ad.
 func _on_foam_bomb_reward() -> void:
+	# Count the grant against the per-level cap even if the board is already clean,
+	# so a watched ad always consumes one slot (no unbounded re-watching).
+	_free_ad_bombs_used += 1
 	if apply_foam_bomb(true):
 		_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
+	queue_redraw()
+
+
+# B: tapping the completion-panel "double coins" button plays a rewarded ad. Only
+# fires when inventory is actually ready (AdService's _rewarded_in_flight guards
+# against concurrent shows); a dismissed ad simply leaves the offer re-tappable.
+func _try_double_coins() -> void:
+	if not completed or _double_claimed or not _double_offer_shown:
+		return
+	if ads == null or not ads.is_rewarded_ready("level_reward_2x"):
+		return
+	ads.show_rewarded("level_reward_2x", _on_double_coins_reward)
+
+
+# Rewarded-ad callback for level-end double coins. Fires only when earned (the ad
+# was watched to completion), so grant a bonus equal to the base level reward
+# (total = 2x). A dismissed ad never calls this, leaving the offer available.
+func _on_double_coins_reward() -> void:
+	if _double_claimed:
+		return
+	_double_claimed = true
+	var bonus := coin_reward
+	coins += bonus
+	_emit_content(ContentEvents.reward_double_coins(level_index, bonus))
+	audio.play_coin_bonus()
+	_save_progress()
 	queue_redraw()
 
 
@@ -1770,6 +1833,9 @@ func _update_clean_progress() -> void:
 		coin_reward += _level_milestone_bonus
 		coins += coin_reward
 		total_stars += earned_stars
+		# B: latch whether to offer the level-end "double coins" rewarded ad, so the
+		# completion panel reserves a stable button row for the life of this screen.
+		_double_offer_shown = ads != null and ads.is_rewarded_ready("level_reward_2x")
 		_register_best_time()
 		_emit_content(ContentEvents.level_complete(
 			level_index, earned_stars, int(level_time), best_combo, coin_reward, is_new_record
@@ -2854,17 +2920,19 @@ func _draw_bomb_button() -> void:
 		var c := rect.get_center()
 		draw_set_transform(c * (1.0 - pop), 0.0, Vector2(pop, pop))
 	var can_afford := coins >= BOMB_COST
-	# When coins run short but a rewarded ad is ready, the chip becomes an active
-	# "watch ad for a free foam bomb" affordance instead of a disabled button.
-	var ad_ready: bool = not can_afford and ads != null and ads.is_rewarded_ready("foam_bomb_free")
+	# A: whenever a rewarded free bomb is available (inventory ready + under the
+	# per-level cap), the chip is the green "watch ad for a free bomb" affordance —
+	# regardless of coin balance, so the ad actually gets shown. Falls back to the
+	# coin price only when no free ad is available.
+	var ad_ready := _free_ad_bomb_available()
 	var bg: Color
 	var style_key: String
-	if can_afford:
-		bg = Color("#f8f4a6")
-		style_key = "bomb_on"
-	elif ad_ready:
+	if ad_ready:
 		bg = Color("#a8e6c0")
 		style_key = "bomb_ad"
+	elif can_afford:
+		bg = Color("#f8f4a6")
+		style_key = "bomb_on"
 	else:
 		bg = Color(0.55, 0.6, 0.63, 0.85)
 		style_key = "bomb_off"
@@ -3267,7 +3335,7 @@ func _draw_completion_panel() -> void:
 		return
 	var font: Font = _font()
 	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.35))
-	var panel := Rect2(38.0, 198.0, 314.0, 232.0)
+	var panel := Rect2(38.0, 198.0, 314.0, 232.0 + _completion_extra())
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
 
@@ -3313,6 +3381,31 @@ func _draw_completion_panel() -> void:
 		draw_style_box(_style("milestone_chip", chip_color, 15.0), milestone_chip)
 		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), tr("MILESTONE_CHIP") % [level_index, _level_milestone_bonus], HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x, 13, Color("#fff0ff"))
 
+	# B: level-end "watch ad → double coins" CTA. Active (green + play triangle)
+	# until claimed; after a watched ad it flips to a claimed/disabled state so the
+	# row stays put and can't be tapped twice.
+	if _double_offer_shown:
+		var dbl := _get_double_rect()
+		var claimed := _double_claimed
+		# Active (tappable) only while inventory is ready; between a dismissed show
+		# and its reload the chip dims but keeps its reserved row.
+		var active: bool = not claimed and ads != null and ads.is_rewarded_ready("level_reward_2x")
+		var dbl_bg: Color
+		var dbl_shadow: Color
+		if active:
+			dbl_bg = Color("#39d98a")
+			dbl_shadow = Color("#1f8a55")
+		else:
+			dbl_bg = Color("#c9d3d9")
+			dbl_shadow = Color("#9aa8b0")
+		draw_style_box(_style("double_shadow", dbl_shadow, 14.0), Rect2(dbl.position + Vector2(0.0, 4.0), dbl.size))
+		draw_style_box(_style("double_button", dbl_bg, 14.0), dbl)
+		if active:
+			var dtx := dbl.position.x + 26.0
+			var dty := dbl.position.y + dbl.size.y * 0.5
+			draw_colored_polygon(PackedVector2Array([Vector2(dtx, dty - 7.0), Vector2(dtx, dty + 7.0), Vector2(dtx + 11.0, dty)]), Color("#0d3b2a"))
+		draw_string(font, Vector2(dbl.position.x, dbl.position.y + 27.0), tr("DOUBLE_DONE") if claimed else tr("DOUBLE_COINS"), HORIZONTAL_ALIGNMENT_CENTER, dbl.size.x, 16, Color("#4a565c") if not active else Color("#0d3b2a"))
+
 	var retry_rect := _get_retry_rect()
 	draw_style_box(_style("retry_shadow", Color("#246076"), 14.0), Rect2(retry_rect.position + Vector2(0.0, 4.0), retry_rect.size))
 	draw_style_box(_style("retry_button", Color("#7fd6e6"), 14.0), retry_rect)
@@ -3348,12 +3441,25 @@ func _get_tool_rect(index: int) -> Rect2:
 	return Rect2(margin + float(index) * (width + gap), _tool_button_y(), width, TOOL_BUTTON_HEIGHT)
 
 
+# B: when the level-end double-coins offer is shown, the completion panel grows by
+# this much and the retry/next row slides down to make room for the 2x button.
+const COMPLETION_DOUBLE_EXTRA := 56.0
+
+
+func _completion_extra() -> float:
+	return COMPLETION_DOUBLE_EXTRA if _double_offer_shown else 0.0
+
+
+func _get_double_rect() -> Rect2:
+	return Rect2(58.0, 352.0, 274.0, 42.0)
+
+
 func _get_retry_rect() -> Rect2:
-	return Rect2(58.0, 360.0, 131.0, 46.0)
+	return Rect2(58.0, 360.0 + _completion_extra(), 131.0, 46.0)
 
 
 func _get_next_rect() -> Rect2:
-	return Rect2(201.0, 360.0, 131.0, 46.0)
+	return Rect2(201.0, 360.0 + _completion_extra(), 131.0, 46.0)
 
 
 func _get_start_rect() -> Rect2:

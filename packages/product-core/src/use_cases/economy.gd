@@ -8,7 +8,10 @@ const GameConfig = preload("res://core/domain/game_config.gd")
 
 
 static func calc_coin_reward(stars: int, best_combo: int) -> int:
-	return 20 + stars * 10 + min(best_combo, 10) * 2
+	# Medium economy tightening (~15% lower base income): scarcity comes from the
+	# upgrade/skin sinks, and ad-watchers can recover the gap via the level-end
+	# double-coins rewarded ad. Ad-free foam bombs (rewarded) keep the bomb cheap.
+	return 16 + stars * 8 + min(best_combo, 10) * 2
 
 
 static func calc_level_milestone_bonus(level: int) -> int:

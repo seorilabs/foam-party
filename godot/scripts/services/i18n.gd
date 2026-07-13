@@ -84,6 +84,9 @@ const STRINGS := {
 	# foam bomb
 	"BOMB_LABEL": ["거품", "Foam"],
 	"BOMB_FREE": ["무료", "Free"],
+	# level-end double-coins rewarded ad
+	"DOUBLE_COINS": ["광고 보고 코인 2배", "Watch ad — 2× coins"],
+	"DOUBLE_DONE": ["코인 2배 획득!", "Coins doubled!"],
 	# completion panel
 	"COMPLETE_TITLE": ["완전 청소!", "All Clean!"],
 	"COMPLETE_SUB": ["%s %02d ㆍ %s ㆍ 최고 콤보 x%d", "%s %02d ㆍ %s ㆍ Best Combo x%d"],

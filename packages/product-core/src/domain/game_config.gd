@@ -12,7 +12,10 @@ const STAR_WARN_SECONDS := 15.0
 const COMBO_WINDOW := 2.5
 const CLEAN_DAMAGE_RATE := 72.0
 const BOMB_COST := 40
-const UPGRADE_COSTS := [[80, 160, 280], [80, 160, 280], [80, 160, 280]]
+# Rewarded ad grants at most this many free foam bombs per level; beyond the cap
+# the bomb falls back to the coin price so ad inventory is not farmed endlessly.
+const FREE_AD_BOMB_PER_LEVEL := 3
+const UPGRADE_COSTS := [[90, 190, 320], [90, 190, 320], [90, 190, 320]]
 const UPGRADE_MULTS := [1.0, 1.3, 1.6, 2.0]
 const UPGRADE_KEYS := ["water", "soap", "sponge"]
 const UPGRADE_MAX_LEVEL := 3
