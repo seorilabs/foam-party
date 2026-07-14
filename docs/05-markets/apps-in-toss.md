@@ -24,6 +24,6 @@
 ## Current Status
 
 - Godot Web export preset은 GitHub Pages와 AppsInToss wrapper 후보가 공유한다.
-- AIT 번들은 Firebase Web SDK/API Key를 포함하지 않고 GA4 Measurement Protocol로만 이벤트를 수집한다.
+- AIT 번들은 Google API Key/GA4 secret을 포함하지 않으며, 서버 프록시 도입 전까지 웹 애널리틱스를 비활성한다.
 - `.ait` 생성 성공은 AppsInToss 콘솔 등록, 이미지, 광고, sandbox QA 완료를 의미하지 않는다.
 - 게임 등급분류 증빙 전에는 앱정보 검토 요청을 완료할 수 없다.

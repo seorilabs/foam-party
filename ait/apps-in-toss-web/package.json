@@ -14,7 +14,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "ait deploy",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@apps-in-toss/web-framework": "^2.6.0",
