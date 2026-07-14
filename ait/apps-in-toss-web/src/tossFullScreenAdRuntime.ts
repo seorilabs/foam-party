@@ -60,15 +60,14 @@ export function installFoamPartyTossFullScreenAdBridge() {
 }
 
 function adGroupId(placement: string): string {
-  const env = import.meta.env
   if (placement === REWARDED_PLACEMENT) {
-    return env.VITE_TOSS_REWARDED_AD_GROUP_ID?.trim() || ''
+    return import.meta.env.VITE_TOSS_REWARDED_AD_GROUP_ID?.trim() || ''
   }
   if (placement === LEVEL_REWARD_PLACEMENT) {
-    return env.VITE_TOSS_LEVEL_REWARD_AD_GROUP_ID?.trim() || ''
+    return import.meta.env.VITE_TOSS_LEVEL_REWARD_AD_GROUP_ID?.trim() || ''
   }
   if (placement === INTERSTITIAL_PLACEMENT) {
-    return env.VITE_TOSS_INTERSTITIAL_AD_GROUP_ID?.trim() || ''
+    return import.meta.env.VITE_TOSS_INTERSTITIAL_AD_GROUP_ID?.trim() || ''
   }
   return ''
 }

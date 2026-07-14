@@ -5,7 +5,7 @@
 - AppsInToss appName: `foam-party` (등록 완료, 수정 불가)
 - Display name(한글): 버블 버블 거품 세차 (콘솔 앱정보 등록명 = 미니앱 표기명. `granite.config.ts` `brand.displayName` / `ait/apps-in-toss-web/index.html` title과 일치해야 함)
 - Display name(영문): Foam Party
-- Delivery shape: Godot Web export wrapper 후보
+- Delivery shape: Godot Web export + AppsInToss Web wrapper
 
 ## Registration
 
@@ -16,14 +16,14 @@
 ## Release
 
 - Web export preset: `Web`
-- Granite wrapper: 확정 필요
-- `.ait` artifact: 미진행
+- Granite wrapper: `ait/apps-in-toss-web`
+- `.ait` artifact: 생성/배포 가능. 생성 후 `npm run check:no-google-api-key` 필수
 - Sandbox QA: 확정 필요
 - Registration images: `apps-in-toss/assets/` 제작본, 콘솔 업로드 미진행
 
 ## Current Status
 
 - Godot Web export preset은 GitHub Pages와 AppsInToss wrapper 후보가 공유한다.
-- AppsInToss delivery wrapper는 아직 미구현이다.
+- AIT 번들은 Firebase Web SDK/API Key를 포함하지 않고 GA4 Measurement Protocol로만 이벤트를 수집한다.
 - `.ait` 생성 성공은 AppsInToss 콘솔 등록, 이미지, 광고, sandbox QA 완료를 의미하지 않는다.
 - 게임 등급분류 증빙 전에는 앱정보 검토 요청을 완료할 수 없다.

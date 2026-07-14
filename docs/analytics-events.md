@@ -3,7 +3,7 @@
 모든 이벤트는 Firebase Analytics로 수집한다. 플랫폼별 경로:
 
 - **네이티브(Android/iOS)**: Godot `FirebaseAnalyticsAdapter` → `godotx_firebase` 네이티브 플러그인.
-- **웹/AIT**: Godot `FirebaseAnalyticsAdapter` → `JavaScriptBridge` → `window.__foamPartyFirebase`(firebaseRuntime.ts) → Firebase JS SDK.
+- **웹/AIT**: Godot `FirebaseAnalyticsAdapter` → `JavaScriptBridge` → `window.__foamPartyFirebase`(firebaseRuntime.ts) → GA4 Measurement Protocol. AIT 번들에 Firebase Web SDK/API Key는 포함하지 않는다.
 
 즉 게임 로직은 항상 `analytics.log_event(name, params)` 하나만 호출하고, 플랫폼 라우팅은 어댑터가 처리한다.
 
