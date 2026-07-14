@@ -43,9 +43,9 @@ npm run build
 
 ## GA4 / 광고 브리지
 
-- `window.__foamPartyFirebase` 호환 브리지는 GA4 Measurement Protocol로 이벤트를 보냅니다.
-- AIT 번들에는 Firebase Web SDK, `VITE_FIREBASE_API_KEY`, Remote Config 클라이언트를 포함하지 않습니다.
-- Remote Config 브리지는 기본값을 반환하며, `VITE_GA4_MP_API_SECRET` 또는 `VITE_GA4_MEASUREMENT_ID`가 없으면 이벤트 수집만 비활성화됩니다.
+- `window.__foamPartyFirebase` 호환 브리지는 기존 Godot/광고 코드 호환을 위한 no-op입니다.
+- AIT 번들에는 Firebase Web SDK, Google API Key, GA4 Measurement Protocol secret을 포함하지 않습니다.
+- AIT 애널리틱스는 서버 프록시 도입 전까지 비활성이며 Remote Config 브리지는 로컬 기본값을 반환합니다.
 
 ## GitHub Actions
 
