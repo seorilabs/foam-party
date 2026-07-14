@@ -1,7 +1,3 @@
-import { getAnalytics, isSupported, logEvent, type Analytics } from 'firebase/analytics'
-import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app'
-import { fetchAndActivate, getRemoteConfig, getValue, type RemoteConfig } from 'firebase/remote-config'
-
 type EventParams = Record<string, boolean | number | string>
 
 type FoamPartyFirebaseBridge = {
@@ -25,13 +21,7 @@ const REMOTE_DEFAULTS = {
   game_over_interstitial_retry_delay_seconds: 1.5,
 }
 
-let app: FirebaseApp | null = null
-let analyticsReady: Promise<Analytics | null> = Promise.resolve(null)
-let remoteConfig: RemoteConfig | null = null
-
 export function installFoamPartyFirebaseBridge() {
-  initializeFirebase()
-
   window.__foamPartyFirebase = {
     fetchRemoteConfig,
     getBoolean,
@@ -41,93 +31,31 @@ export function installFoamPartyFirebaseBridge() {
     recordError,
   }
 
-  fetchRemoteConfig()
   logActiveAnalyticsPath()
 }
 
-function initializeFirebase() {
-  const config = firebaseOptions()
-  if (!config) {
-    return
-  }
-
-  app = getApps().length > 0 ? getApp() : initializeApp(config)
-  remoteConfig = getRemoteConfig(app)
-  remoteConfig.settings = {
-    fetchTimeoutMillis: 30 * 1000,
-    minimumFetchIntervalMillis: 60 * 60 * 1000,
-  }
-  remoteConfig.defaultConfig = REMOTE_DEFAULTS
-
-  analyticsReady = isSupported()
-    .then((supported) => {
-      if (!supported || !config.measurementId || app == null) {
-        return null
-      }
-      return getAnalytics(app)
-    })
-    .catch(() => null)
-}
-
-// One-line diagnostic so the active path is visible in the WebView console (AIT
-// sandbox / remote DevTools). Runs from installFoamPartyFirebaseBridge so it fires
-// even when initializeFirebase early-returns on missing config (MP can still be
-// the live path in that case).
 function logActiveAnalyticsPath() {
-  void analyticsReady.then((analytics) => {
-    const mode = analytics != null ? 'firebase' : measurementProtocolEnabled() ? 'mp-fallback' : 'disabled'
-    console.info(`[FoamParty] analytics path: ${mode}`)
-  })
-}
-
-function firebaseOptions(): FirebaseOptions | null {
-  const apiKey = optional(import.meta.env.VITE_FIREBASE_API_KEY)
-  const projectId = optional(import.meta.env.VITE_FIREBASE_PROJECT_ID)
-  const appId = optional(import.meta.env.VITE_FIREBASE_APP_ID)
-  if (!apiKey || !projectId || !appId) {
-    return null
-  }
-
-  return {
-    apiKey,
-    appId,
-    authDomain: optional(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN),
-    measurementId: optional(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID),
-    messagingSenderId: optional(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID),
-    projectId,
-    storageBucket: optional(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET),
-  }
+  const mode = measurementProtocolEnabled() ? 'ga4-mp' : 'disabled'
+  console.info(`[FoamParty] analytics path: ${mode}`)
 }
 
 function fetchRemoteConfig() {
-  if (remoteConfig == null) {
-    return
-  }
-  void fetchAndActivate(remoteConfig).catch(() => undefined)
+  // AIT packages intentionally ship without the Firebase Web SDK or API key.
+  // Keep the bridge method as a no-op so the Godot adapter stays compatible.
 }
 
 function getBoolean(key: string, fallback: boolean) {
-  if (remoteConfig == null || key.trim() === '') {
-    return fallback
-  }
-  const value = getValue(remoteConfig, key)
-  return value.getSource() === 'static' ? fallback : value.asBoolean()
+  const value = REMOTE_DEFAULTS[key as keyof typeof REMOTE_DEFAULTS]
+  return typeof value === 'boolean' ? value : fallback
 }
 
 function getNumber(key: string, fallback: number) {
-  if (remoteConfig == null || key.trim() === '') {
-    return fallback
-  }
-  const value = getValue(remoteConfig, key)
-  return value.getSource() === 'static' ? fallback : value.asNumber()
+  const value = REMOTE_DEFAULTS[key as keyof typeof REMOTE_DEFAULTS]
+  return typeof value === 'number' ? value : fallback
 }
 
-function getString(key: string, fallback: string) {
-  if (remoteConfig == null || key.trim() === '') {
-    return fallback
-  }
-  const value = getValue(remoteConfig, key)
-  return value.getSource() === 'static' ? fallback : value.asString()
+function getString(_key: string, fallback: string) {
+  return fallback
 }
 
 function logFirebaseEvent(eventName: string, paramsJson = '{}') {
@@ -139,22 +67,11 @@ function sendFirebaseEvent(eventName: string, params: EventParams) {
   if (cleanName === '') {
     return
   }
-  void analyticsReady.then((analytics) => {
-    if (analytics != null) {
-      logEvent(analytics, cleanName, params)
-    } else {
-      // Firebase Analytics unavailable in this WebView (isSupported() false /
-      // gtag blocked) — fall back to GA4 Measurement Protocol so collection still
-      // works. Only one path runs per event, so there is no double counting.
-      sendViaMeasurementProtocol(cleanName, params)
-    }
-  })
+  sendViaMeasurementProtocol(cleanName, params)
 }
 
-// ── GA4 Measurement Protocol fallback ───────────────────────────────────────
-// A plain fetch to GA4 that does not depend on gtag, cookies, IndexedDB, or the
-// Firebase API key — the exact things that can make Firebase Analytics silently
-// no-op inside the AppsInToss WebView. Enabled only when an MP api_secret is set.
+// AIT uses GA4 Measurement Protocol directly so no Google API key or Firebase
+// client SDK is included in the package.
 const GA4_MP_ENDPOINT = 'https://www.google-analytics.com/mp/collect'
 
 function mpApiSecret() {

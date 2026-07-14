@@ -41,11 +41,11 @@ npm run build
 
 성공하면 `foam-party.ait`가 생성됩니다. 이 산출물 생성은 기술 패키징 확인이며, AppsInToss 출시 검수·게임 등급분류가 완료됐다는 뜻은 아닙니다.
 
-## Firebase / 광고 브리지
+## GA4 / 광고 브리지
 
-- 이 래퍼는 `window.__foamPartyFirebase`(Analytics/Remote Config)와 `window.__foamPartyAds`(전면 광고) JS bridge를 설치합니다.
-- **현재 폼 파티 Godot 빌드는 Web에서 이 JS bridge를 호출하지 않습니다.** Godot 쪽 Firebase는 Android 네이티브 플러그인 싱글턴(`GodotxFirebaseCore` 등) 경로만 사용합니다. 따라서 Web/AIT에서 이 bridge는 설치만 되고 소비되지 않는 상태이며, Web 분석·광고 연동은 후속 작업입니다.
-- Firebase Web 환경변수(`VITE_FIREBASE_*`)가 없으면 bridge는 no-op으로 동작하고 AIT 빌드는 계속 가능합니다.
+- `window.__foamPartyFirebase` 호환 브리지는 GA4 Measurement Protocol로 이벤트를 보냅니다.
+- AIT 번들에는 Firebase Web SDK, `VITE_FIREBASE_API_KEY`, Remote Config 클라이언트를 포함하지 않습니다.
+- Remote Config 브리지는 기본값을 반환하며, `VITE_GA4_MP_API_SECRET` 또는 `VITE_GA4_MEASUREMENT_ID`가 없으면 이벤트 수집만 비활성화됩니다.
 
 ## GitHub Actions
 
