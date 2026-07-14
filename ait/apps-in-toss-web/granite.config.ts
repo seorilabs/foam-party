@@ -3,7 +3,7 @@ import { defineConfig } from '@apps-in-toss/web-framework/config'
 export default defineConfig({
   appName: 'foam-party',
   brand: {
-    displayName: '폼 파티',
+    displayName: '버블 버블 거품 세차',
     primaryColor: '#81c5c3',
     // AIT 콘솔 로고 업로드 후 발급된 static.toss.im HTTPS URL.
     icon: 'https://static.toss.im/appsintoss/38345/ec558824-cda2-4308-ad78-e2ab45571a15.png',

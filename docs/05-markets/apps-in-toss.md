@@ -2,8 +2,9 @@
 
 ## App Identity
 
-- AppsInToss appName: `foam-party` 후보 (등록 후 수정 불가, 콘솔 등록 전 확정)
-- Display name: 폼 파티 / Foam Party
+- AppsInToss appName: `foam-party` (등록 완료, 수정 불가)
+- Display name(한글): 버블 버블 거품 세차 (콘솔 앱정보 등록명 = 미니앱 표기명. `granite.config.ts` `brand.displayName` / `ait/apps-in-toss-web/index.html` title과 일치해야 함)
+- Display name(영문): Foam Party
 - Delivery shape: Godot Web export wrapper 후보
 
 ## Registration

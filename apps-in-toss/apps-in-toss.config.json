@@ -2,7 +2,8 @@
   "app": {
     "appName": "foam-party",
     "appNameStatus": "확정 완료: 콘솔 등록 완료 (등록 후 수정 불가)",
-    "displayName": "폼 파티",
+    "displayName": "버블 버블 거품 세차",
+    "displayNameStatus": "확정 완료: AIT 앱정보 등록명. 미니앱 표기명(granite.config.ts brand.displayName / index.html title)과 동일해야 함 (AIT 반려 사유 해결)",
     "displayNameEnglish": "Foam Party",
     "appType": "game",
     "category": "게임 > 캐주얼",
