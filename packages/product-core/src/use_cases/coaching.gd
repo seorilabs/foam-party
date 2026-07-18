@@ -42,8 +42,15 @@ static func tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 			if not poop_activated:
 				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
 			return false
-		"sticker":
-			return tool_id != TOOL_SPONGE
+		"road_grime":
+			if tool_id == TOOL_AIR:
+				return true
+			# Contact washing starts only after the road film has been rinsed or
+			# soaped; dry scrubbing would drag grit across the paint.
+			var road_grime_softened: bool = patch.wetness > 0.2 or patch.soap > 0.15 or patch.looseness > 0.35
+			if not road_grime_softened:
+				return tool_id == TOOL_SPONGE
+			return false
 	return false
 
 
@@ -60,8 +67,10 @@ static func recommended_tool(patch: DirtPatch) -> String:
 			if patch.soap > 0.25 or patch.state in [STATE_LOOSENED, STATE_RUNOFF]:
 				return TOOL_WATER
 			return TOOL_SOAP
-		"sticker":
-			return TOOL_SPONGE
+		"road_grime":
+			if patch.wetness > 0.2 or patch.soap > 0.15 or patch.looseness > 0.35:
+				return TOOL_SPONGE
+			return TOOL_WATER
 	return TOOL_WATER
 
 
