@@ -46,7 +46,7 @@ const STRINGS := {
 	"DM_OIL": ["오일 %d개 청소하기", "Clean %d oil spots"],
 	"DM_BUG": ["벌레 자국 %d개 닦기", "Wipe %d bug marks"],
 	"DM_POOP": ["새똥 %d개 닦기", "Wipe %d droppings"],
-	"DM_STICKER": ["스티커 %d개 떼기", "Peel %d stickers"],
+	"DM_ROAD_GRIME": ["도로 때 %d개 닦기", "Wipe %d road-grime spots"],
 	# grade tracker
 	"GRADE_COMBO_URGENT": ["콤보 x%d! %d초", "Combo x%d! %ds"],
 	"GRADE_KEEP_STAR": ["별 %d 유지: %d초", "Keep star %d: %ds"],

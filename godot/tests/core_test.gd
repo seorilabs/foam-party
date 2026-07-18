@@ -128,6 +128,17 @@ func _run_core_tests() -> void:
 	if String(Coaching.recommended_tool(oil)) != "sponge":
 		_fail("soaped oil should recommend sponge")
 		return
+	var road_grime = DirtPatch.new("road_grime", Vector2.ZERO, 18.0, 100.0, 0.5)
+	if String(Coaching.recommended_tool(road_grime)) != "water":
+		_fail("dry road grime should recommend a pre-rinse")
+		return
+	if not bool(Coaching.tool_misapplied("sponge", road_grime)):
+		_fail("dry road grime should reject direct sponge scrubbing")
+		return
+	road_grime.wetness = 0.4
+	if String(Coaching.recommended_tool(road_grime)) != "sponge":
+		_fail("pre-rinsed road grime should recommend sponge")
+		return
 	if not bool(Coaching.is_light_dirt("leaf")) or bool(Coaching.is_light_dirt("oil")):
 		_fail("light-dirt classification is wrong")
 		return
@@ -177,6 +188,13 @@ func _run_core_tests() -> void:
 		return
 	if String(mud.state) != "runoff" and String(mud.state) != "wet":
 		_fail("water on mud should move it to a wet/runoff state")
+		return
+	var road_grime2 = DirtPatch.new("road_grime", Vector2(100.0, 100.0), 20.0, 100.0, 0.5)
+	WashRules.apply_water(road_grime2, 0.2, 1.0, 1.0)
+	var road_grime_health_after_rinse: float = road_grime2.health
+	WashRules.apply_sponge(road_grime2, 0.5, Vector2(100.0, 100.0), 1.0, 1.0)
+	if road_grime2.health >= road_grime_health_after_rinse or String(road_grime2.state) != "loosened":
+		_fail("pre-rinsed road grime should loosen and clean with sponge")
 		return
 	var leaf2 = DirtPatch.new("leaf", Vector2(100.0, 100.0), 18.0, 100.0, 0.5)
 	WashRules.apply_air(leaf2, 0.5, Vector2(100.0, 140.0), 1.0, 0.0)

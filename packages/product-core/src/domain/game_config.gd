@@ -28,9 +28,9 @@ const DAILY_MISSION_POOL := [
 	{"type": "oil", "label": "오일 %d개 청소하기", "target": 15},
 	{"type": "bug", "label": "벌레 자국 %d개 닦기", "target": 12},
 	{"type": "poop", "label": "새똥 %d개 닦기", "target": 10},
-	{"type": "sticker", "label": "스티커 %d개 떼기", "target": 8},
+	{"type": "road_grime", "label": "도로 때 %d개 닦기", "target": 8},
 ]
 const DAILY_MISSION_REWARD := 50
 const COMBO_BONUS_AMOUNTS := {5: 5, 10: 10, 15: 15, 20: 20}
-const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop", "sticker"]
+const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"]
 const CAR_TYPES := ["compact", "sports", "truck"]

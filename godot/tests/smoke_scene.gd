@@ -322,31 +322,35 @@ func _run_smoke() -> void:
 		_fail("sustained wrong rubbing should still surface the hint")
 		return
 
-	# --- sticker: misapplied / sponge removes (injected patch — no pool dependency) ---
-	var hint_sticker: int = root_node.call("spawn_patch_for_test", "sticker")
-	if String(root_node.call("get_recommended_tool_for_test", hint_sticker)) != "sponge":
-		_fail("sticker should recommend sponge")
+	# --- road grime: pre-rinse first, then sponge removes ---
+	var hint_road_grime: int = root_node.call("spawn_patch_for_test", "road_grime")
+	if String(root_node.call("get_recommended_tool_for_test", hint_road_grime)) != "water":
+		_fail("dry road grime should recommend water")
 		return
-	if not bool(root_node.call("is_tool_misapplied_for_test", "water", hint_sticker)):
-		_fail("water on sticker should be flagged")
+	if bool(root_node.call("is_tool_misapplied_for_test", "water", hint_road_grime)):
+		_fail("water on road grime should not be flagged")
 		return
-	if not bool(root_node.call("is_tool_misapplied_for_test", "soap", hint_sticker)):
-		_fail("soap on sticker should be flagged")
+	if not bool(root_node.call("is_tool_misapplied_for_test", "air", hint_road_grime)):
+		_fail("air on road grime should be flagged")
 		return
-	if not bool(root_node.call("is_tool_misapplied_for_test", "air", hint_sticker)):
-		_fail("air on sticker should be flagged")
+	if not bool(root_node.call("is_tool_misapplied_for_test", "sponge", hint_road_grime)):
+		_fail("dry sponge scrubbing on road grime should be flagged")
 		return
-	if bool(root_node.call("is_tool_misapplied_for_test", "sponge", hint_sticker)):
-		_fail("sponge on sticker should not be flagged")
+	root_node.call("apply_tool_to_patch_for_test", "water", hint_road_grime, 0.2)
+	if String(root_node.call("get_recommended_tool_for_test", hint_road_grime)) != "sponge":
+		_fail("pre-rinsed road grime should recommend sponge")
 		return
-	var sticker_health_before: float = float(root_node.call("get_patch_health_for_test", hint_sticker))
-	root_node.call("apply_tool_to_patch_for_test", "sponge", hint_sticker, 0.5)
-	var sticker_health_after: float = float(root_node.call("get_patch_health_for_test", hint_sticker))
-	if sticker_health_after >= sticker_health_before:
-		_fail("sponge should reduce sticker health")
+	if bool(root_node.call("is_tool_misapplied_for_test", "sponge", hint_road_grime)):
+		_fail("sponge on pre-rinsed road grime should not be flagged")
 		return
-	if String(root_node.call("get_patch_state_for_test", hint_sticker)) != "loosened":
-		_fail("sponge should loosen sticker")
+	var road_grime_health_before: float = float(root_node.call("get_patch_health_for_test", hint_road_grime))
+	root_node.call("apply_tool_to_patch_for_test", "sponge", hint_road_grime, 0.5)
+	var road_grime_health_after: float = float(root_node.call("get_patch_health_for_test", hint_road_grime))
+	if road_grime_health_after >= road_grime_health_before:
+		_fail("sponge should reduce pre-rinsed road grime health")
+		return
+	if String(root_node.call("get_patch_state_for_test", hint_road_grime)) != "loosened":
+		_fail("sponge should loosen road grime")
 		return
 
 	# --- scrub drag trail builds while washing and fades once the pointer lifts ---

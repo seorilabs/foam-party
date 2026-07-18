@@ -42,6 +42,8 @@ static func runoff_cleanup_rate(patch: DirtPatch) -> float:
 		return patch.soap * 0.18 + patch.looseness * 0.32
 	if patch.kind == "poop":
 		return patch.soap * 0.22 + patch.looseness * 0.28
+	if patch.kind == "road_grime":
+		return patch.soap * 0.10 + patch.looseness * 0.14
 	return 0.08
 
 
@@ -104,8 +106,12 @@ static func apply_water(patch: DirtPatch, delta: float, proximity: float, mult: 
 		else:
 			patch.state = STATE_WET
 			patch.health -= 0.04 * proximity * delta * wr
-	elif patch.kind == "sticker":
-		patch.health -= 0.03 * proximity * delta * wr
+	elif patch.kind == "road_grime":
+		# A rinse wets and loosens the abrasive surface dust, but the bonded road
+		# film still needs a contact wash with the sponge.
+		patch.state = STATE_WET
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.75)
+		patch.health -= 0.28 * proximity * delta * wr
 	else:
 		patch.state = STATE_WET
 		patch.health -= 0.45 * proximity * delta * wr
@@ -128,8 +134,11 @@ static func apply_soap(patch: DirtPatch, delta: float, proximity: float, mult: f
 		patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.2)
 		patch.state = STATE_LOOSENED if patch.looseness > 0.5 else STATE_SOAPED
 		patch.health -= 0.06 * proximity * delta * sr
-	elif patch.kind == "sticker":
-		patch.health -= 0.02 * proximity * delta * sr
+	elif patch.kind == "road_grime":
+		patch.soap = min(1.0, patch.soap + delta * proximity * 1.25)
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.8)
+		patch.state = STATE_LOOSENED if patch.looseness > 0.45 else STATE_SOAPED
+		patch.health -= 0.06 * proximity * delta * sr
 	else:
 		patch.soap = min(0.45, patch.soap + delta * proximity * 0.25)
 
@@ -158,10 +167,14 @@ static func apply_sponge(patch: DirtPatch, delta: float, source_point: Vector2, 
 		patch.health -= 0.45 * proximity * delta * spr
 	elif patch.kind == "leaf":
 		patch.health -= 0.2 * proximity * delta * spr
-	elif patch.kind == "sticker":
-		patch.state = STATE_LOOSENED
-		patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.5)
-		patch.health -= 1.35 * proximity * delta * spr
+	elif patch.kind == "road_grime":
+		if patch.wetness > 0.2 or patch.soap > 0.15 or patch.looseness > 0.35:
+			patch.state = STATE_LOOSENED
+			patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.25)
+			patch.health -= (1.2 + patch.soap * 0.55 + patch.wetness * 0.25) * proximity * delta * spr
+			patch.soap = max(0.0, patch.soap - delta * proximity * 0.18)
+		else:
+			patch.health -= 0.12 * proximity * delta * spr
 	elif patch.kind == "poop":
 		if patch.soap > 0.25 or patch.looseness > 0.35:
 			patch.state = STATE_LOOSENED

@@ -324,6 +324,12 @@ func _load_progress() -> void:
 	var loaded_type: String = daily_config.get_value("daily", "type", "")
 	var loaded_label: String = daily_config.get_value("daily", "label", "")
 	var loaded_target: int = int(daily_config.get_value("daily", "target", 0))
+	# Preserve today's progress for installs that generated the retired sticker
+	# mission before road grime replaced that dirt type.
+	if loaded_type == "sticker":
+		loaded_type = "road_grime"
+		loaded_label = tr("DM_ROAD_GRIME") % loaded_target
+		_daily_progress_dirty = true
 	var type_valid := false
 	for m in DAILY_MISSION_POOL:
 		if m["type"] == loaded_type:
@@ -1327,6 +1333,8 @@ func apply_foam_bomb(free := false) -> bool:
 			patch.state = STATE_SOAPED
 		elif patch.kind == "poop":
 			patch.state = STATE_LOOSENED
+		elif patch.kind == "road_grime":
+			patch.state = STATE_LOOSENED
 		var center := _patch_center(patch)
 		for bubble_index in range(3):
 			var offset := Vector2(rng.randf_range(-patch.radius, patch.radius), rng.randf_range(-patch.radius, patch.radius))
@@ -1452,13 +1460,13 @@ func _spawn_dirt() -> void:
 	var health_base_max := 120.0
 	match car_type:
 		"sports":
-			type_pool = ["oil", "dust", "oil", "dust", "sticker", "leaf", "dust", "bug", "mud"]
+			type_pool = ["oil", "dust", "oil", "dust", "road_grime", "leaf", "dust", "bug", "mud"]
 			radius_min = 11.0
 			radius_max = 20.0
 			health_base_min = 80.0
 			health_base_max = 135.0
 		"truck":
-			type_pool = ["mud", "mud", "bug", "leaf", "mud", "poop", "dust", "sticker", "leaf"]
+			type_pool = ["mud", "mud", "bug", "leaf", "mud", "poop", "dust", "road_grime", "leaf"]
 			radius_min = 15.0
 			radius_max = 28.0
 			health_base_min = 85.0
@@ -1478,7 +1486,7 @@ func _spawn_dirt() -> void:
 			health += 25.0 * health_scale
 		elif kind == "poop":
 			health += 15.0 * health_scale
-		elif kind == "sticker":
+		elif kind == "road_grime":
 			health += 20.0 * health_scale
 		var patch := DirtPatch.new(kind, base_position + jitter, radius, health, rng.randf_range(0.0, 10.0))
 		dirt_patches.append(patch)
@@ -2459,8 +2467,8 @@ func _draw_dirt() -> void:
 			_draw_bug_patch(center, patch.radius, strength, patch.seed_offset)
 		elif patch.kind == "poop":
 			_draw_poop_patch(center, patch.radius, strength, patch.seed_offset)
-		elif patch.kind == "sticker":
-			_draw_sticker_patch(center, patch.radius, strength, patch.seed_offset, patch.looseness)
+		elif patch.kind == "road_grime":
+			_draw_road_grime_patch(center, patch.radius, strength, patch.seed_offset)
 
 		if patch.wetness > 0.18:
 			_draw_wet_gloss(center, patch.radius, patch.wetness)
@@ -2592,56 +2600,46 @@ func _draw_poop_patch(center: Vector2, radius: float, strength: float, seed_valu
 		draw_circle(center + Vector2(cos(angle), sin(angle)) * radius * dist, max(2.0, drop_r), drop_color)
 
 
-func _draw_sticker_patch(center: Vector2, radius: float, strength: float, seed_value: float, looseness: float) -> void:
+func _draw_road_grime_patch(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
 	var s := clampf(strength, 0.0, 1.0)
-	# Pick sticker color from a bright palette using seed.
-	var palette := [
-		Color(0.98, 0.26, 0.26), Color(0.98, 0.62, 0.10), Color(0.18, 0.72, 0.28),
-		Color(0.18, 0.48, 0.98), Color(0.72, 0.22, 0.95), Color(0.98, 0.92, 0.12),
-	]
-	var hue_index := int(seed_value * 3.7) % palette.size()
-	var sticker_color := Color(palette[hue_index].r, palette[hue_index].g, palette[hue_index].b, 0.92 * s)
-	var border_color := Color(sticker_color.r * 0.65, sticker_color.g * 0.65, sticker_color.b * 0.65, 0.95 * s)
-	var w := radius * 1.65
-	var h := radius * 1.1
-	var tilt := (fmod(seed_value, 1.0) - 0.5) * 0.55
-	# Draw shadow.
-	var shadow_points := PackedVector2Array()
-	for corner in [Vector2(-w, -h), Vector2(w, -h), Vector2(w, h), Vector2(-w, h)]:
-		shadow_points.append(center + Vector2(2.0, 3.0) + corner.rotated(tilt))
-	draw_colored_polygon(shadow_points, Color(0.0, 0.0, 0.0, 0.18 * s))
-	# Draw main sticker body.
+	var rotation: float = fmod(seed_value * 0.73, TAU)
+	var radius_x: float = radius * (1.22 + 0.10 * sin(seed_value * 1.7))
+	var radius_y: float = radius * (0.72 + 0.08 * cos(seed_value * 1.3))
 	var body_points := PackedVector2Array()
-	for corner in [Vector2(-w, -h), Vector2(w, -h), Vector2(w, h), Vector2(-w, h)]:
-		body_points.append(center + corner.rotated(tilt))
-	draw_colored_polygon(body_points, sticker_color)
-	# Diagonal stripe accent.
-	var stripe_color := Color(1.0, 1.0, 1.0, 0.28 * s)
-	for si in range(3):
-		var ox := -w * 0.5 + float(si) * w * 0.42
-		var stripe_poly := PackedVector2Array([
-			center + Vector2(ox, -h).rotated(tilt),
-			center + Vector2(ox + w * 0.18, -h).rotated(tilt),
-			center + Vector2(ox + w * 0.18, h).rotated(tilt),
-			center + Vector2(ox, h).rotated(tilt),
-		])
-		draw_colored_polygon(stripe_poly, stripe_color)
-	# Border line.
-	for bi in range(4):
-		var corners := [Vector2(-w, -h), Vector2(w, -h), Vector2(w, h), Vector2(-w, h)]
-		draw_line(center + corners[bi].rotated(tilt), center + corners[(bi + 1) % 4].rotated(tilt), border_color, 2.5)
-	# Peeling corner effect — grows as looseness increases.
-	if looseness > 0.1 or s < 0.7:
-		var peel := clampf(looseness * 1.2 + (1.0 - s) * 0.8, 0.0, 1.0)
-		var peel_size := peel * radius * 0.7
-		var corner := center + Vector2(w, h).rotated(tilt)
-		var peel_poly := PackedVector2Array([
-			corner,
-			corner + Vector2(-peel_size, 0.0).rotated(tilt),
-			corner + Vector2(0.0, -peel_size).rotated(tilt),
-		])
-		draw_colored_polygon(peel_poly, Color(0.88, 0.88, 0.88, 0.82 * s))
-		draw_polyline(peel_poly, Color(0.55, 0.55, 0.55, 0.6 * s), 1.5)
+	var outer_points := PackedVector2Array()
+	for index in range(14):
+		var angle: float = TAU * float(index) / 14.0
+		var wobble: float = 1.0 \
+			+ 0.13 * sin(seed_value * 2.1 + float(index) * 1.91) \
+			+ 0.08 * cos(seed_value * 1.3 + float(index) * 2.67)
+		var local_point: Vector2 = Vector2(cos(angle) * radius_x, sin(angle) * radius_y) * wobble
+		body_points.append(center + local_point.rotated(rotation))
+		outer_points.append(center + (local_point * 1.14).rotated(rotation))
+	body_points = _smooth_polygon(body_points, 1)
+	outer_points = _smooth_polygon(outer_points, 1)
+
+	# Two translucent silhouettes create a feathered, paint-hugging road-film edge
+	# instead of the old sticker's hard rectangular border.
+	draw_colored_polygon(outer_points, Color(0.30, 0.29, 0.26, 0.14 * s))
+	draw_colored_polygon(body_points, Color(0.31, 0.28, 0.22, 0.48 * s))
+
+	var inner_points := PackedVector2Array()
+	var highlight_offset: Vector2 = Vector2(-radius * 0.10, -radius * 0.08).rotated(rotation)
+	for point in body_points:
+		inner_points.append(center + (point - center) * 0.68 + highlight_offset)
+	draw_colored_polygon(inner_points, Color(0.48, 0.44, 0.34, 0.17 * s))
+
+	# Deterministic grit flecks break up the silhouette without repeating a woven
+	# or striped texture. They fade with the same health-driven opacity.
+	for index in range(6):
+		var fleck_angle: float = seed_value * 1.9 + float(index) * 1.73
+		var fleck_distance: float = radius * (0.62 + 0.38 * absf(sin(seed_value + float(index) * 0.83)))
+		var fleck_local: Vector2 = Vector2(
+			cos(fleck_angle) * fleck_distance * 1.15,
+			sin(fleck_angle) * fleck_distance * 0.70
+		).rotated(rotation)
+		var fleck_radius: float = maxf(1.3, radius * (0.055 + 0.045 * absf(cos(seed_value * 1.4 + float(index)))))
+		draw_circle(center + fleck_local, fleck_radius, Color(0.20, 0.18, 0.14, 0.36 * s))
 
 
 func _draw_flying_trail(patch: DirtPatch, center: Vector2, strength: float) -> void:
