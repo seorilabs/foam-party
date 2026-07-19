@@ -1,6 +1,7 @@
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { neutralizeGeminiKeyFalsePositiveSource } from '../src/godotLoaderSanitizer.ts'
 
 const wrapperRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = path.resolve(wrapperRoot, '..', '..')
@@ -101,7 +102,7 @@ async function neutralizeGeminiKeyFalsePositive(loaderPath) {
   // 길이 조건 보강 예정). 해당 문자열은 emscripten의 abort() 진단 메시지 안에만 있어
   // 런타임 동작에 영향이 없으므로 `AQ.` 시퀀스를 깨뜨려 오탐을 무력화한다.
   const source = await readFile(loaderPath, 'utf8')
-  const sanitized = source.replaceAll('FAQ.html', 'FAQ_html')
+  const sanitized = neutralizeGeminiKeyFalsePositiveSource(source)
   if (sanitized !== source) {
     await writeFile(loaderPath, sanitized)
     return true
