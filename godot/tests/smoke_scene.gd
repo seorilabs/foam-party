@@ -400,6 +400,96 @@ func _run_smoke() -> void:
 		return
 	root_node.set("is_washing", false)
 
+	# --- compact top HUD layout ---
+	# Stars, customer mood, and mission must share one non-overlapping row. The
+	# smaller sound/help controls stay fully inside the main status card, including
+	# their expanded 44px touch targets.
+	var status_rect: Rect2 = root_node.call("_get_status_rect")
+	var grade_rect: Rect2 = root_node.call("_get_grade_rect")
+	var customer_rect: Rect2 = root_node.call("_get_customer_rect")
+	var mission_rect: Rect2 = root_node.call("_get_daily_mission_rect")
+	if not is_equal_approx(grade_rect.position.y, customer_rect.position.y) or not is_equal_approx(grade_rect.position.y, mission_rect.position.y):
+		_fail("stars, customer mood, and mission must share one HUD row")
+		return
+	if grade_rect.intersects(customer_rect) or customer_rect.intersects(mission_rect) or grade_rect.intersects(mission_rect):
+		_fail("compact HUD summary cards must not overlap")
+		return
+	var mission_bar_rect: Rect2 = root_node.call("_get_daily_mission_bar_rect")
+	if mission_bar_rect.position.x - mission_rect.position.x < 8.0 or mission_rect.end.x - mission_bar_rect.end.x < 8.0:
+		_fail("daily mission progress bar needs visible horizontal chip padding")
+		return
+	if mission_rect.end.y - mission_bar_rect.end.y < 6.0:
+		_fail("daily mission progress bar needs visible bottom chip padding")
+		return
+	var sound_rect: Rect2 = root_node.call("_get_sound_rect")
+	var help_rect: Rect2 = root_node.call("_get_help_rect")
+	var sound_hit_rect := sound_rect.grow(10.0)
+	var help_hit_rect := help_rect.grow(10.0)
+	if not status_rect.encloses(sound_hit_rect) or not status_rect.encloses(help_hit_rect):
+		_fail("sound/help touch targets must stay inside the status card")
+		return
+	if sound_hit_rect.intersects(help_hit_rect):
+		_fail("compact sound/help touch targets must not overlap")
+		return
+
+	# --- one physical tap must produce one HUD action ---
+	# Touch-to-mouse emulation used to feed _input twice: sound toggled off then
+	# back on, while help opened then immediately dismissed. Keep project settings
+	# and the code-level emulated-event guard covered together.
+	if Input.is_emulating_mouse_from_touch() or Input.is_emulating_touch_from_mouse():
+		_fail("pointer-type emulation must stay disabled for dual mouse/touch handlers")
+		return
+	root_node.call("_update_canvas_transform")
+	var input_canvas_origin: Vector2 = root_node.get("canvas_origin")
+	var input_canvas_scale: float = float(root_node.get("canvas_scale"))
+	var sound_design_point: Vector2 = sound_rect.get_center()
+	var sound_point: Vector2 = input_canvas_origin + sound_design_point * input_canvas_scale
+	root_node.set("sound_enabled", true)
+	var sound_touch := InputEventScreenTouch.new()
+	sound_touch.device = 0
+	sound_touch.index = 0
+	sound_touch.position = sound_point
+	sound_touch.pressed = true
+	root_node.call("_input", sound_touch)
+	if bool(root_node.get("sound_enabled")):
+		_fail("one physical sound-button touch should toggle sound once")
+		return
+	var duplicate_sound_mouse := InputEventMouseButton.new()
+	duplicate_sound_mouse.device = InputEvent.DEVICE_ID_EMULATION
+	duplicate_sound_mouse.button_index = MOUSE_BUTTON_LEFT
+	duplicate_sound_mouse.position = sound_point
+	duplicate_sound_mouse.pressed = true
+	root_node.call("_input", duplicate_sound_mouse)
+	if bool(root_node.get("sound_enabled")):
+		_fail("emulated mouse duplicate must not toggle sound a second time")
+		return
+	if bool(root_node.get("is_washing")):
+		_fail("sound-button touch must not start washing")
+		return
+
+	var help_design_point: Vector2 = help_rect.get_center()
+	var help_point: Vector2 = input_canvas_origin + help_design_point * input_canvas_scale
+	root_node.set("show_tutorial", false)
+	var help_touch := InputEventScreenTouch.new()
+	help_touch.device = 0
+	help_touch.index = 0
+	help_touch.position = help_point
+	help_touch.pressed = true
+	root_node.call("_input", help_touch)
+	if not bool(root_node.get("show_tutorial")):
+		_fail("one physical help-button touch should open the tutorial")
+		return
+	var duplicate_help_mouse := InputEventMouseButton.new()
+	duplicate_help_mouse.device = InputEvent.DEVICE_ID_EMULATION
+	duplicate_help_mouse.button_index = MOUSE_BUTTON_LEFT
+	duplicate_help_mouse.position = help_point
+	duplicate_help_mouse.pressed = true
+	root_node.call("_input", duplicate_help_mouse)
+	if not bool(root_node.get("show_tutorial")):
+		_fail("emulated mouse duplicate must not dismiss the tutorial")
+		return
+	root_node.set("show_tutorial", false)
+
 	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])
 	get_root().remove_child(root_node)
 	root_node.free()
