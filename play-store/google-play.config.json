@@ -7,13 +7,16 @@
   "privacyPolicyUrl": "https://www.seorilabs.com/privacy/",
   "storeListing": {
     "appName": {
-      "en-US": "Foam Party"
+      "en-US": "Foam Party",
+      "ko-KR": "폼 파티"
     },
     "shortDescription": {
-      "en-US": "Wash messy cars with water, soap, air, and sponge tools in quick casual levels"
+      "en-US": "Wash messy cars with water, soap, air, and sponge tools in quick casual levels",
+      "ko-KR": "물, 비누, 스펀지와 바람으로 자동차를 씻는 캐주얼 세차 게임"
     },
     "fullDescription": {
-      "en-US": "Foam Party is a casual car wash game built for short mobile sessions.\n\nClean each car by choosing the right tool for the mess. Rinse mud with water, lift stubborn grime with soap and sponge work, and use air to clear the last droplets. Keep your combo alive, finish faster, earn more stars, and unlock the next car.\n\nFeatures:\n- Simple one-hand washing controls\n- Water, soap, sponge, and air tools with different effects\n- Dirt states that react to the way you clean\n- Combos, best times, star goals, coins, and foam bomb boosts\n- Local progress save for offline play\n\nFoam Party is designed as a light, colorful arcade cleaning loop without account setup."
+      "en-US": "Foam Party is a casual car wash game built for short mobile sessions.\n\nClean each car by choosing the right tool for the mess. Rinse mud with water, lift stubborn grime with soap and sponge work, and use air to clear the last droplets. Keep your combo alive, finish faster, earn more stars, and unlock the next car.\n\nFeatures:\n- Simple one-hand washing controls\n- Water, soap, sponge, and air tools with different effects\n- Dirt states that react to the way you clean\n- Combos, best times, star goals, coins, and foam bomb boosts\n- Local progress save for offline play\n\nFoam Party is designed as a light, colorful arcade cleaning loop without account setup.",
+      "ko-KR": "폼 파티는 짧은 시간에 즐길 수 있는 캐주얼 세차 게임입니다.\n\n차량의 오염에 맞는 도구를 선택해 깨끗하게 세차하세요. 물로 흙탕물을 씻고, 비누로 찌든 때를 불린 뒤 스펀지로 닦아내며, 바람으로 낙엽과 먼지를 날릴 수 있습니다. 콤보를 이어 더 많은 별을 얻고, 코인을 모아 도구를 업그레이드하고 스킨을 잠금 해제하세요.\n\n주요 특징:\n- 한 손으로 즐기는 간단한 세차 조작\n- 서로 다른 효과를 가진 물, 비누, 스펀지, 바람 도구\n- 세차 방법에 따라 반응하는 다양한 오염 상태\n- 콤보, 최고 기록, 별 목표, 코인과 거품 폭탄 부스트\n- 계정 없이 즐기는 오프라인 플레이와 로컬 진행 저장\n\n폼 파티에서 가볍고 화려한 아케이드 세차를 즐겨보세요."
     },
     "video": {},
     "lastApplied": {
@@ -38,14 +41,9 @@
     "playIcon": "play-store/assets/icon-512.png",
     "featureGraphic": "play-store/assets/feature-graphic-1024x500.png",
     "phoneScreenshots": [
-      "play-store/screenshots/phone/shot_title.png",
-      "play-store/screenshots/phone/shot_tutorial.png",
-      "play-store/screenshots/phone/shot_default.png",
-      "play-store/screenshots/phone/shot_water.png",
-      "play-store/screenshots/phone/shot_soap.png",
-      "play-store/screenshots/phone/shot_sponge.png",
-      "play-store/screenshots/phone/shot_combo.png",
-      "play-store/screenshots/phone/shot_complete.png"
+      "play-store/screenshots/phone/01-start.png",
+      "play-store/screenshots/phone/02-wash.png",
+      "play-store/screenshots/phone/03-result.png"
     ],
     "sevenInchTabletScreenshots": [
       "play-store/screenshots/tablet-7/shot_title.png",
@@ -83,53 +81,66 @@
     }
   },
   "release": {
-    "track": "internal",
-    "name": "foam-party 0.1.0 (3) internal",
-    "versionName": "0.1.0",
-    "versionCode": 3,
+    "track": "production",
+    "name": "Foam Party 1.0.0 (1000000)",
+    "versionName": "1.0.0",
+    "versionCode": 1000000,
+    "sourceTag": "v1.0.0",
+    "sourceCommit": "0e22fa23cb0b3c13396df5c29cb9e4899122dff6",
+    "bundleSha256": "0b8a5469c23efe4b87c2dfaf39d30ee2c6b822438636a537d59b282316aae296",
     "aabPath": "build/android/foam-party-internal.aab",
     "minimumTargetSdk": 35,
     "signing": "play-app-signing-with-upload-key",
     "uploadKeyAlias": "seorilabs-upload",
     "releaseNotes": {
-      "en-US": "Internal testing build for Foam Party.\n\n- Keeps the tool hint message visible above the car on shorter screens\n- Fixes mobile sound/help button taps\n- Improves safe-area layout for top status and bottom tool UI"
+      "en-US": "Foam Party 1.0.0 is here!\n\n- Wash cars using water, soap, sponge, and air tools\n- Build combos, earn stars and coins, and unlock upgrades and skins\n- Added Korean and English auto-localization with a bundled Korean font\n- Improved mobile layouts and touch controls",
+      "ko-KR": "폼 파티 1.0.0 정식 출시!\n\n- 물·비누·스펀지·바람 도구로 자동차를 깨끗하게 세차해 보세요\n- 콤보를 이어 별과 코인을 얻고 업그레이드와 스킨을 잠금 해제하세요\n- 한국어·영어 자동 전환과 한글 전용 폰트를 적용했습니다\n- 모바일 화면 배치와 터치 조작을 개선했습니다"
     },
     "lastBuild": {
-      "builtAt": "2026-06-18T23:30:00+09:00",
+      "builtAt": "2026-07-09T20:34:18+09:00",
       "aabPath": "build/android/foam-party-internal.aab",
-      "size": "34M",
-      "status": "built",
+      "status": "built-and-uploaded-to-play",
+      "githubActionsRun": "https://github.com/seorilabs/foam-party/actions/runs/29014747060",
       "verification": [
-        "jarsigner: jar verified",
-        "AAB contains base/lib/arm64-v8a",
-        "AAB contains AdMob and Firebase artifacts"
+        "source tag v1.0.0 resolved to 0e22fa23cb0b3c13396df5c29cb9e4899122dff6",
+        "versionName=1.0.0 and versionCode=1000000",
+        "Play bundle sha256=0b8a5469c23efe4b87c2dfaf39d30ee2c6b822438636a537d59b282316aae296"
       ]
     },
     "lastInternalUpload": {
-      "uploadedAt": "2026-06-18T23:38:37+09:00",
+      "uploadedAt": "2026-07-09T20:34:18+09:00",
       "status": "completed",
       "track": "internal",
-      "versionCode": 3,
-      "editId": "01104709446132396381",
-      "verifiedAt": "2026-06-18T23:38:37+09:00",
+      "versionCode": 1000000,
+      "verifiedAt": "2026-07-18",
       "credential": "seorilabs-play-publisher@seorilabs-gws.iam.gserviceaccount.com"
     },
-    "productionDraft": {
-      "createdAt": "2026-06-18T22:12:38+09:00",
-      "reviewRequestedAt": "2026-06-18T22:23:57+09:00",
-      "verifiedAt": "2026-06-18T22:23:57+09:00",
+    "previousProductionRelease": {
+      "verifiedAt": "2026-07-18",
       "track": "production",
-      "name": "Foam Party 0.1.0 (1)",
-      "versionCode": 1,
+      "name": "2 (0.1.0)",
+      "versionName": "0.1.0",
+      "versionCode": 2,
       "status": "completed",
-      "editId": "15986281661735417806",
-      "apiReadbackEditId": "07907892941145573073",
       "releaseNotes": {
         "en-US": "Initial release of Foam Party.\n\n- Wash messy cars with water, soap, air, and sponge tools\n- Earn stars, coins, and best times across quick levels\n- Use the foam bomb boost for tougher messes"
-      },
-      "launchCountries": "worldwide",
-      "countryAvailabilityStatus": "api-readback: restOfWorld=true and 176 explicit countries returned, including KR, US, and JP",
-      "playReviewStatus": "review-request-sent-by-user; Android Publisher track readback does not expose the human review queue state separately"
+      }
+    },
+    "productionLaunch": {
+      "requestedAt": "2026-07-18",
+      "verifiedAt": "2026-07-18",
+      "track": "production",
+      "name": "1000000 (1.0.0)",
+      "versionName": "1.0.0",
+      "versionCode": 1000000,
+      "currentStatus": "draft",
+      "intendedStatus": "completed",
+      "storeListingLocales": [
+        "en-US",
+        "ko-KR"
+      ],
+      "blocker": "Play API commit rejected until Korean developer Account Details are completed",
+      "commitError": "To comply with Korean law, developers in Korea must provide additional information on the Account Details page."
     }
   },
   "adMob": {

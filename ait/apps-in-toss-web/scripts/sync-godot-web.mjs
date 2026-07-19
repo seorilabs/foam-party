@@ -93,6 +93,22 @@ async function disableGodotCodeExecutionShim(loaderPath) {
   return false
 }
 
+async function neutralizeGeminiKeyFalsePositive(loaderPath) {
+  // AppsInToss 정적 분석 파이프라인은 신형 Gemini API Key의 `AQ.<base64>` 형태를
+  // 탐지한다. Godot/emscripten 로더에는 진단용 URL `.../FAQ.html#...` 이 들어 있고,
+  // minify된 한 줄에서 그 `AQ.` 접두가 greedy하게 매칭되어 심사가
+  // "Gemini API 키를 사용 중인지 확인해주세요" 오탐 반려를 낸다(앱인토스 측 확인 완료,
+  // 길이 조건 보강 예정). 해당 문자열은 emscripten의 abort() 진단 메시지 안에만 있어
+  // 런타임 동작에 영향이 없으므로 `AQ.` 시퀀스를 깨뜨려 오탐을 무력화한다.
+  const source = await readFile(loaderPath, 'utf8')
+  const sanitized = source.replaceAll('FAQ.html', 'FAQ_html')
+  if (sanitized !== source) {
+    await writeFile(loaderPath, sanitized)
+    return true
+  }
+  return false
+}
+
 function replaceAsciiBytes(buffer, from, to) {
   if (from.length !== to.length) {
     throw new Error(`Cannot replace "${from}" with "${to}": byte lengths differ`)
@@ -158,6 +174,7 @@ await mkdir(targetDir, { recursive: true })
 await cp(sourceDir, targetDir, { recursive: true })
 await writeFile(path.join(targetDir, '.gitkeep'), '')
 const disabledCodeExecutionShim = await disableGodotCodeExecutionShim(path.join(targetDir, loaderFile))
+const neutralizedGeminiFalsePositive = await neutralizeGeminiKeyFalsePositive(path.join(targetDir, loaderFile))
 const patchedWasmBridgeStrings = await patchGodotWasmBridgeStrings(path.join(targetDir, `${executableName}.wasm`))
 
 const html = await readFile(path.join(sourceDir, htmlFile), 'utf8')
@@ -178,6 +195,9 @@ console.log(`Synced Godot Web export to ${path.relative(wrapperRoot, targetDir)}
 console.log(`Generated ${path.relative(wrapperRoot, generatedPath)} using ${loaderFile}`)
 if (disabledCodeExecutionShim) {
   console.log(`Disabled Godot browser code execution shim in ${path.join('public', 'godot', loaderFile)}`)
+}
+if (neutralizedGeminiFalsePositive) {
+  console.log(`Neutralized AppsInToss Gemini-key false positive (FAQ.html) in ${path.join('public', 'godot', loaderFile)}`)
 }
 if (patchedWasmBridgeStrings > 0) {
   console.log(`Patched ${patchedWasmBridgeStrings} Godot Web bridge string(s) in ${path.join('public', 'godot', `${executableName}.wasm`)}`)

@@ -3,9 +3,11 @@
 ## Google Play
 
 - Android package name: `com.seorilabs.foamparty`
-- Firebase Android app: 확정 필요
-- Release track: internal testing 우선
-- Current status: Android Debug preset만 있음. AAB/APK release build automation은 아직 없음.
+- Firebase Android app: `1:72898706664:android:456c2bdc38879e37bc5d5d`
+- Release track: production
+- Current public release: `0.1.0` / versionCode `2`
+- Target release: `1.0.0` / versionCode `1000000`; Play bundle과 internal upload 완료, production draft 생성 상태.
+- Current blocker: 한국 개발자 계정의 Play Console `Account Details` 추가 정보 미입력으로 production commit이 403 거부됨.
 
 ## Apple App Store
 
