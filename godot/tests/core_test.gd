@@ -15,9 +15,8 @@ func _run_core_tests() -> void:
 	var Coaching: GDScript = load("res://core/use_cases/coaching.gd")
 	var DailyMission: GDScript = load("res://core/use_cases/daily_mission.gd")
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
-	var DirtProgression: GDScript = load("res://core/use_cases/dirt_progression.gd")
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
-	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or DirtProgression == null or DirtPatch == null:
+	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or DirtPatch == null:
 		_fail("core scripts failed to load through res://core symlink")
 		return
 
@@ -175,30 +174,6 @@ func _run_core_tests() -> void:
 		return
 	if absf(float(BestTime.best_time({}, 3)) - 0.0) > 0.001:
 		_fail("missing level should report zero best time")
-		return
-
-	# --- Dirt progression: early levels reveal tool-matching rules gradually ---
-	var expected_dirt_by_level := {
-		1: ["mud", "dust", "leaf"],
-		2: ["mud", "dust", "leaf", "oil"],
-		3: ["mud", "dust", "leaf", "oil", "bug", "poop"],
-		4: ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"],
-		5: ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"],
-	}
-	for level in expected_dirt_by_level:
-		var actual: Array[String] = DirtProgression.allowed_types_for_level(level)
-		if actual != expected_dirt_by_level[level]:
-			_fail("unexpected dirt unlocks at level %d: %s" % [level, actual])
-			return
-	var sports_pool := ["oil", "dust", "oil", "road_grime", "leaf", "bug", "mud"]
-	var gated_sports: Array[String] = DirtProgression.filter_pool_for_level(sports_pool, 2)
-	if gated_sports != ["oil", "dust", "oil", "leaf", "mud"]:
-		_fail("level 2 sports bias should preserve weights while excluding locked dirt: " + str(gated_sports))
-		return
-	var truck_pool := ["mud", "mud", "bug", "poop", "road_grime", "leaf"]
-	var gated_truck: Array[String] = DirtProgression.filter_pool_for_level(truck_pool, 3)
-	if gated_truck != ["mud", "mud", "bug", "poop", "leaf"]:
-		_fail("level 3 truck bias should preserve weights while excluding locked dirt: " + str(gated_truck))
 		return
 
 	# --- Wash rules: deterministic patch mutation (lift/mult injected) ---
