@@ -11,6 +11,7 @@ const Coaching = preload("res://core/use_cases/coaching.gd")
 const DailyMission = preload("res://core/use_cases/daily_mission.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
 const WashRules = preload("res://core/use_cases/wash_rules.gd")
+const DirtProgression = preload("res://core/use_cases/dirt_progression.gd")
 const AnalyticsPort = preload("res://core/ports/analytics_port.gd")
 const ContentEvents = preload("res://core/analytics/content_events.gd")
 const AdPort = preload("res://core/ports/ad_port.gd")
@@ -937,6 +938,13 @@ func get_patch_count_by_kind_for_test(kind: String) -> int:
 	return count
 
 
+func get_spawned_dirt_kinds_for_test() -> Array[String]:
+	var kinds: Array[String] = []
+	for raw_patch in dirt_patches:
+		kinds.append((raw_patch as DirtPatch).kind)
+	return kinds
+
+
 func spawn_patch_for_test(kind: String) -> int:
 	var patch := DirtPatch.new(kind, _gameplay_point(Vector2(195.0, 520.0)), _gameplay_length(18.0), 100.0, 0.5)
 	dirt_patches.append(patch)
@@ -1495,6 +1503,7 @@ func _spawn_dirt() -> void:
 			health_base_max = 145.0
 		_:
 			type_pool = DIRT_TYPES.duplicate()
+	type_pool = DirtProgression.filter_pool_for_level(type_pool, level_index)
 
 	var spawn_count: int = min(pool.size(), 18 + level_index * 2)
 	var health_scale := 1.0 + float(level_index - 1) * 0.06

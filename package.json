@@ -9,7 +9,7 @@
   "scripts": {
     "build:godot:web": "bash scripts/ensure_godot.sh --with-export-templates && bash scripts/export_godot_web.sh",
     "test": "npm run test:core && npm run check:architecture && npm run test:godot && npm run check:docs",
-    "test:core": "bash scripts/test_core.sh",
+    "test:core": "bash scripts/test_core.sh && CORE_TEST_SCENE=res://tests/dirt_progression_test.gd bash scripts/test_core.sh",
     "test:godot": "bash scripts/godot_quality_gate.sh --project godot --smoke-scene res://tests/smoke_scene.gd",
     "check:architecture": "bash scripts/check_architecture.sh",
     "check:docs": "bash scripts/check_docs.sh",

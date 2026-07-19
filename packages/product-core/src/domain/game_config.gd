@@ -33,4 +33,16 @@ const DAILY_MISSION_POOL := [
 const DAILY_MISSION_REWARD := 50
 const COMBO_BONUS_AMOUNTS := {5: 5, 10: 10, 15: 15, 20: 20}
 const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"]
+# Early levels introduce tool-matching rules gradually. The value is the first
+# playable level where each dirt kind may appear; level 4 converges to the full
+# catalog used by the existing per-car weighted pools.
+const DIRT_UNLOCK_LEVELS := {
+	"mud": 1,
+	"dust": 1,
+	"leaf": 1,
+	"oil": 2,
+	"bug": 3,
+	"poop": 3,
+	"road_grime": 4,
+}
 const CAR_TYPES := ["compact", "sports", "truck"]

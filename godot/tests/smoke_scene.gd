@@ -56,6 +56,29 @@ func _run_smoke() -> void:
 		_fail("tutorial should dismiss")
 		return
 
+	# Early dirt catalogs grow monotonically and every spawned kind respects the
+	# level gate. Repeating level 1 must preserve the seeded spawn sequence.
+	var expected_dirt_by_level := {
+		1: ["mud", "dust", "leaf"],
+		2: ["mud", "dust", "leaf", "oil"],
+		3: ["mud", "dust", "leaf", "oil", "bug", "poop"],
+		4: ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"],
+	}
+	var level_one_sequence: Array[String] = []
+	for gated_level in expected_dirt_by_level:
+		root_node.call("reset_game", gated_level)
+		var spawned: Array[String] = root_node.call("get_spawned_dirt_kinds_for_test")
+		for kind in spawned:
+			if kind not in expected_dirt_by_level[gated_level]:
+				_fail("level %d spawned locked dirt: %s" % [gated_level, kind])
+				return
+		if gated_level == 1:
+			level_one_sequence = spawned.duplicate()
+	root_node.call("reset_game", 1)
+	if root_node.call("get_spawned_dirt_kinds_for_test") != level_one_sequence:
+		_fail("level 1 dirt sequence should be deterministic for the fixed seed")
+		return
+
 	var progress_before: float = root_node.call("get_clean_progress_for_test")
 	var mud_index: int = root_node.call("get_patch_index_by_kind_for_test", "mud")
 	if mud_index < 0:
@@ -81,10 +104,7 @@ func _run_smoke() -> void:
 		_fail("leaf did not visibly drift")
 		return
 
-	var oil_index: int = root_node.call("get_patch_index_by_kind_for_test", "oil")
-	if oil_index < 0:
-		_fail("oil patch missing")
-		return
+	var oil_index: int = root_node.call("spawn_patch_for_test", "oil")
 	var oil_initial: float = root_node.call("get_patch_health_for_test", oil_index)
 	var oil_after_water: float = root_node.call("apply_tool_to_patch_for_test", "water", oil_index, 1.0)
 	if oil_after_water < oil_initial - 12.0:
