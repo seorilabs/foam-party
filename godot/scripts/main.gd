@@ -683,6 +683,18 @@ func _spawn_combo_break_burst() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# The project handles real mouse and real touch events separately. Godot can
+	# additionally synthesize the other pointer type with DEVICE_ID_EMULATION;
+	# processing both makes one tap toggle sound twice or open and immediately
+	# close the help overlay. Ignore only those synthetic duplicates.
+	if event.device == InputEvent.DEVICE_ID_EMULATION and (
+		event is InputEventMouseButton
+		or event is InputEventMouseMotion
+		or event is InputEventScreenTouch
+		or event is InputEventScreenDrag
+	):
+		return
+
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
 		if key_event.pressed:
@@ -754,6 +766,7 @@ func _draw() -> void:
 	else:
 		_draw_wash_trail()
 		_draw_tool_cursor()
+		# One compact summary row: stars, customer mood, and daily mission.
 		_draw_grade_tracker()
 		_draw_customer_patience()
 		_draw_daily_mission()
@@ -763,11 +776,10 @@ func _draw() -> void:
 		_draw_toolbar()
 		_draw_completion_panel()
 		_draw_combo_milestone_flash()
-	# On AIT/web the top-right corner is a framework touch zone (X button / gestures)
-	# where taps never reach the canvas, so the sound/help buttons live only on native;
-	# web/AIT reaches sound + exit through the back-button pause menu instead.
-	# (Also suppressed behind the title-screen upgrade/skin popups.)
-	if not OS.has_feature("web") and not (game_state == STATE_TITLE and (show_upgrade_panel or show_skin_panel)):
+	# During play sound/help sit inside the status card; on the title screen they
+	# remain in the safe top-left area. Both avoid the AIT framework's fixed
+	# top-right controls (··· / X).
+	if not (game_state == STATE_TITLE and (show_upgrade_panel or show_skin_panel)):
 		_draw_top_buttons()
 	if show_tutorial:
 		_draw_tutorial()
@@ -1093,15 +1105,15 @@ func _hud_top_y() -> float:
 	return maxf(HUD_TOP_Y, _safe_area_design_insets().y + HUD_SAFE_PADDING)
 
 
-# Combo badge floats just below the status card + mission/customer row so it never
-# overlaps the top HUD. Shared by the badge draw and its break-burst spawn.
+# Combo badge floats below the single compact summary row so it never overlaps
+# the top HUD. Shared by the badge draw and its break-burst spawn.
 func _combo_badge_center_y() -> float:
-	return _hud_top_y() + 202.0
+	return _hud_top_y() + 172.0
 
 
 func _top_button_y() -> float:
 	if game_state == STATE_PLAYING:
-		return _hud_top_y() + 96.0
+		return _hud_top_y() + 12.0
 	return maxf(TOP_BUTTON_Y, _safe_area_design_insets().y + TOP_BUTTON_SAFE_PADDING)
 
 
@@ -2138,7 +2150,7 @@ func _draw_background() -> void:
 
 func _draw_status() -> void:
 	var font: Font = _font()
-	var card := Rect2(14.0, _hud_top_y(), 362.0, 84.0)
+	var card := _get_status_rect()
 	draw_style_box(_style("hud_shadow", Color(0.05, 0.23, 0.33, 0.25), 20.0), Rect2(card.position + Vector2(0.0, 3.0), card.size))
 	draw_style_box(_style("hud_card", Color(0.97, 0.99, 1.0, 0.94), 20.0), card)
 
@@ -2948,20 +2960,17 @@ func _draw_daily_mission() -> void:
 	if game_state != STATE_PLAYING or daily_mission_type.is_empty():
 		return
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
-	var top_y := _hud_top_y() + 88.0
-	var rect := Rect2(14.0, top_y, 286.0, 26.0)
+	var rect := _get_daily_mission_rect()
 
-	draw_style_box(_style("dm_shadow", Color(0.03, 0.14, 0.2, 0.18), 12.0),
+	draw_style_box(_style("dm_shadow", Color(0.03, 0.14, 0.2, 0.22), 16.0),
 		Rect2(rect.position + Vector2(0.0, 2.0), rect.size))
-	draw_style_box(_style("dm_bg", Color(0.03, 0.14, 0.2, 0.60), 12.0), rect)
+	draw_style_box(_style("dm_bg", Color(0.03, 0.14, 0.2, 0.66), 16.0), rect)
 
 	var font := _font()
 	var claimed := daily_mission_claimed
 	var progress := mini(daily_mission_progress, daily_mission_target)
 
-	var bar_margin := 4.0
-	var bar_rect := Rect2(rect.position.x + bar_margin, rect.position.y + rect.size.y - 6.0,
-		rect.size.x - bar_margin * 2.0, 4.0)
+	var bar_rect := _get_daily_mission_bar_rect()
 	draw_style_box(_style("dm_bar_bg", Color(0.0, 0.0, 0.0, 0.35), 2.0), bar_rect)
 	var fill := 1.0 if claimed else float(progress) / float(max(daily_mission_target, 1))
 	if fill > 0.0:
@@ -2972,13 +2981,16 @@ func _draw_daily_mission() -> void:
 
 	var label_text := _daily_mission_display_label()
 	var count_text := tr("DM_DONE") if claimed else "%d/%d" % [progress, daily_mission_target]
-	var text_y := rect.position.y + 18.0
 	var label_col := Color(0.7, 1.0, 0.75) if claimed else Color(0.85, 0.95, 1.0)
 	var count_col := Color("#39d98a") if claimed else Color(0.7, 0.9, 1.0)
-	draw_string(font, Vector2(rect.position.x + 8.0, text_y),
-		label_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 72.0, 11, label_col)
-	draw_string(font, Vector2(rect.position.x + rect.size.x - 62.0, text_y),
-		count_text, HORIZONTAL_ALIGNMENT_RIGHT, 54.0, 11, count_col)
+	var label_width := rect.size.x - 16.0
+	var label_font_size := 11
+	while label_font_size > 8 and font.get_string_size(label_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, label_font_size).x > label_width:
+		label_font_size -= 1
+	draw_string(font, Vector2(rect.position.x + 8.0, rect.position.y + 18.0),
+		label_text, HORIZONTAL_ALIGNMENT_CENTER, label_width, label_font_size, label_col)
+	draw_string(font, Vector2(rect.position.x + 8.0, rect.position.y + 40.0),
+		count_text, HORIZONTAL_ALIGNMENT_CENTER, label_width, 11, count_col)
 
 	if _daily_mission_pop_time >= 0.0:
 		var age := time_now - _daily_mission_pop_time
@@ -2986,8 +2998,8 @@ func _draw_daily_mission() -> void:
 			var alpha := clampf(1.0 - (age - 1.6) / 1.2, 0.0, 1.0)
 			var rise := age * 26.0
 			var pop_text := tr("DM_CLEAR_POP") % DAILY_MISSION_REWARD
-			draw_string(font, Vector2(14.0, top_y - 14.0 - rise),
-				pop_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.9, 0.3, alpha))
+			draw_string(font, Vector2(rect.position.x - 30.0, rect.end.y + 18.0 - rise),
+				pop_text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x + 30.0, 11, Color(1.0, 0.9, 0.3, alpha))
 		else:
 			_daily_mission_pop_time = -10.0
 
@@ -2996,19 +3008,28 @@ func _draw_top_buttons() -> void:
 	var font: Font = _font()
 	var sound_rect := _get_sound_rect()
 	var help_rect := _get_help_rect()
+	var compact := game_state == STATE_PLAYING
 	for rect in [sound_rect, help_rect]:
-		draw_style_box(_style("round_button", Color(0.03, 0.14, 0.2, 0.62), 18.0), rect)
+		var style_key := "hud_icon_button" if compact else "round_button"
+		draw_style_box(_style(style_key, Color(0.03, 0.14, 0.2, 0.68), rect.size.x * 0.5), rect)
 	var icon_color := Color(0.93, 0.99, 1.0)
 	var speaker_center := sound_rect.get_center()
+	var icon_scale := sound_rect.size.x / 30.0
 	draw_colored_polygon(PackedVector2Array([
-		speaker_center + Vector2(-9.0, -3.0), speaker_center + Vector2(-3.0, -3.0), speaker_center + Vector2(3.0, -9.0),
-		speaker_center + Vector2(3.0, 9.0), speaker_center + Vector2(-3.0, 3.0), speaker_center + Vector2(-9.0, 3.0),
+		speaker_center + Vector2(-9.0, -3.0) * icon_scale, speaker_center + Vector2(-3.0, -3.0) * icon_scale, speaker_center + Vector2(3.0, -9.0) * icon_scale,
+		speaker_center + Vector2(3.0, 9.0) * icon_scale, speaker_center + Vector2(-3.0, 3.0) * icon_scale, speaker_center + Vector2(-9.0, 3.0) * icon_scale,
 	]), icon_color)
 	if sound_enabled:
-		draw_arc(speaker_center + Vector2(4.0, 0.0), 7.0, -1.0, 1.0, 8, icon_color, 2.0)
+		draw_arc(speaker_center + Vector2(4.0, 0.0) * icon_scale, 7.0 * icon_scale, -1.0, 1.0, 8, icon_color, maxf(1.5, 2.0 * icon_scale))
 	else:
-		draw_line(speaker_center + Vector2(-11.0, -11.0), speaker_center + Vector2(11.0, 11.0), Color("#ff6b6b"), 3.0)
-	draw_string(font, Vector2(help_rect.position.x, help_rect.position.y + 26.0), "?", HORIZONTAL_ALIGNMENT_CENTER, help_rect.size.x, 20, icon_color)
+		draw_line(speaker_center + Vector2(-11.0, -11.0) * icon_scale, speaker_center + Vector2(11.0, 11.0) * icon_scale, Color("#ff6b6b"), maxf(2.0, 3.0 * icon_scale))
+	var help_font_size := maxi(15, roundi(20.0 * help_rect.size.x / 30.0))
+	# draw_string() receives a baseline, not a glyph center. Derive it from the
+	# font metrics so the question mark shares the speaker icon's visual center.
+	var help_baseline_y := help_rect.get_center().y + (
+		font.get_ascent(help_font_size) - font.get_descent(help_font_size)
+	) * 0.5
+	draw_string(font, Vector2(help_rect.position.x, help_baseline_y), "?", HORIZONTAL_ALIGNMENT_CENTER, help_rect.size.x, help_font_size, icon_color)
 
 
 func _draw_tutorial() -> void:
@@ -3091,7 +3112,7 @@ func _draw_grade_tracker() -> void:
 		return
 	var font: Font = _font()
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
-	var rect := Rect2(14.0, _hud_top_y() + 120.0, 120.0, 56.0)
+	var rect := _get_grade_rect()
 	draw_style_box(_style("grade_shadow", Color(0.03, 0.14, 0.2, 0.22), 16.0), Rect2(rect.position + Vector2(0.0, 2.0), rect.size))
 	draw_style_box(_style("grade_chip", Color(0.03, 0.14, 0.2, 0.66), 16.0), rect)
 
@@ -3099,25 +3120,25 @@ func _draw_grade_tracker() -> void:
 	var at_risk := _grade_at_risk_slot()
 	var warning: bool = time_left >= 0.0 and time_left <= STAR_WARN_SECONDS
 
-	var star_y := rect.position.y + 22.0
+	var star_y := rect.position.y + 20.0
 	var risk_beat: float = 0.5 + 0.5 * sin(time_now * 12.0)
 	for slot in range(3):
-		var center := Vector2(rect.position.x + 30.0 + float(slot) * 30.0, star_y)
+		var center := Vector2(rect.position.x + 20.0 + float(slot) * 32.0, star_y)
 		var state := _grade_slot_state(slot)
 		# A star about to be lost pulses a red ring whether it is already earned
 		# or still a reachable target, so the urgency reads the same either way.
 		var at_risk_here: bool = warning and slot == at_risk
 		if at_risk_here:
-			draw_arc(center, 13.0, 0.0, TAU, 20, Color(1.0, 0.42, 0.36, 0.35 + 0.45 * risk_beat), 2.5)
+			draw_arc(center, 11.0, 0.0, TAU, 20, Color(1.0, 0.42, 0.36, 0.35 + 0.45 * risk_beat), 2.5)
 		if state == GRADE_SLOT_EARNED:
 			var scale: float = 1.0 + (0.16 * risk_beat if at_risk_here else 0.0)
-			_draw_star(center, 10.0 * scale, Color("#ffce3d"), Color("#e0a818"))
+			_draw_star(center, 8.5 * scale, Color("#ffce3d"), Color("#e0a818"))
 		elif state == GRADE_SLOT_TARGET:
 			var tp: float = 0.5 + 0.5 * sin(time_now * 5.0)
 			var ts: float = 1.0 + (0.12 * risk_beat if at_risk_here else 0.0)
-			_draw_star(center, 10.0 * ts, Color(1.0, 0.81, 0.24, 0.14 + 0.12 * tp), Color(1.0, 0.81, 0.24, 0.5 + 0.4 * tp))
+			_draw_star(center, 8.5 * ts, Color(1.0, 0.81, 0.24, 0.14 + 0.12 * tp), Color(1.0, 0.81, 0.24, 0.5 + 0.4 * tp))
 		else:
-			_draw_star(center, 9.0, Color(0.42, 0.5, 0.55, 0.85), Color(0.3, 0.37, 0.42, 0.9))
+			_draw_star(center, 8.0, Color(0.42, 0.5, 0.55, 0.85), Color(0.3, 0.37, 0.42, 0.9))
 
 	var line_y := rect.position.y + rect.size.y - 9.0
 	var text := ""
@@ -3138,27 +3159,30 @@ func _draw_grade_tracker() -> void:
 		col = Color(1.0, 0.88, 0.55)
 	else:
 		text = tr("GRADE_TIME") % _format_time(level_time)
-	draw_string(font, Vector2(rect.position.x, line_y), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 12, col)
+	var text_font_size := 11
+	while text_font_size > 8 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, text_font_size).x > rect.size.x - 8.0:
+		text_font_size -= 1
+	draw_string(font, Vector2(rect.position.x + 4.0, line_y), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 8.0, text_font_size, col)
 
 
 func _draw_customer_patience() -> void:
 	if completed:
 		return
 	# 손님 인내 게이지: STAR2_TIME(140s)을 기준으로 1.0 → 0.0으로 감소.
-	# 등급 트래커(x=14, w=120) 오른쪽, 사운드 버튼(x=306) 왼쪽 사이에 배치.
+	# 별점과 일일 미션 사이의 같은 높이 요약 카드에 배치한다.
 	if STAR2_TIME <= 0.0:
 		return
 	var patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
-	var rect := Rect2(142.0, _hud_top_y() + 120.0, 110.0, 56.0)
+	var rect := _get_customer_rect()
 
 	draw_style_box(_style("cust_shadow", Color(0.03, 0.14, 0.2, 0.22), 16.0),
 		Rect2(rect.position + Vector2(0.0, 2.0), rect.size))
 	draw_style_box(_style("cust_chip", Color(0.03, 0.14, 0.2, 0.66), 16.0), rect)
 
 	# 손님 얼굴 (카드 왼쪽)
-	var face := Vector2(rect.position.x + 26.0, rect.position.y + 24.0)
-	var fr := 15.0
+	var face := Vector2(rect.position.x + 21.0, rect.position.y + 23.0)
+	var fr := 14.0
 	var face_col := Color(1.0, 0.85, 0.22).lerp(Color(1.0, 0.35, 0.22), 1.0 - patience)
 	draw_circle(face, fr, face_col)
 	draw_arc(face, fr, 0.0, TAU, 28, Color(0.0, 0.0, 0.0, 0.18), 1.5)
@@ -3190,7 +3214,7 @@ func _draw_customer_patience() -> void:
 		draw_arc(Vector2(face.x, face.y + 9.5), 6.0, PI + 0.4, TAU - 0.4, 12, Color(0.08, 0.06, 0.04), 2.0)
 
 	# 인내 게이지 바 (카드 오른쪽)
-	var bar := Rect2(rect.position.x + 53.0, rect.position.y + 14.0, 48.0, 11.0)
+	var bar := Rect2(rect.position.x + 43.0, rect.position.y + 14.0, 53.0, 10.0)
 	draw_style_box(_style("cust_bar_bg", Color(0.15, 0.28, 0.38, 0.55), 5.0), bar)
 	if patience > 0.0:
 		var bar_key: String
@@ -3221,8 +3245,8 @@ func _draw_customer_patience() -> void:
 		var blink := 0.55 + 0.45 * sin(time_now * 8.0)
 		mood_label = tr("MOOD_ANGRY")
 		mood_col = Color(1.0, 0.62, 0.40, blink)
-	draw_string(font, Vector2(rect.position.x + 48.0, rect.position.y + rect.size.y - 8.0),
-		mood_label, HORIZONTAL_ALIGNMENT_CENTER, 62.0, 12, mood_col)
+	draw_string(font, Vector2(rect.position.x + 40.0, rect.position.y + rect.size.y - 8.0),
+		mood_label, HORIZONTAL_ALIGNMENT_CENTER, 61.0, 11, mood_col)
 
 	# 콤보 리액션 말풍선: 콤보 마일스톤 달성 직후 2.2초간 표시 후 페이드.
 	var cheer_age := time_now - _customer_cheer_time
@@ -3661,12 +3685,45 @@ func _get_start_rect() -> Rect2:
 	return Rect2(95.0, 488.0, 200.0, 58.0)
 
 
+func _get_status_rect() -> Rect2:
+	return Rect2(14.0, _hud_top_y(), 362.0, 84.0)
+
+
+func _get_grade_rect() -> Rect2:
+	return Rect2(14.0, _hud_top_y() + 90.0, 104.0, 56.0)
+
+
+func _get_customer_rect() -> Rect2:
+	return Rect2(124.0, _hud_top_y() + 90.0, 104.0, 56.0)
+
+
+func _get_daily_mission_rect() -> Rect2:
+	return Rect2(234.0, _hud_top_y() + 90.0, 142.0, 56.0)
+
+
+func _get_daily_mission_bar_rect() -> Rect2:
+	var rect := _get_daily_mission_rect()
+	var margin_x := 10.0
+	var height := 4.0
+	var bottom_padding := 7.0
+	return Rect2(
+		rect.position.x + margin_x,
+		rect.end.y - bottom_padding - height,
+		rect.size.x - margin_x * 2.0,
+		height
+	)
+
+
 func _get_sound_rect() -> Rect2:
-	return Rect2(306.0, _top_button_y(), 36.0, 36.0)
+	if game_state == STATE_PLAYING:
+		return Rect2(156.0, _top_button_y(), 24.0, 24.0)
+	return Rect2(14.0, _top_button_y(), 30.0, 30.0)
 
 
 func _get_help_rect() -> Rect2:
-	return Rect2(344.0, _top_button_y(), 36.0, 36.0)
+	if game_state == STATE_PLAYING:
+		return Rect2(204.0, _top_button_y(), 24.0, 24.0)
+	return Rect2(50.0, _top_button_y(), 30.0, 30.0)
 
 
 func _get_bomb_rect() -> Rect2:
