@@ -31,6 +31,14 @@ npm run dev
 
 `npm run dev`는 `sync:godot`을 먼저 실행해 `build/web` 산출물을 `public/godot`으로 복사하고 `src/godotBuild.ts` 메타데이터를 재생성한 뒤 Granite 개발 서버를 엽니다.
 
+iOS 실기기 샌드박스에서는 Mac의 Wi-Fi IP를 `AIT_WEB_HOST`로 전달합니다. 샌드박스 앱의 로컬 서버 주소에도 같은 IP를 저장해야 합니다.
+
+```bash
+AIT_WEB_HOST="$(ipconfig getifaddr en0)" npm run dev
+```
+
+Granite 개발 서버는 Node.js 22 LTS에서 실기기 연결을 검증했습니다. Node.js 24에서는 iOS 샌드박스 연결 종료 시 `ECONNRESET`으로 개발 서버가 종료될 수 있습니다.
+
 ## 4. AIT 빌드
 
 ```bash

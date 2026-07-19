@@ -110,6 +110,27 @@ async function neutralizeGeminiKeyFalsePositive(loaderPath) {
   return false
 }
 
+async function enableInsecureSandboxAudioFallback(loaderPath) {
+  const source = await readFile(loaderPath, 'utf8')
+  const audioPositionWorkletInit =
+    'GodotAudio.audioPositionWorkletPromise=ctx.audioWorklet.addModule(path);'
+  const guardedAudioPositionWorkletInit =
+    'GodotAudio.audioPositionWorkletPromise=ctx.audioWorklet?ctx.audioWorklet.addModule(path):Promise.resolve();'
+  const samplePositionWorkletConnect =
+    'async connectPositionWorklet(start){await GodotAudio.audioPositionWorkletPromise;if(this.isCanceled){return}this._source.connect(this.getPositionWorklet());if(start){this.start()}}'
+  const guardedSamplePositionWorkletConnect =
+    'async connectPositionWorklet(start){await GodotAudio.audioPositionWorkletPromise;if(this.isCanceled){return}if(!GodotAudio.ctx.audioWorklet){if(start){this.start()}return}this._source.connect(this.getPositionWorklet());if(start){this.start()}}'
+  const patched = source
+    .replace(audioPositionWorkletInit, guardedAudioPositionWorkletInit)
+    .replace(samplePositionWorkletConnect, guardedSamplePositionWorkletConnect)
+
+  if (patched !== source) {
+    await writeFile(loaderPath, patched)
+    return true
+  }
+  return false
+}
+
 function replaceAsciiBytes(buffer, from, to) {
   if (from.length !== to.length) {
     throw new Error(`Cannot replace "${from}" with "${to}": byte lengths differ`)
@@ -176,6 +197,9 @@ await cp(sourceDir, targetDir, { recursive: true })
 await writeFile(path.join(targetDir, '.gitkeep'), '')
 const disabledCodeExecutionShim = await disableGodotCodeExecutionShim(path.join(targetDir, loaderFile))
 const neutralizedGeminiFalsePositive = await neutralizeGeminiKeyFalsePositive(path.join(targetDir, loaderFile))
+const enabledInsecureSandboxAudioFallback = await enableInsecureSandboxAudioFallback(
+  path.join(targetDir, loaderFile),
+)
 const patchedWasmBridgeStrings = await patchGodotWasmBridgeStrings(path.join(targetDir, `${executableName}.wasm`))
 
 const html = await readFile(path.join(sourceDir, htmlFile), 'utf8')
@@ -199,6 +223,9 @@ if (disabledCodeExecutionShim) {
 }
 if (neutralizedGeminiFalsePositive) {
   console.log(`Neutralized AppsInToss Gemini-key false positive (FAQ.html) in ${path.join('public', 'godot', loaderFile)}`)
+}
+if (enabledInsecureSandboxAudioFallback) {
+  console.log(`Enabled Godot audio fallback for insecure AppsInToss sandbox in ${path.join('public', 'godot', loaderFile)}`)
 }
 if (patchedWasmBridgeStrings > 0) {
   console.log(`Patched ${patchedWasmBridgeStrings} Godot Web bridge string(s) in ${path.join('public', 'godot', `${executableName}.wasm`)}`)

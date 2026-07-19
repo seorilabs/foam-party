@@ -84,7 +84,13 @@ export default function GodotCanvas() {
           throw new Error('Godot Engine loader is not available')
         }
 
-        const missingFeatures = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED })
+        const isLocalAppsInTossSandbox =
+          import.meta.env.DEV &&
+          window.location.protocol === 'http:' &&
+          window.navigator.userAgent.includes('AppsInToss')
+        const missingFeatures = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED }).filter(
+          (feature) => !(isLocalAppsInTossSandbox && feature.startsWith('Secure Context')),
+        )
         if (missingFeatures.length > 0) {
           throw new Error(`Missing browser features: ${missingFeatures.join(', ')}`)
         }

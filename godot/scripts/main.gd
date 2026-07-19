@@ -90,6 +90,7 @@ var particles: Array = []
 var rng := RandomNumberGenerator.new()
 var is_washing := false
 var pointer_position := Vector2.ZERO
+var _primary_touch_index := -1
 # Velocity-scaled smear left behind the active tool while scrubbing. Gives the
 # core drag gesture a sense of weight: faster sweeps paint a longer, brighter
 # tool-tinted streak, so the player feels the effort of "really scrubbing".
@@ -725,22 +726,30 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventScreenTouch:
 		var touch_event := event as InputEventScreenTouch
-		if touch_event.index != 0:
-			return
-		var touch_point := _to_design(touch_event.position)
 		if touch_event.pressed:
+			# Browser Touch.identifier values are opaque and may be large non-zero
+			# integers on iOS WKWebView. Track the first active finger instead of
+			# assuming the primary touch always has index 0.
+			if _primary_touch_index == -1:
+				_primary_touch_index = touch_event.index
+			elif touch_event.index != _primary_touch_index:
+				return
+			var touch_point := _to_design(touch_event.position)
 			if _handle_tap(touch_point):
 				return
 			if _point_in_wash_area(touch_point):
 				pointer_position = touch_point
 				is_washing = true
 		else:
+			if touch_event.index != _primary_touch_index:
+				return
 			is_washing = false
+			_primary_touch_index = -1
 		return
 
 	if event is InputEventScreenDrag:
 		var drag_event := event as InputEventScreenDrag
-		if drag_event.index == 0:
+		if drag_event.index == _primary_touch_index:
 			pointer_position = _to_design(drag_event.position)
 
 
@@ -798,6 +807,7 @@ func reset_game(new_level: int) -> void:
 	_double_offer_shown = false
 	_gleam_time = -1.0
 	is_washing = false
+	_primary_touch_index = -1
 	wash_trail.clear()
 	wash_speed = 0.0
 	_trail_has_last = false
