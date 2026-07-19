@@ -447,7 +447,8 @@ func _run_smoke() -> void:
 	root_node.set("sound_enabled", true)
 	var sound_touch := InputEventScreenTouch.new()
 	sound_touch.device = 0
-	sound_touch.index = 0
+	# WKWebView uses opaque, non-zero Touch.identifier values on iOS.
+	sound_touch.index = 279624489
 	sound_touch.position = sound_point
 	sound_touch.pressed = true
 	root_node.call("_input", sound_touch)
@@ -466,13 +467,34 @@ func _run_smoke() -> void:
 	if bool(root_node.get("is_washing")):
 		_fail("sound-button touch must not start washing")
 		return
+	if int(root_node.get("_primary_touch_index")) != sound_touch.index:
+		_fail("the first active iOS touch identifier must become the primary touch")
+		return
 
 	var help_design_point: Vector2 = help_rect.get_center()
 	var help_point: Vector2 = input_canvas_origin + help_design_point * input_canvas_scale
 	root_node.set("show_tutorial", false)
+	var secondary_help_touch := InputEventScreenTouch.new()
+	secondary_help_touch.device = 0
+	secondary_help_touch.index = 279624490
+	secondary_help_touch.position = help_point
+	secondary_help_touch.pressed = true
+	root_node.call("_input", secondary_help_touch)
+	if bool(root_node.get("show_tutorial")):
+		_fail("a secondary touch must not trigger a HUD action while the primary touch is active")
+		return
+	var sound_release := InputEventScreenTouch.new()
+	sound_release.device = 0
+	sound_release.index = sound_touch.index
+	sound_release.position = sound_point
+	sound_release.pressed = false
+	root_node.call("_input", sound_release)
+	if int(root_node.get("_primary_touch_index")) != -1:
+		_fail("releasing the primary touch must clear its opaque identifier")
+		return
 	var help_touch := InputEventScreenTouch.new()
 	help_touch.device = 0
-	help_touch.index = 0
+	help_touch.index = 279624490
 	help_touch.position = help_point
 	help_touch.pressed = true
 	root_node.call("_input", help_touch)
@@ -488,6 +510,12 @@ func _run_smoke() -> void:
 	if not bool(root_node.get("show_tutorial")):
 		_fail("emulated mouse duplicate must not dismiss the tutorial")
 		return
+	var help_release := InputEventScreenTouch.new()
+	help_release.device = 0
+	help_release.index = help_touch.index
+	help_release.position = help_point
+	help_release.pressed = false
+	root_node.call("_input", help_release)
 	root_node.set("show_tutorial", false)
 
 	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])

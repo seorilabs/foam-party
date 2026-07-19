@@ -1,5 +1,7 @@
 import { defineConfig } from '@apps-in-toss/web-framework/config'
 
+const webHost = process.env.AIT_WEB_HOST ?? 'localhost'
+
 export default defineConfig({
   appName: 'foam-party',
   brand: {
@@ -10,7 +12,7 @@ export default defineConfig({
     bridgeColorMode: 'basic',
   },
   web: {
-    host: 'localhost',
+    host: webHost,
     port: 5173,
     commands: {
       dev: 'vite --host 0.0.0.0',
