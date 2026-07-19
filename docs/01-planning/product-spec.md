@@ -36,5 +36,5 @@
 ## 승인
 
 - Planning approval status: 기존 MVP 개발 승인 상태로 간주.
-- Deployment approval status: 확정 필요.
+- Deployment approval status: Google Play production `1.0.0` 출시는 2026-07-18 사용자 승인 완료. App Store와 AppsInToss production 승인은 별도다.
 - Deployment approval 전에는 store submission, production promotion, AppsInToss production release를 진행하지 않는다.

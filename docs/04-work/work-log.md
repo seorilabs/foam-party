@@ -9,13 +9,25 @@
 
 - 스펀지 전용 오물로 보이던 줄무늬 사각 `sticker`를 실제 세차 흐름에 맞는 `road_grime`(도로 때)으로 교체했다. 도로 때는 불규칙한 반투명 회갈색 얼룩으로 그리며, 마른 상태에서 바로 문지르지 않고 고압수 또는 비누로 불린 뒤 스펀지로 제거한다.
 
+## 2026-07-17
+
+- **AIT "Gemini API 키" 반려의 진짜 원인 확정 — 앱인토스 정적 분석의 오탐**. 아래 07-14의 가설들(Firebase 키/GA4/생성형 AI 정책)은 모두 헛다리였고, 이 항목이 최종 결론이다.
+- **근거**: (1) 콘솔 `review_get`상 반려는 `AUTO_REJECTED`(1~4초)이고 매 재제출마다 동일 재검출 — 무키 v1.3.3, 검증 클린본 모두 동일 반려. (2) 승인된 형제 Godot 게임(루시드 체스 4.6.3, 리버시 4.6)은 **동일 엔진 wasm**을 쓰는데도 통과 — 6월 승인으로 규칙 추가(최근) 이전. (3) 앱인토스 담당자 커뮤니티 답변: *"`AQ.*` 패턴의 Gemini API Key를 코드에 넣는 걸 최근 정적 분석에서 걸리게 했는데, 일부 js obfuscation 과정에서 동일 패턴이 있다. 길이 조건 체크해서 통과되도록 하겠다."*
+- **트리거 위치 특정**: 번들 전체에서 `AQ.` 패턴은 **정확히 1곳** — Godot/emscripten 로더 `web/godot/index.js`에 박힌 진단 URL `.../FAQ.html#...`. minify된 한 줄에서 `AQ.`(F**AQ.**html) 접두가 greedy 매칭되어(매치 길이 27만 자) 신형 Gemini 키로 오인됨. 실제 `AIza`/`generativelanguage`/`api_secret`은 0건.
+- **조치(B) — 빌드 파이프라인 자체 무력화**: `ait/apps-in-toss-web/scripts/sync-godot-web.mjs`에 `neutralizeGeminiKeyFalsePositive` 추가 — 복사된 로더의 `FAQ.html`→`FAQ_html`로 치환해 `AQ.` 시퀀스를 제거(emscripten abort 진단 문자열이라 런타임 무해). `granite.config.ts`의 `web.commands.build='npm run build:web'` 덕에 `ait build`가 `sync:godot`를 호출하므로 로컬·CI 모두 자동 적용. `check-no-google-api-key.sh`에 신형 `AQ.<base64>` 키 탐지 + `AQ.html` 잔존 시 배포 전 실패 sentinel 추가. 리빌드 후 `.ait`에서 `AQ.` 패턴 0건·가드 통과 검증 완료.
+- **조치(A) — 재발 방지 요청**: 앱인토스 개발자 문의/커뮤니티에 오탐(우리도 `FAQ.html` 동일 케이스) + 파이프라인 길이 조건 수정 ETA/그때까지 수동 승인 요청 예정.
+- 다음: B 반영 브랜치/PR 후 재제출 → 통과 확인. 통과하면 stash된 Firebase/GA4 애널리틱스 복구 WIP 재개 검토(GA4 `api_secret` 서버 프록시 포함).
+
 ## 2026-07-14
 
-- AIT 반려 사유 2건 해결.
+- AIT 반려 사유를 조사하고 후속 심사 결과로 가설을 검증했다.
 - **미니앱 표기명 불일치**: 콘솔 앱정보 등록명은 `버블 버블 거품 세차`인데 미니앱 표기명이 `폼 파티`였다. `ait/apps-in-toss-web/granite.config.ts`(`brand.displayName`), `ait/apps-in-toss-web/index.html`(title), `apps-in-toss/apps-in-toss.config.json`, `apps-in-toss/registration.md`, `docs/05-markets/apps-in-toss.md`의 한글 표기명을 등록명으로 정정했다. `appName`(`foam-party`)은 내부 식별자라 변경 없음.
-- **Gemini API 키 사용 확인**: 런타임 클라이언트/서버 어디에도 Gemini API 키 사용 없음. Gemini(`gemini-3-pro-image`) 참조는 디자인 타임 에셋 생성 provenance 파일(`godot/assets/art/asset-manifest.json`, `icon-manifest.json`)에만 존재하며 런타임 코드(`.gd`)가 읽지 않는다. `export_filter=all_resources`로 이 매니페스트가 배포 번들에 포함돼 심사자가 런타임 Gemini 호출로 오인한 것으로 보고, iOS/Web/Android export preset의 `exclude_filter`에 두 매니페스트와 `assets/art/style/**`를 추가해 번들에서 제외했다. 저장소 원본과 에셋 재생성 경로는 영향 없음.
-- **AIT API Key 기계 탐지 대응**: 심사 산출물에 Firebase Web 공개 설정인 `AIza...` 키가 포함되어 Gemini 키로 기계 탐지될 수 있음을 확인했다. AIT에서 Firebase Web SDK/Remote Config/API Key를 제거하고 애널리틱스는 기존 GA4 Measurement Protocol 경로만 사용하도록 변경했다. 빌드 후 `.ait` 내 `AIza`, Generative Language, Firebase AI, Gemini 모델 마커를 검사하는 gate를 추가했다.
-- **AIT 클라이언트 secret 완전 제거**: API Key 제거 후에도 심사가 반복 반려해 `.ait` 전체를 재조사한 결과 GA4 Measurement Protocol `api_secret`이 Web JS에 포함된 것을 확인했다. AIT 애널리틱스 전송을 비활성하고 secret/측정 ID 환경변수 참조를 제거했으며, 산출물 gate에 `api_secret`과 `VITE_GA4_MP_API_SECRET`를 추가했다.
+- **Gemini 참조 번들 제외 가설**: 런타임 클라이언트/서버에는 Gemini API 사용이 없고, Gemini(`gemini-3-pro-image`) 참조는 디자인 타임 에셋 생성 provenance에만 있었다. 해당 매니페스트와 스타일 원본은 런타임에 불필요해 export에서 제외했지만, 후속 심사에서도 같은 반려 사유가 반복되어 원인은 아니었다.
+- **Firebase API Key 탐지 가설 반증**: Firebase Web 공개 설정인 `AIza...` 키가 Gemini 키로 탐지된다고 가정해 Firebase SDK/Remote Config를 제거했으나, 키가 0건인 v1.3.3도 동일 사유로 반려됐다. 동일 워크스페이스의 출시 앱에는 Firebase Web 설정이 포함되어 있어 일반적인 Firebase 키 금지 규칙도 아니다.
+- **GA4 설정 탐지 가설 반증**: GA4 Measurement Protocol 설정까지 제거하고 AIT 애널리틱스를 완전히 비활성화했지만 v1.3.3이 동일 사유로 반려됐다.
+- **자동 스캐너 확인**: 반려는 사람 리뷰 스레드가 아니라 시스템 자동 체크다(반박 답변 채널 없음, 콘솔에 AI 사용 선언란도 없음). 심사가 "Gemini"를 볼 수 있는 곳은 제출 번들뿐이므로, 번들을 검증 가능하게 클린으로 만들면 통과해야 한다.
+- **env 통째 인라인 누수 발견**: Firebase 복구 WIP의 `tossFullScreenAdRuntime.ts`에 `const env = import.meta.env`가 있어 Vite가 전체 `import.meta.env`를 번들에 직렬화했다. 개별 가드를 우회해 `AIza` 키와 `VITE_GA4_MP_API_SECRET`(실제 GA4 비밀값)이 평문 노출됐다. "코드에서 제거 ≠ 번들에서 제거"이므로, 제출 경로가 불확실했던 과거 "클린" 제출본이 실제로는 키를 포함했을 가능성이 있다.
+- **결정(A)**: 승인 전까지 Firebase/GA4를 AIT 번들에 넣지 않는다. HEAD의 no-op 스텁 상태에서 `AIza`/`@firebase/ai`/`api_secret` 0건임을 `check:no-google-api-key` 가드로 검증한 `.ait`만 제출한다(검증 통과 확인함). Firebase/GA4 애널리틱스 복구 WIP는 `git stash`(`WIP: AIT Firebase/GA4 애널리틱스 복구 (승인 후 재개)`)에 보존. 복구 시 서버 프록시 없는 클라이언트 GA4 `api_secret`은 리뷰어의 "서버 경유" 지적과 충돌하므로 함께 해결한다.
 
 ## 2026-06-16
 

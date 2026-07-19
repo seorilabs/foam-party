@@ -28,3 +28,6 @@ jobs:
         npm run check:architecture
         npm run check:docs
         bash scripts/godot_quality_gate.sh --project godot --smoke-scene res://tests/smoke_scene.gd
+        npm --prefix ait/apps-in-toss-web ci
+        npm --prefix ait/apps-in-toss-web run lint
+        npm --prefix ait/apps-in-toss-web test
