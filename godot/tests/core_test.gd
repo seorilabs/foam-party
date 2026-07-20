@@ -14,6 +14,7 @@ func _run_core_tests() -> void:
 	var Economy: GDScript = load("res://core/use_cases/economy.gd")
 	var Coaching: GDScript = load("res://core/use_cases/coaching.gd")
 	var ComboProtection: GDScript = load("res://core/use_cases/combo_protection.gd")
+	var CustomerPresentation: GDScript = load("res://core/use_cases/customer_presentation.gd")
 	var StalledDirtHighlight: GDScript = load("res://core/use_cases/stalled_dirt_highlight.gd")
 	var DailyMission: GDScript = load("res://core/use_cases/daily_mission.gd")
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
@@ -24,10 +25,12 @@ func _run_core_tests() -> void:
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
 	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
 	var I18n: GDScript = load("res://scripts/services/i18n.gd")
-	if Scoring == null or Economy == null or Coaching == null or ComboProtection == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
+	if Scoring == null or Economy == null or Coaching == null or ComboProtection == null or CustomerPresentation == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
 		return
 	if not _test_combo_protection_rule(ComboProtection, GameConfig):
+		return
+	if not _test_customer_presentation_rule(CustomerPresentation, GameConfig):
 		return
 	if not _test_car_roster_and_saved_level_mapping(GameConfig):
 		return
@@ -423,6 +426,34 @@ func _test_combo_protection_rule(ComboProtection: GDScript, GameConfig: GDScript
 	var second_timeout: Dictionary = ComboProtection.timeout_transition(int(first_timeout["combo_count"]), bool(first_timeout["protection_available"]))
 	if int(second_timeout["combo_count"]) != 0 or float(second_timeout["combo_timer"]) != 0.0 or not bool(second_timeout["did_reset"]):
 		_fail("second timeout should reset combo after protection is spent")
+		return false
+	return true
+
+
+func _test_customer_presentation_rule(CustomerPresentation: GDScript, GameConfig: GDScript) -> bool:
+	var first_rotation: Array[int] = []
+	for level in range(1, 6):
+		var car_type := String(GameConfig.car_type_for_level(level))
+		var profile_index := int(CustomerPresentation.profile_index(car_type, level))
+		if first_rotation.has(profile_index):
+			_fail("the first car rotation should expose five distinct customers")
+			return false
+		first_rotation.append(profile_index)
+		var first_profile: Dictionary = CustomerPresentation.profile_for(car_type, level)
+		if first_profile != CustomerPresentation.profile_for(car_type, level):
+			_fail("customer profile must be deterministic for the same car and level")
+			return false
+		if not ["cap", "glasses", "headband"].has(String(first_profile["accessory"])):
+			_fail("customer profile used an unsupported procedural accessory")
+			return false
+	if first_rotation.size() < 3:
+		_fail("customer rotation must expose at least three profiles")
+		return false
+	var one_star := float(CustomerPresentation.reaction_strength(1))
+	var two_stars := float(CustomerPresentation.reaction_strength(2))
+	var three_stars := float(CustomerPresentation.reaction_strength(3))
+	if not (one_star < two_stars and two_stars < three_stars):
+		_fail("customer completion reaction must grow with earned stars")
 		return false
 	return true
 

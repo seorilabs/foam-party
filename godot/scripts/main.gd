@@ -9,6 +9,7 @@ const Scoring = preload("res://core/use_cases/scoring.gd")
 const Economy = preload("res://core/use_cases/economy.gd")
 const Coaching = preload("res://core/use_cases/coaching.gd")
 const ComboProtection = preload("res://core/use_cases/combo_protection.gd")
+const CustomerPresentation = preload("res://core/use_cases/customer_presentation.gd")
 const StalledDirtHighlight = preload("res://core/use_cases/stalled_dirt_highlight.gd")
 const DailyMission = preload("res://core/use_cases/daily_mission.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
@@ -188,6 +189,7 @@ var _combo_milestone_fanfare := ""
 var _combo_milestone_count := 0
 var _customer_cheer_text := ""
 var _customer_cheer_time := -10.0
+var _customer_completion_time := -10.0
 var best_times: Dictionary = {}
 var best_stars: Dictionary = {}
 var is_new_record := false
@@ -1069,6 +1071,7 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_gold_spot_pop_amount = 0
 	_customer_cheer_text = ""
 	_customer_cheer_time = -10.0
+	_customer_completion_time = -10.0
 	is_new_record = false
 	record_pop_time = -10.0
 	_progress_milestone_hit = 0
@@ -1229,6 +1232,18 @@ func get_grade_time_to_downgrade_for_test() -> float:
 
 func get_car_type_for_test() -> String:
 	return car_type
+
+
+func get_customer_profile_for_test() -> Dictionary:
+	return _customer_profile()
+
+
+func get_customer_reaction_strength_for_test(stars: int) -> float:
+	return CustomerPresentation.reaction_strength(stars)
+
+
+func get_completion_customer_rect_for_test() -> Rect2:
+	return _completion_customer_rect(_completion_panel_rect())
 
 
 func get_car_transition_phase_for_test() -> String:
@@ -2700,6 +2715,7 @@ func _update_clean_progress() -> void:
 		_gleam_time = 0.0
 		is_washing = false
 		earned_stars = _calc_stars()
+		_customer_completion_time = float(Time.get_ticks_msec()) / 1000.0
 		coin_reward = _calc_coin_reward(earned_stars)
 		_level_milestone_bonus = _calc_level_milestone_bonus(active_level_index)
 		coin_reward += _level_milestone_bonus
@@ -4279,9 +4295,11 @@ func _draw_customer_patience() -> void:
 	# 손님 얼굴 (카드 왼쪽)
 	var face := Vector2(rect.position.x + 21.0, rect.position.y + 23.0)
 	var fr := 14.0
-	var face_col := Color(1.0, 0.85, 0.22).lerp(Color(1.0, 0.35, 0.22), 1.0 - patience)
+	var customer_profile := _customer_profile()
+	var face_col := Color(String(customer_profile["face_hex"])).lerp(Color("#f2857f"), (1.0 - patience) * 0.42)
 	draw_circle(face, fr, face_col)
 	draw_arc(face, fr, 0.0, TAU, 28, Color(0.0, 0.0, 0.0, 0.18), 1.5)
+	_draw_customer_accessory(face, fr, customer_profile)
 
 	# 눈
 	draw_circle(Vector2(face.x - 5.0, face.y - 4.5), 2.0, Color(0.08, 0.06, 0.04))
@@ -4363,6 +4381,33 @@ func _draw_customer_patience() -> void:
 		draw_string(font, Vector2(bubble.position.x, bubble.position.y + 20.0),
 			_customer_cheer_text, HORIZONTAL_ALIGNMENT_CENTER, bubble.size.x, 14,
 			Color(0.35, 0.18, 0.02, cheer_alpha))
+
+
+func _customer_profile() -> Dictionary:
+	return CustomerPresentation.profile_for(car_type, active_level_index)
+
+
+func _draw_customer_accessory(center: Vector2, radius: float, profile: Dictionary) -> void:
+	var hair := Color(String(profile["hair_hex"]))
+	var accent := Color(String(profile["accent_hex"]))
+	var scale := radius / 14.0
+	draw_arc(center, radius - 1.0 * scale, PI + 0.12, TAU - 0.12, 18, hair, 3.0 * scale, true)
+	match String(profile["accessory"]):
+		"cap":
+			var crown := PackedVector2Array([
+				center + Vector2(-9.0, -11.5) * scale,
+				center + Vector2(-5.0, -17.0) * scale,
+				center + Vector2(7.0, -16.0) * scale,
+				center + Vector2(10.0, -10.0) * scale,
+			])
+			draw_colored_polygon(crown, accent)
+			draw_line(center + Vector2(-10.0, -10.0) * scale, center + Vector2(13.0, -8.5) * scale, accent.darkened(0.18), 2.5 * scale, true)
+		"glasses":
+			for side in [-1.0, 1.0]:
+				draw_arc(center + Vector2(side * 5.0, -4.5) * scale, 4.1 * scale, 0.0, TAU, 16, accent.darkened(0.25), 1.4 * scale, true)
+			draw_line(center + Vector2(-1.0, -4.5) * scale, center + Vector2(1.0, -4.5) * scale, accent.darkened(0.25), 1.4 * scale, true)
+		"headband":
+			draw_arc(center, radius - 2.0 * scale, PI + 0.15, TAU - 0.15, 18, accent, 3.2 * scale, true)
 
 
 func _draw_combo_badge() -> void:
@@ -4685,11 +4730,12 @@ func _draw_completion_panel() -> void:
 		return
 	var font: Font = _font()
 	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.35))
-	var panel := Rect2(38.0, 198.0, 314.0, 232.0 + _completion_extra())
+	var panel := _completion_panel_rect()
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
 
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	_draw_completion_customer_reaction(panel, time_now)
 	for index in range(3):
 		var star_center := Vector2(145.0 + float(index) * 50.0, panel.position.y + 42.0)
 		var reveal_age: float = time_now - _star_reveal_times[index]
@@ -4765,6 +4811,52 @@ func _draw_completion_panel() -> void:
 	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))
 	draw_style_box(_style("next_button", Color("#39d98a"), 14.0), next_rect)
 	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), tr("NEXT"), HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
+
+
+func _completion_panel_rect() -> Rect2:
+	return Rect2(38.0, 198.0, 314.0, 232.0 + _completion_extra())
+
+
+func _completion_customer_rect(panel: Rect2) -> Rect2:
+	return Rect2(panel.position + Vector2(15.0, 13.0), Vector2(58.0, 58.0))
+
+
+func _draw_completion_customer_reaction(panel: Rect2, time_now: float) -> void:
+	var profile := _customer_profile()
+	var reaction_rect := _completion_customer_rect(panel)
+	var strength := CustomerPresentation.reaction_strength(earned_stars)
+	var age := maxf(time_now - _customer_completion_time, 0.0)
+	var bounce := absf(sin(age * (7.0 + strength * 3.0))) * exp(-age * 1.6) * (2.0 + strength * 4.0)
+	var pop := 1.0 + exp(-age * 5.0) * strength * 0.18
+	var center := reaction_rect.get_center() + Vector2(0.0, -bounce)
+	var radius := 20.0 * pop
+
+	draw_circle(center + Vector2(0.0, 2.0), radius + 3.0, Color(0.08, 0.2, 0.28, 0.14))
+	draw_circle(center, radius, Color(String(profile["face_hex"])))
+	draw_arc(center, radius, 0.0, TAU, 32, Color(0.0, 0.0, 0.0, 0.2), 1.8, true)
+	_draw_customer_accessory(center, radius, profile)
+
+	var feature_scale := radius / 20.0
+	var ink := Color(0.12, 0.07, 0.04)
+	if earned_stars >= 3:
+		for side in [-1.0, 1.0]:
+			var eye := center + Vector2(side * 7.0, -4.5) * feature_scale
+			draw_arc(eye, 3.5 * feature_scale, 0.15, PI - 0.15, 10, ink, 2.0 * feature_scale, true)
+	else:
+		draw_circle(center + Vector2(-7.0, -4.5) * feature_scale, 2.2 * feature_scale, ink)
+		draw_circle(center + Vector2(7.0, -4.5) * feature_scale, 2.2 * feature_scale, ink)
+	if earned_stars <= 1:
+		draw_arc(center + Vector2(0.0, 3.0) * feature_scale, 7.0 * feature_scale, 0.35, PI - 0.35, 14, ink, 2.2 * feature_scale, true)
+	else:
+		draw_circle(center + Vector2(0.0, 7.0) * feature_scale, (4.0 + strength * 3.0) * feature_scale, ink)
+		draw_arc(center + Vector2(0.0, 6.0) * feature_scale, 3.5 * feature_scale, 0.2, PI - 0.2, 10, Color("#f2857f"), 1.8 * feature_scale, true)
+		draw_circle(center + Vector2(-13.0, 4.0) * feature_scale, 2.3 * feature_scale, Color(1.0, 0.38, 0.42, 0.34))
+		draw_circle(center + Vector2(13.0, 4.0) * feature_scale, 2.3 * feature_scale, Color(1.0, 0.38, 0.42, 0.34))
+
+	for index in range(clampi(earned_stars, 1, 3)):
+		var angle := -PI * 0.85 + float(index) * PI * 0.85
+		var sparkle_center := center + Vector2.from_angle(angle) * (radius + 9.0 + sin(time_now * 5.0 + float(index)) * 2.0)
+		_draw_star(sparkle_center, (3.5 + strength * 2.0), Color("#ffce3d"), Color("#e0a818"))
 
 
 func _format_time(seconds_value: float) -> String:
