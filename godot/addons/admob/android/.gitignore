@@ -1,0 +1,2 @@
+# Foam Party vendors the verified Godot 4.6.3 binaries so CI and local exports
+# use the same native plugin without downloading release artifacts at build time.

@@ -43,6 +43,8 @@ targeted_device_family_from_preset() {
   esac
 }
 
+python3 tools/configure_native_ads.py
+
 team_id="${FOAM_PARTY_IOS_TEAM_ID:-HCDUXX4Z3X}"
 bundle_id="${FOAM_PARTY_IOS_BUNDLE_ID:-com.seorilabs.foamparty}"
 profile_value="${FOAM_PARTY_IOS_PROFILE_SPECIFIER:-${FOAM_PARTY_IOS_PROFILE_UUID:-${GODOT_APPLE_PLATFORM_PROFILE_SPECIFIER_RELEASE:-${GODOT_APPLE_PLATFORM_PROVISIONING_PROFILE_UUID_RELEASE:-${GODOT_IOS_PROVISIONING_PROFILE_UUID_RELEASE:-}}}}}"
@@ -55,6 +57,7 @@ export_options="${build_dir}/ExportOptions-app-store.plist"
 
 mkdir -p "$build_dir"
 godot --headless --path godot --export-release iOS "../${build_dir}/${project_name}.ipa"
+python3 tools/patch_ios_admob_project.py "${build_dir}/${project_name}.xcodeproj/project.pbxproj"
 
 if [[ "${1:-}" == "--project-only" ]]; then
   find "$build_dir" -maxdepth 1 \( -name "*.xcodeproj" -o -name "$project_name" \) -print

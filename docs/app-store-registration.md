@@ -34,17 +34,17 @@
 
 ## 현재 바이너리 기준 질문지 후보
 
-현재 소스 검색 기준으로 Firebase, AdMob, Analytics, IAP, 계정, 채팅, UGC, 외부 웹 접근, 도박, 랜덤박스, Game Center는 없다. 진행 저장은 `user://foam_party_save.cfg` 로컬 파일만 사용한다.
+현재 소스는 Firebase Analytics와 Poing AdMob v4.3.1을 포함한다. IAP, 계정, 채팅, UGC, 외부 웹 접근, 도박, 랜덤박스, Game Center는 없다. 게임 진행 자체는 `user://foam_party_save.cfg` 로컬 파일에 저장하지만 분석/광고 SDK는 네트워크를 사용한다.
 
 | 항목 | 후보 답변 | 근거 |
 | --- | --- | --- |
-| App Privacy | 데이터 수집 없음 후보 | 외부 SDK/네트워크 호출 없음 |
-| Tracking / ATT | 아니오 후보 | 광고/분석 SDK 없음 |
-| Age Rating | 4+ 후보 | 카툰 세차, 폭력/성인/도박/UGC 없음 |
-| Content Rights | 자체 에셋 후보 | 외부 에셋 없이 코드/프로젝트 에셋 사용 |
+| App Privacy | 재작성 필요 | AdMob 및 Firebase Analytics 도입 |
+| Tracking / ATT | 아니오 후보 | ATT 비활성, iOS 광고 요청 `npa=1` 기본값 |
+| Age Rating | 재확정 필요 | 광고 포함 답변을 다음 버전 설문에 반영 |
+| Content Rights | 자체 에셋 + 외부 SDK | Poing plugin MIT, Google Mobile Ads/UMP 의존성 |
 | Export Compliance | `ITSAppUsesNonExemptEncryption=false` 후보 | custom cryptography 없음 |
 
-단, 위 항목은 App Store Connect에 실제 입력하기 전까지 완료로 보지 않는다. 광고, Firebase, 외부 SDK가 들어오면 다시 작성한다.
+NPA 요청만으로 EEA/UK 동의 요건이 끝나지 않는다. App Store 다음 버전 제출 전 AdMob privacy message와 UMP 동의 흐름, production 광고 ID, 실제 iPhone QA를 확정한다.
 
 ## 필수 남은 항목
 

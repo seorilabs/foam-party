@@ -70,20 +70,21 @@
     }
   },
   "currentBinaryPrivacy": {
-    "firebase": false,
-    "ads": false,
-    "analytics": false,
+    "firebase": true,
+    "ads": true,
+    "analytics": true,
     "iap": false,
     "account": false,
-    "networkCallsObservedInSource": false,
-    "localSaveOnly": true,
-    "appPrivacyCandidate": "현재 소스 기준 데이터 수집 없음 후보. App Store Connect 입력 전 SDK/네트워크 변경 여부 재검증 필요",
-    "trackingCandidate": "아니오",
-    "attRequiredCandidate": "아니오"
+    "networkCallsObservedInSource": true,
+    "localSaveOnly": false,
+    "appPrivacyCandidate": "AdMob 및 Firebase Analytics 도입 기준으로 App Privacy를 다시 작성해야 함. 새 바이너리 제출 전 확정 필요",
+    "trackingCandidate": "아니오 후보: ATT disabled, iOS AdMob requests default to npa=1",
+    "attRequiredCandidate": "아니오 후보. IDFA 추적을 활성화하지 않으며 ATT prompt를 표시하지 않음",
+    "consentCandidate": "확정 필요: EEA/UK 배포 전 AdMob privacy message와 UMP 동의 흐름 구성"
   },
   "complianceCandidates": {
     "ageRating": "4+ 후보. 실제 App Store Connect 설문 입력 전 완료 아님",
-    "contentRights": "현재 바이너리는 자체 제작/코드 생성 에셋만 사용 후보. 광고 SDK 도입 시 재검토 필요",
+    "contentRights": "자체 제작/코드 생성 에셋 사용 후보. Poing AdMob plugin MIT license와 Google Mobile Ads SDK 의존성 포함",
     "exportCompliance": "ITSAppUsesNonExemptEncryption=false 후보. 현재 custom cryptography 없음",
     "gameCenter": false,
     "lootBoxes": false,
@@ -98,8 +99,8 @@
     "provisioningProfile": "완료: App Store profile WQFTFT3KG7 (Apple Distribution 인증서 4PSTD55GTV). repo secret APPLE_PROVISIONING_PROFILE_BASE64",
     "supportUrl": "https://www.seorilabs.com/support",
     "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
-    "appPrivacy": "1.0.0 제출 시 콘솔에서 확정",
-    "ageRating": "1.0.0 제출 시 콘솔에서 확정",
+    "appPrivacy": "확정 필요: AdMob/Firebase Analytics가 들어간 다음 버전 기준으로 App Privacy 재제출",
+    "ageRating": "확정 필요: 광고 포함 여부를 다음 버전 설문에 반영",
     "dsaTraderStatus": "1.0.0 제출 시 콘솔에서 확정",
     "reviewContactPhone": "1.0.0 제출 시 콘솔에서 확정",
     "contentRights": "1.0.0 제출 시 콘솔에서 확정",
@@ -107,18 +108,22 @@
     "screenshots": "완료: en-US iPhone 6.7\" 1290x2796 3장 (app-store/screenshots/en-US/iphone69)",
     "testFlightUpload": "완료: 다수 빌드 업로드. Xcode Cloud 경로가 정본(build 6/7/8...), GH 경로는 폐지",
     "buildSelection": "완료: 1.0.0 = Xcode Cloud build 8",
-    "submitForReview": "완료: 1.0.0 WAITING_FOR_REVIEW (2026-07-10 제출)"
+    "submitForReview": "완료: 1.0.0 WAITING_FOR_REVIEW (2026-07-10 제출). 네이티브 광고 변경은 다음 버전 범위",
+    "nativeAdMobProductionIds": "확정 필요: iOS app ID와 game_over/foam_bomb_free/level_reward_2x unit ID",
+    "nativeAdMobDeviceQa": "확정 필요: 실제 iPhone에서 load/impression/dismiss/earned와 GA4 이벤트 확인",
+    "umpConsent": "확정 필요: worldwide 배포의 EEA/UK용 AdMob privacy message와 UMP 흐름"
   },
   "lastLocalVerification": {
-    "date": "2026-06-12",
-    "projectOnlyExport": "passed: build/ios/foam-party.xcodeproj generated",
-    "unsignedReleaseCompile": "passed: xcodebuild Release iphoneos CODE_SIGNING_ALLOWED=NO after en-US/worldwide update",
-    "signedAppStoreIpa": "blocked: App Store provisioning profile required"
+    "date": "2026-07-21",
+    "projectOnlyExport": "passed: AdMob xcframework, GADApplicationIdentifier, SKAdNetworkItems, and local Swift Package reference generated",
+    "unsignedReleaseCompile": "passed: xcodebuild Release iphoneos CODE_SIGNING_ALLOWED=NO with GoogleMobileAds 13.3.0, UMP 3.1.0, and Poing AdMob v4.3.1 linked",
+    "signedAppStoreIpa": "not run for this change: production AdMob IDs, UMP policy flow, signing, and physical-device QA remain gated"
   },
   "notes": [
-    "현재 MVP는 local-only 게임이며 Firebase, AdMob, IAP, 계정 기능이 없다.",
+    "현재 소스는 Firebase Analytics와 Poing AdMob v4.3.1 네이티브 SDK를 포함한다. IAP와 계정 기능은 없다.",
     "초기 App Store 등록은 en-US primary locale과 worldwide availability로 진행한다. 한국어 현지화는 후속 후보로 보관한다.",
-    "광고 adapter나 Firebase를 추가하면 App Privacy, ATT/IDFA, age rating, review notes를 반드시 다시 갱신한다.",
+    "iOS 광고 요청은 ATT를 띄우지 않고 npa=1을 기본 적용한다. NPA는 UMP 동의 수집을 대체하지 않는다.",
+    "godot/config/native_ads.json은 Google 테스트 ID가 기본이며 실제 ID는 tools/configure_native_ads.py가 빌드 환경변수로 주입한다.",
     "App Store Connect 수동 항목은 checker에서 blocker inventory로 남긴다."
   ]
 }
