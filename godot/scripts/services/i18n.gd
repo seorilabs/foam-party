@@ -100,6 +100,7 @@ const STRINGS := {
 	# pause menu + quit confirm (AIT back button)
 	"PAUSE_TITLE": ["일시정지 · 설정", "Paused · Settings"],
 	"RESUME": ["계속하기", "Resume"],
+	"PAUSE_RESTART": ["이 차 다시 세차", "Restart Car"],
 	"GUIDE": ["세차 가이드", "Wash Guide"],
 	"HOME": ["홈으로", "Home"],
 	"QUIT": ["종료", "Quit"],
