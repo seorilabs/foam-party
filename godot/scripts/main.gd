@@ -96,6 +96,7 @@ const WATER_EFFECT_STYLES := [STYLE_DROPLET, STYLE_MIST, STYLE_SPRAY_FAN, STYLE_
 const WATER_EFFECT_PARTICLE_CAP := 72
 const FOAM_EFFECT_STYLES := [STYLE_BUBBLE, STYLE_FOAM]
 const FOAM_EFFECT_PARTICLE_CAP := 64
+const PARTICLE_CAP := 192
 const FOAM_BOMB_BURST_PARTICLE_COUNT := 28
 const OIL_SHEEN_BAND_COUNT := 5
 const OIL_SHEEN_MAX_ALPHA := 0.46
@@ -852,7 +853,7 @@ func _spawn_combo_break_burst() -> void:
 		var angle: float = rng.randf_range(0.0, TAU)
 		var speed: float = rng.randf_range(40.0, 85.0)
 		var offset := Vector2(rng.randf_range(-7.0, 7.0), rng.randf_range(-5.0, 5.0))
-		particles.append(WashParticle.new(
+		_append_particle(WashParticle.new(
 			badge_center + offset,
 			Vector2.from_angle(angle) * speed,
 			rng.randf_range(0.28, 0.46),
@@ -1103,6 +1104,14 @@ func get_foam_effect_particle_count_for_test() -> int:
 
 func get_foam_effect_particle_cap_for_test() -> int:
 	return FOAM_EFFECT_PARTICLE_CAP
+
+
+func get_particle_count_for_test() -> int:
+	return particles.size()
+
+
+func get_particle_cap_for_test() -> int:
+	return PARTICLE_CAP
 
 
 func apply_body_foam_tool_for_test(tool_id: String, delta: float) -> void:
@@ -1768,8 +1777,8 @@ func _spawn_foam_bomb_burst() -> void:
 	_append_foam_effect_batch(burst)
 	# Two bounded shock rings make the one-time action read across the whole car;
 	# the persistent silhouette layer carries the state after the rings fade.
-	particles.append(WashParticle.new(car_center, Vector2.ZERO, 0.42, _gameplay_length(44.0), Color(0.92, 0.99, 1.0, 0.74), STYLE_RING))
-	particles.append(WashParticle.new(car_center, Vector2.ZERO, 0.58, _gameplay_length(78.0), Color(1.0, 0.93, 0.72, 0.52), STYLE_RING))
+	_append_particle(WashParticle.new(car_center, Vector2.ZERO, 0.42, _gameplay_length(44.0), Color(0.92, 0.99, 1.0, 0.74), STYLE_RING))
+	_append_particle(WashParticle.new(car_center, Vector2.ZERO, 0.58, _gameplay_length(78.0), Color(1.0, 0.93, 0.72, 0.52), STYLE_RING))
 
 
 # A rewarded free bomb is offered while inventory is ready and the per-level cap
@@ -2233,17 +2242,17 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 		var offset := Vector2.from_angle(angle) * radius * rng.randf_range(0.2, 0.9)
 		var lift := rng.randf_range(-26.0, -8.0) * (1.0 + intensity * 0.6)
 		var sparkle := WashParticle.new(center + offset, Vector2(0.0, lift), rng.randf_range(0.4, 0.75) + intensity * 0.2, rng.randf_range(3.5, 6.5) + intensity * 2.0, sparkle_tint, STYLE_SPARKLE)
-		particles.append(sparkle)
+		_append_particle(sparkle)
 
 	var bubble_count: int = 5 + min(int(round(float(combo) * 0.7)), 8)
 	for index in range(bubble_count):
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(40.0, 120.0) * (1.0 + intensity * 0.5)
 		var bubble := WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.3, 0.6), rng.randf_range(2.5, 5.5), Color(0.85, 0.96, 1.0, 0.85), STYLE_BUBBLE)
-		particles.append(bubble)
+		_append_particle(bubble)
 
 	# Expanding shockwave ring grows with the combo to punctuate the pop.
-	particles.append(WashParticle.new(center, Vector2.ZERO, 0.3 + intensity * 0.2, 4.0 + radius * (0.5 + intensity * 0.6), sparkle_tint, STYLE_RING))
+	_append_particle(WashParticle.new(center, Vector2.ZERO, 0.3 + intensity * 0.2, 4.0 + radius * (0.5 + intensity * 0.6), sparkle_tint, STYLE_RING))
 
 	# Hot combos throw celebratory gold confetti so a streak reads as a payoff.
 	if hot:
@@ -2252,7 +2261,7 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 			var angle := rng.randf_range(-PI, 0.0)
 			var speed := rng.randf_range(120.0, 230.0)
 			var color := Color.from_hsv(rng.randf_range(0.09, 0.14), 0.75, 1.0, 0.95)
-			particles.append(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.6, 1.1), rng.randf_range(3.5, 6.5), color, STYLE_CONFETTI))
+			_append_particle(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.6, 1.1), rng.randf_range(3.5, 6.5), color, STYLE_CONFETTI))
 
 	# Outward sparkle burst: a small ring of fast sparks gives the scrubbing loop
 	# a satisfying "pop" at the exact moment a patch disappears.
@@ -2264,7 +2273,7 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 	for index in range(pop_count):
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(60.0, 130.0)
-		particles.append(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.35, 0.55), rng.randf_range(3.5, 6.0), pop_color, STYLE_SPARKLE))
+		_append_particle(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.35, 0.55), rng.randf_range(3.5, 6.0), pop_color, STYLE_SPARKLE))
 
 
 func _spawn_water_removal_splash(center: Vector2, radius: float) -> void:
@@ -2411,9 +2420,26 @@ func _spawn_water_particles(point: Vector2) -> void:
 	_append_water_effect_batch(batch)
 
 
+func _append_particle(particle: WashParticle) -> void:
+	while particles.size() >= PARTICLE_CAP:
+		particles.remove_at(0)
+	particles.append(particle)
+
+
+func _append_particle_batch(batch: Array[WashParticle]) -> void:
+	var batch_start := maxi(0, batch.size() - PARTICLE_CAP)
+	var incoming_count := batch.size() - batch_start
+	var overflow := particles.size() + incoming_count - PARTICLE_CAP
+	while overflow > 0 and not particles.is_empty():
+		particles.remove_at(0)
+		overflow -= 1
+	for index in range(batch_start, batch.size()):
+		particles.append(batch[index])
+
+
 func _append_water_effect_batch(batch: Array[WashParticle]) -> void:
-	# Reserve room by dropping the oldest water-impact visuals only. Other tool,
-	# combo, and completion particles keep their own independent lifetimes.
+	# Keep the dedicated water budget first; the shared append helper then applies
+	# the total transient budget across every tool and celebration effect.
 	var overflow := _water_effect_particle_count() + batch.size() - WATER_EFFECT_PARTICLE_CAP
 	while overflow > 0:
 		var removed_one := false
@@ -2426,8 +2452,7 @@ func _append_water_effect_batch(batch: Array[WashParticle]) -> void:
 				break
 		if not removed_one:
 			break
-	for particle in batch:
-		particles.append(particle)
+	_append_particle_batch(batch)
 
 
 func _water_effect_particle_count() -> int:
@@ -2457,8 +2482,10 @@ func _append_foam_effect_batch(batch: Array[WashParticle]) -> void:
 				break
 		if not removed_one:
 			break
+	var retained_batch: Array[WashParticle] = []
 	for index in range(batch_start, batch.size()):
-		particles.append(batch[index])
+		retained_batch.append(batch[index])
+	_append_particle_batch(retained_batch)
 
 
 func _foam_effect_particle_count() -> int:
@@ -2475,9 +2502,9 @@ func _spawn_air_particles(point: Vector2) -> void:
 		var speed := rng.randf_range(120.0, 230.0)
 		var velocity := Vector2.from_angle(angle) * speed + Vector2(0.0, rng.randf_range(-36.0, -8.0))
 		var jitter := Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-14.0, 14.0))
-		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.2, 0.45), rng.randf_range(7.0, 13.0), Color(1.0, 1.0, 1.0, 0.55), STYLE_STREAK))
+		_append_particle(WashParticle.new(point + jitter, velocity, rng.randf_range(0.2, 0.45), rng.randf_range(7.0, 13.0), Color(1.0, 1.0, 1.0, 0.55), STYLE_STREAK))
 	if rng.randf() < 0.6:
-		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-16.0, 16.0)), Vector2(rng.randf_range(-50.0, 50.0), rng.randf_range(-60.0, -20.0)), rng.randf_range(0.35, 0.6), rng.randf_range(6.0, 11.0), Color(1.0, 1.0, 1.0, 0.4), STYLE_SWIRL))
+		_append_particle(WashParticle.new(point + Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-16.0, 16.0)), Vector2(rng.randf_range(-50.0, 50.0), rng.randf_range(-60.0, -20.0)), rng.randf_range(0.35, 0.6), rng.randf_range(6.0, 11.0), Color(1.0, 1.0, 1.0, 0.4), STYLE_SWIRL))
 
 
 func _spawn_soap_particles(point: Vector2) -> void:
@@ -2635,7 +2662,7 @@ func _check_progress_milestone() -> void:
 	for index in range(22):
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(50.0, 130.0)
-		particles.append(WashParticle.new(
+		_append_particle(WashParticle.new(
 			Vector2(rng.randf_range(40.0, 280.0), 72.0),
 			Vector2.from_angle(angle) * speed + Vector2(0.0, -28.0),
 			rng.randf_range(0.55, 1.1),
@@ -2654,20 +2681,20 @@ func _spawn_completion_burst() -> void:
 		var speed := rng.randf_range(70.0, 230.0)
 		var color := Color.from_hsv(rng.randf(), 0.55, 1.0, 0.95)
 		var particle := WashParticle.new(Vector2(rng.randf_range(70.0, 330.0), rng.randf_range(300.0, 620.0)), Vector2.from_angle(angle) * speed, rng.randf_range(0.7, 1.6), rng.randf_range(3.0, 7.0), color, STYLE_CONFETTI)
-		particles.append(particle)
+		_append_particle(particle)
 	if is_new_record:
 		_spawn_record_burst()
 	if level_time > 0.0 and level_time < 60.0:
-		_spawn_speedrun_burst(particles)
+		_spawn_speedrun_burst()
 
 
-func _spawn_speedrun_burst(p: Array) -> void:
+func _spawn_speedrun_burst() -> void:
 	var center := DESIGN_SIZE * 0.5
 	for i in range(32):
 		var angle := TAU * float(i) / 32.0
 		var speed := rng.randf_range(190.0, 360.0)
 		var hue := rng.randf_range(0.10, 0.15)  # gold
-		p.append(WashParticle.new(
+		_append_particle(WashParticle.new(
 			center,
 			Vector2.from_angle(angle) * speed,
 			rng.randf_range(0.55, 1.1),
@@ -2682,10 +2709,10 @@ func _spawn_record_burst() -> void:
 		var angle := rng.randf_range(-PI * 0.85, -PI * 0.15)
 		var speed := rng.randf_range(150.0, 320.0)
 		var gold := Color.from_hsv(rng.randf_range(0.1, 0.14), 0.7, 1.0, 0.95)
-		particles.append(WashParticle.new(Vector2(195.0, 300.0), Vector2.from_angle(angle) * speed, rng.randf_range(0.8, 1.5), rng.randf_range(4.0, 8.0), gold, STYLE_CONFETTI))
+		_append_particle(WashParticle.new(Vector2(195.0, 300.0), Vector2.from_angle(angle) * speed, rng.randf_range(0.8, 1.5), rng.randf_range(4.0, 8.0), gold, STYLE_CONFETTI))
 	for index in range(14):
 		var angle := rng.randf_range(0.0, TAU)
-		particles.append(WashParticle.new(Vector2(195.0, 290.0) + Vector2.from_angle(angle) * rng.randf_range(0.0, 60.0), Vector2(0.0, rng.randf_range(-40.0, -12.0)), rng.randf_range(0.5, 1.0), rng.randf_range(4.0, 7.0), Color(1.0, 0.95, 0.65, 0.95), STYLE_SPARKLE))
+		_append_particle(WashParticle.new(Vector2(195.0, 290.0) + Vector2.from_angle(angle) * rng.randf_range(0.0, 60.0), Vector2(0.0, rng.randf_range(-40.0, -12.0)), rng.randf_range(0.5, 1.0), rng.randf_range(4.0, 7.0), Color(1.0, 0.95, 0.65, 0.95), STYLE_SPARKLE))
 
 
 func _draw_background() -> void:
