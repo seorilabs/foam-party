@@ -16,8 +16,14 @@ func _run_core_tests() -> void:
 	var DailyMission: GDScript = load("res://core/use_cases/daily_mission.gd")
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
-	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or DirtPatch == null:
+	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
+	var I18n: GDScript = load("res://scripts/services/i18n.gd")
+	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
+		return
+	if not _test_car_roster_and_saved_level_mapping(GameConfig):
+		return
+	if not _test_new_car_localized_labels(I18n):
 		return
 
 	# --- Scoring: star boundaries (matches smoke_scene 3/2/1-star cases) ---
@@ -344,6 +350,39 @@ func _test_ftue_release_attribution_and_shared_native_path(FtueEvents: GDScript)
 		return false
 	if not native_adapter_source.contains("func log_event(event_name: String, params: Dictionary = {})"):
 		_fail("native FTUE events must keep the shared AnalyticsPort log_event path")
+		return false
+	return true
+
+
+func _test_car_roster_and_saved_level_mapping(GameConfig: GDScript) -> bool:
+	var expected_roster := ["compact", "sports", "truck", "van", "offroad"]
+	if Array(GameConfig.CAR_TYPES) != expected_roster:
+		_fail("car roster must contain five ordered vehicle types")
+		return false
+	var saved_level_expectations := {
+		1: "compact",
+		2: "sports",
+		3: "truck",
+		4: "van",
+		5: "offroad",
+		6: "compact",
+	}
+	for saved_level in saved_level_expectations:
+		if String(GameConfig.car_type_for_level(saved_level)) != saved_level_expectations[saved_level]:
+			_fail("saved level %d restored the wrong car type" % saved_level)
+			return false
+	if String(GameConfig.car_type_for_level(0)) != "compact":
+		_fail("invalid saved levels must clamp to the first car type")
+		return false
+	return true
+
+
+func _test_new_car_localized_labels(I18n: GDScript) -> bool:
+	if I18n.STRINGS.get("CAR_VAN", []) != ["밴", "Van"]:
+		_fail("van must have exact Korean and English labels")
+		return false
+	if I18n.STRINGS.get("CAR_OFFROAD", []) != ["오프로더", "Off-roader"]:
+		_fail("off-roader must have exact Korean and English labels")
 		return false
 	return true
 

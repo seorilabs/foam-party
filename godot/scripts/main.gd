@@ -576,6 +576,8 @@ func _rebuild_i18n_labels() -> void:
 		"compact": tr("CAR_COMPACT"),
 		"sports": tr("CAR_SPORTS"),
 		"truck": tr("CAR_TRUCK"),
+		"van": tr("CAR_VAN"),
+		"offroad": tr("CAR_OFFROAD"),
 	}
 
 
@@ -1484,12 +1486,16 @@ func _calc_level_milestone_bonus(level: int) -> int:
 
 
 func _set_car_palette() -> void:
-	car_type = CAR_TYPES[(level_index - 1) % CAR_TYPES.size()]
+	car_type = GameConfig.car_type_for_level(level_index)
 	var hue := fmod(0.10 + float(level_index - 1) * 0.18, 1.0)
 	if car_type == "sports":
 		car_color = Color.from_hsv(hue, 0.85, 1.0)
 	elif car_type == "truck":
 		car_color = Color.from_hsv(hue, 0.42, 0.9)
+	elif car_type == "van":
+		car_color = Color.from_hsv(hue, 0.5, 0.96)
+	elif car_type == "offroad":
+		car_color = Color.from_hsv(hue, 0.72, 0.84)
 	else:
 		car_color = Color.from_hsv(hue, 0.62, 1.0)
 
@@ -1535,6 +1541,18 @@ func _spawn_dirt() -> void:
 			radius_max = 28.0
 			health_base_min = 85.0
 			health_base_max = 145.0
+		"van":
+			type_pool = ["dust", "road_grime", "leaf", "dust", "mud", "road_grime", "oil", "leaf", "bug"]
+			radius_min = 13.0
+			radius_max = 24.0
+			health_base_min = 78.0
+			health_base_max = 130.0
+		"offroad":
+			type_pool = ["mud", "road_grime", "mud", "bug", "leaf", "road_grime", "poop", "mud", "dust"]
+			radius_min = 16.0
+			radius_max = 29.0
+			health_base_min = 90.0
+			health_base_max = 150.0
 		_:
 			type_pool = DIRT_TYPES.duplicate()
 	type_pool = DirtProgression.filter_pool_for_level(type_pool, level_index)
@@ -2344,6 +2362,52 @@ func _build_car_shapes() -> void:
 			Vector2(138.0, 456.0), Vector2(130.0, 444.0),
 		]), 2),
 	}
+	car_shapes["van"] = {
+		"silhouette": _smooth_polygon(PackedVector2Array([
+			Vector2(58.0, 652.0), Vector2(50.0, 590.0), Vector2(50.0, 492.0), Vector2(58.0, 456.0),
+			Vector2(90.0, 448.0), Vector2(110.0, 440.0), Vector2(112.0, 378.0), Vector2(122.0, 348.0),
+			Vector2(144.0, 338.0), Vector2(246.0, 338.0), Vector2(268.0, 348.0), Vector2(278.0, 378.0),
+			Vector2(280.0, 440.0), Vector2(300.0, 448.0), Vector2(332.0, 456.0), Vector2(340.0, 492.0),
+			Vector2(340.0, 590.0), Vector2(332.0, 652.0), Vector2(300.0, 660.0), Vector2(90.0, 660.0),
+		]), 2),
+		"bumper": _smooth_polygon(PackedVector2Array([
+			Vector2(58.0, 606.0), Vector2(332.0, 606.0), Vector2(336.0, 632.0), Vector2(328.0, 654.0),
+			Vector2(298.0, 662.0), Vector2(92.0, 662.0), Vector2(62.0, 654.0), Vector2(54.0, 632.0),
+		]), 2),
+		"left_mirror": _smooth_polygon(PackedVector2Array([
+			Vector2(92.0, 438.0), Vector2(64.0, 430.0), Vector2(52.0, 442.0), Vector2(64.0, 462.0), Vector2(94.0, 460.0),
+		]), 2),
+		"right_mirror": _smooth_polygon(PackedVector2Array([
+			Vector2(298.0, 438.0), Vector2(326.0, 430.0), Vector2(338.0, 442.0), Vector2(326.0, 462.0), Vector2(296.0, 460.0),
+		]), 2),
+		"windshield": _smooth_polygon(PackedVector2Array([
+			Vector2(136.0, 354.0), Vector2(254.0, 354.0), Vector2(266.0, 426.0), Vector2(256.0, 442.0),
+			Vector2(134.0, 442.0), Vector2(124.0, 426.0),
+		]), 2),
+	}
+	car_shapes["offroad"] = {
+		"silhouette": _smooth_polygon(PackedVector2Array([
+			Vector2(50.0, 650.0), Vector2(42.0, 602.0), Vector2(48.0, 520.0), Vector2(58.0, 482.0),
+			Vector2(92.0, 464.0), Vector2(110.0, 456.0), Vector2(122.0, 408.0), Vector2(140.0, 382.0),
+			Vector2(168.0, 370.0), Vector2(222.0, 370.0), Vector2(250.0, 382.0), Vector2(268.0, 408.0),
+			Vector2(280.0, 456.0), Vector2(298.0, 464.0), Vector2(332.0, 482.0), Vector2(342.0, 520.0),
+			Vector2(348.0, 602.0), Vector2(340.0, 650.0), Vector2(306.0, 662.0), Vector2(84.0, 662.0),
+		]), 2),
+		"bumper": _smooth_polygon(PackedVector2Array([
+			Vector2(50.0, 600.0), Vector2(340.0, 600.0), Vector2(344.0, 628.0), Vector2(334.0, 654.0),
+			Vector2(304.0, 664.0), Vector2(86.0, 664.0), Vector2(56.0, 654.0), Vector2(46.0, 628.0),
+		]), 2),
+		"left_mirror": _smooth_polygon(PackedVector2Array([
+			Vector2(106.0, 454.0), Vector2(78.0, 446.0), Vector2(66.0, 458.0), Vector2(78.0, 478.0), Vector2(108.0, 474.0),
+		]), 2),
+		"right_mirror": _smooth_polygon(PackedVector2Array([
+			Vector2(284.0, 454.0), Vector2(312.0, 446.0), Vector2(324.0, 458.0), Vector2(312.0, 478.0), Vector2(282.0, 474.0),
+		]), 2),
+		"windshield": _smooth_polygon(PackedVector2Array([
+			Vector2(146.0, 390.0), Vector2(244.0, 390.0), Vector2(258.0, 444.0), Vector2(248.0, 458.0),
+			Vector2(142.0, 458.0), Vector2(132.0, 444.0),
+		]), 2),
+	}
 
 
 func _draw_car() -> void:
@@ -2356,6 +2420,12 @@ func _draw_car() -> void:
 	if car_type == "truck":
 		wheel_y = 636.0
 		wheel_radius = 35.0
+	elif car_type == "offroad":
+		wheel_y = 632.0
+		wheel_radius = 37.0
+	elif car_type == "van":
+		wheel_y = 640.0
+		wheel_radius = 33.0
 	elif car_type == "sports":
 		wheel_y = 646.0
 		wheel_radius = 29.0
@@ -2368,7 +2438,7 @@ func _draw_car() -> void:
 	_draw_closed_outline(silhouette, outline, 5.0)
 
 	var bumper: PackedVector2Array = shapes["bumper"]
-	draw_colored_polygon(bumper, Color("#d6dde1") if car_type == "truck" else Color("#e7eef2"))
+	draw_colored_polygon(bumper, Color("#d6dde1") if car_type in ["truck", "offroad"] else Color("#e7eef2"))
 	_draw_closed_outline(bumper, outline, 4.0)
 
 	var mirror_color := car_color.darkened(0.12)
@@ -2393,6 +2463,10 @@ func _draw_car() -> void:
 		_draw_sports_details(outline)
 	elif car_type == "truck":
 		_draw_truck_details(outline)
+	elif car_type == "van":
+		_draw_van_details(outline)
+	elif car_type == "offroad":
+		_draw_offroad_details(outline)
 
 	var plate := Rect2(159.0, 582.0, 72.0, 22.0)
 	draw_rect(plate, Color("#f7fbff"))
@@ -2447,6 +2521,46 @@ func _draw_truck_details(outline: Color) -> void:
 	draw_rect(Rect2(168.0, 636.0, 54.0, 12.0), Color("#9aa7ad"))
 	draw_rect(Rect2(168.0, 636.0, 54.0, 12.0), outline, false, 2.0)
 	draw_arc(Vector2(195.0, 620.0), 140.0, PI + 0.5, PI + 0.85, 10, Color(1.0, 1.0, 1.0, 0.26), 7.0)
+
+
+func _draw_van_details(outline: Color) -> void:
+	# Split windshield and roof markers give the tall cab a delivery-van read.
+	draw_line(Vector2(195.0, 350.0), Vector2(195.0, 442.0), outline, 3.0)
+	for marker_x in [162.0, 195.0, 228.0]:
+		draw_circle(Vector2(marker_x, 346.0), 5.0, Color("#ffb84d"))
+		draw_circle(Vector2(marker_x, 346.0), 5.0, outline, false, 1.5)
+	_draw_square_headlight(Rect2(88.0, 518.0, 42.0, 35.0), outline)
+	_draw_square_headlight(Rect2(260.0, 518.0, 42.0, 35.0), outline)
+	for slat_index in range(4):
+		var slat_y := 520.0 + float(slat_index) * 12.0
+		draw_line(Vector2(152.0, slat_y), Vector2(238.0, slat_y), outline.lerp(car_color, 0.3), 4.0)
+	draw_arc(Vector2(195.0, 568.0), 27.0, PI * 0.24, PI * 0.76, 14, outline, 4.0)
+	draw_rect(Rect2(144.0, 626.0, 102.0, 14.0), Color("#aab7bd"))
+	draw_rect(Rect2(144.0, 626.0, 102.0, 14.0), outline, false, 2.0)
+
+
+func _draw_offroad_details(outline: Color) -> void:
+	# Roof rack, round lamps and a skid plate distinguish the lifted off-roader.
+	draw_line(Vector2(142.0, 368.0), Vector2(248.0, 368.0), outline, 5.0)
+	for rack_x in [152.0, 238.0]:
+		draw_line(Vector2(rack_x, 368.0), Vector2(rack_x, 378.0), outline, 4.0)
+	for lamp_x in [170.0, 220.0]:
+		draw_circle(Vector2(lamp_x, 375.0), 9.0, outline)
+		draw_circle(Vector2(lamp_x, 375.0), 6.0, Color("#fff2a8"))
+	_draw_round_headlight(Vector2(112.0, 536.0), outline)
+	_draw_round_headlight(Vector2(278.0, 536.0), outline)
+	for slot_index in range(5):
+		var slot_x := 157.0 + float(slot_index) * 18.0
+		draw_rect(Rect2(slot_x, 510.0, 9.0, 48.0), outline.lerp(car_color, 0.28))
+	draw_arc(Vector2(195.0, 566.0), 28.0, PI * 0.22, PI * 0.78, 14, outline, 4.0)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(146.0, 620.0), Vector2(244.0, 620.0), Vector2(230.0, 648.0), Vector2(160.0, 648.0),
+	]), Color("#8f9da3"))
+	draw_polyline(PackedVector2Array([
+		Vector2(146.0, 620.0), Vector2(244.0, 620.0), Vector2(230.0, 648.0), Vector2(160.0, 648.0), Vector2(146.0, 620.0),
+	]), outline, 2.5)
+	for hook_x in [128.0, 252.0]:
+		draw_arc(Vector2(hook_x, 630.0), 9.0, 0.0, PI, 12, Color("#ff7a59"), 4.0)
 
 
 func _draw_round_headlight(center: Vector2, outline: Color) -> void:

@@ -23,6 +23,8 @@ const STRINGS := {
 	"CAR_COMPACT": ["시티", "City"],
 	"CAR_SPORTS": ["스포츠", "Sports"],
 	"CAR_TRUCK": ["트럭", "Truck"],
+	"CAR_VAN": ["밴", "Van"],
+	"CAR_OFFROAD": ["오프로더", "Off-roader"],
 	# active tool hint bubble
 	"HINT_AIR": ["낙엽을 날려요", "Blow away leaves"],
 	"HINT_WATER": ["오물을 씻어요", "Rinse off grime"],
