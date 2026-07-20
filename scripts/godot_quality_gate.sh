@@ -53,6 +53,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHONDONTWRITEBYTECODE=1 python3 "${script_dir}/../tools/test_asset_manifest.py"
 python3 "${script_dir}/../tools/check_asset_manifest.py" "${project}/assets/art/asset-manifest.json"
 
 if [ -z "${log_dir}" ]; then
