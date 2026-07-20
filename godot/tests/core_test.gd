@@ -150,18 +150,23 @@ func _run_core_tests() -> void:
 	# --- Economy: skin purchase intents ---
 	var SkinCatalog: GDScript = load("res://core/domain/skin_catalog.gd")
 	var catalog: Dictionary = SkinCatalog.catalog()
-	var owned: Dictionary = {"classic": true}
-	var buy_intent: Dictionary = Economy.resolve_skin_purchase(catalog, "water", 1, owned, 200)
-	if String(buy_intent["action"]) != "buy" or int(buy_intent["cost"]) != 80 or String(buy_intent["id"]) != "coral":
-		_fail("affording an unowned skin should yield a buy intent")
+	if not _test_tool_scoped_skin_purchase_intents(Economy, catalog):
 		return
-	var deny_intent: Dictionary = Economy.resolve_skin_purchase(catalog, "water", 1, owned, 10)
-	if String(deny_intent["action"]) != "deny":
-		_fail("insufficient coins should deny the skin purchase")
-		return
-	var select_intent: Dictionary = Economy.resolve_skin_purchase(catalog, "water", 0, owned, 0)
-	if String(select_intent["action"]) != "select" or String(select_intent["id"]) != "classic":
-		_fail("an owned skin should yield a select intent")
+	var migrated_owned: Dictionary = Economy.normalize_skin_ownership(catalog, {
+		"classic": true,
+		"gold": true,
+		"pink": true,
+	}, {
+		"water": "gold",
+		"air": "classic",
+		"soap": "pink",
+		"sponge": "classic",
+	})
+	if not bool(migrated_owned.get("water:gold", false)) \
+			or bool(migrated_owned.get("air:gold", false)) \
+			or bool(migrated_owned.get("sponge:gold", false)) \
+			or not bool(migrated_owned.get("soap:pink", false)):
+		_fail("legacy shared gold must migrate only to selected tools while unique skins keep their tool")
 		return
 
 	# --- Coaching: recommendations and misapplied flags on real patches ---
@@ -478,6 +483,26 @@ func _run_core_tests() -> void:
 
 	print("CORE TESTS PASSED")
 	quit(0)
+
+
+func _test_tool_scoped_skin_purchase_intents(Economy: GDScript, catalog: Dictionary) -> bool:
+	# AC-2: the same gold id must resolve buy, select, and deny from the exact
+	# (tool, skin) ownership tuple rather than from the skin id alone.
+	var owned: Dictionary = Economy.default_skin_ownership(catalog)
+	owned[Economy.skin_ownership_key("water", "gold")] = true
+	var water_select: Dictionary = Economy.resolve_skin_purchase(catalog, "water", 3, owned, 0)
+	var air_buy: Dictionary = Economy.resolve_skin_purchase(catalog, "air", 3, owned, 150)
+	var air_deny: Dictionary = Economy.resolve_skin_purchase(catalog, "air", 3, owned, 149)
+	if water_select != {"action": "select", "cost": 150, "id": "gold"}:
+		_fail("owned water gold must resolve to select for water")
+		return false
+	if air_buy != {"action": "buy", "cost": 150, "id": "gold"}:
+		_fail("water gold ownership must still resolve to buy for air")
+		return false
+	if air_deny != {"action": "deny", "cost": 150, "id": "gold"}:
+		_fail("unowned air gold with insufficient coins must resolve to deny")
+		return false
+	return true
 
 
 func _test_ftue_release_attribution_and_shared_native_path(FtueEvents: GDScript) -> bool:
@@ -881,25 +906,25 @@ func _test_car_paint_catalog(CarPaintCatalog: GDScript, Economy: GDScript) -> bo
 		return false
 
 	var owned_paints := {CarPaintCatalog.AUTO_ID: true}
-	var auto_intent: Dictionary = Economy.resolve_skin_purchase(catalog, CarPaintCatalog.TOOL_KEY, 0, owned_paints, 0)
+	var auto_intent: Dictionary = Economy.resolve_flat_item_purchase(catalog, CarPaintCatalog.TOOL_KEY, 0, owned_paints, 0)
 	if String(auto_intent["action"]) != "select":
 		_fail("free automatic car paint must reuse the shared owned-item selection path")
 		return false
-	var buy_intent: Dictionary = Economy.resolve_skin_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, owned_paints, 100)
+	var buy_intent: Dictionary = Economy.resolve_flat_item_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, owned_paints, 100)
 	if String(buy_intent["action"]) != "buy" or int(buy_intent["cost"]) != 100:
 		_fail("fixed car paint purchase must reuse the shared economy judgement")
 		return false
-	var deny_intent: Dictionary = Economy.resolve_skin_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, owned_paints, 99)
+	var deny_intent: Dictionary = Economy.resolve_flat_item_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, owned_paints, 99)
 	if String(deny_intent["action"]) != "deny":
 		_fail("insufficient coins must deny a car paint purchase")
 		return false
 	var nozzle_owned_only := {"coral": true, CarPaintCatalog.AUTO_ID: true}
-	var isolated_intent: Dictionary = Economy.resolve_skin_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, nozzle_owned_only, 100)
+	var isolated_intent: Dictionary = Economy.resolve_flat_item_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, nozzle_owned_only, 100)
 	if String(isolated_intent["action"]) != "buy":
 		_fail("nozzle skin ownership must not unlock a car paint")
 		return false
 	owned_paints["paint_coral"] = true
-	var select_intent: Dictionary = Economy.resolve_skin_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, owned_paints, 0)
+	var select_intent: Dictionary = Economy.resolve_flat_item_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, owned_paints, 0)
 	if String(select_intent["action"]) != "select":
 		_fail("owned car paint must be selectable through the shared economy judgement")
 		return false
