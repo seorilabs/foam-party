@@ -32,7 +32,7 @@ func _run_core_tests() -> void:
 		return
 	if not _test_language_resolution(I18n):
 		return
-	if not _test_dirt_spawn_plan(DirtSpawnPlan):
+	if not _test_dirt_spawn_plan(DirtSpawnPlan, GameConfig):
 		return
 	if not _test_gold_spot_rules(GoldSpot, GameConfig):
 		return
@@ -400,7 +400,7 @@ func _test_ftue_release_attribution_and_shared_native_path(FtueEvents: GDScript)
 	return true
 
 
-func _test_dirt_spawn_plan(DirtSpawnPlan: GDScript) -> bool:
+func _test_dirt_spawn_plan(DirtSpawnPlan: GDScript, GameConfig: GDScript) -> bool:
 	var snapshots := {1: 20, 3: 24, 10: 38, 30: 40}
 	for level in snapshots:
 		var actual: int = DirtSpawnPlan.spawn_count(level)
@@ -437,6 +437,23 @@ func _test_dirt_spawn_plan(DirtSpawnPlan: GDScript) -> bool:
 			return false
 	if DirtSpawnPlan.type_pool_for_level("sports", 2) != ["oil", "dust", "oil", "dust", "leaf", "dust", "mud"]:
 		_fail("sports dirt weights or level gate changed")
+		return false
+	var compact_pool: Array[String] = DirtSpawnPlan.type_pool_for_level("compact", 6)
+	var expected_compact_pool: Array[String] = ["dust", "leaf", "poop", "dust", "leaf", "road_grime", "poop", "dust", "leaf", "mud", "oil", "bug"]
+	if compact_pool != expected_compact_pool:
+		_fail("compact city dirt profile changed: " + str(compact_pool))
+		return false
+	var city_bias_count := compact_pool.count("dust") + compact_pool.count("leaf") + compact_pool.count("poop") + compact_pool.count("road_grime")
+	var secondary_count := compact_pool.count("mud") + compact_pool.count("oil") + compact_pool.count("bug")
+	if city_bias_count <= secondary_count:
+		_fail("compact city dirt must favor dust, leaves, droppings, and road residue")
+		return false
+	for raw_kind in GameConfig.DIRT_TYPES:
+		if not compact_pool.has(String(raw_kind)):
+			_fail("compact city profile removed dirt kind: " + String(raw_kind))
+			return false
+	if compact_pool == DirtSpawnPlan.type_pool_for_level("sports", 6) or compact_pool == DirtSpawnPlan.type_pool_for_level("truck", 6):
+		_fail("compact city dirt profile must stay distinct from sports and truck")
 		return false
 	if DirtSpawnPlan.type_pool_for_level("offroad", 4).count("mud") != 3:
 		_fail("offroad dirt profile should preserve its mud weight")

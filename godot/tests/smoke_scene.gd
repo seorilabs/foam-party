@@ -297,6 +297,8 @@ func _run_smoke() -> void:
 	if String(root_node.call("get_car_type_for_test")) != "compact":
 		_fail("level 1 should be a compact car")
 		return
+	if not _test_compact_city_dirt_profile(root_node):
+		return
 	if not _test_expanded_car_roster_and_gameplay(root_node):
 		return
 	if not _test_new_car_types_reuse_existing_ui_residency(root_node):
@@ -943,6 +945,33 @@ func _test_dirt_spawn_density_contract(root_node: Node) -> bool:
 	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
 		_fail("dirt density must not change top HUD residency")
 		return false
+	return true
+
+
+func _test_compact_city_dirt_profile(root_node: Node) -> bool:
+	root_node.call("reset_game", 6, "compact_city_profile_smoke")
+	if String(root_node.call("get_car_type_for_test")) != "compact":
+		_fail("level 6 should exercise the full-catalog compact city profile")
+		return false
+	var city_bias_count := 0
+	for kind in ["dust", "leaf", "poop", "road_grime"]:
+		city_bias_count += int(root_node.call("get_patch_count_by_kind_for_test", kind))
+	var secondary_count := 0
+	for kind in ["mud", "oil", "bug"]:
+		secondary_count += int(root_node.call("get_patch_count_by_kind_for_test", kind))
+	if city_bias_count <= secondary_count:
+		_fail("compact city profile must spawn more themed dirt than secondary dirt")
+		return false
+	for kind in ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"]:
+		if int(root_node.call("get_patch_count_by_kind_for_test", kind)) <= 0:
+			_fail("compact city profile omitted dirt kind: " + kind)
+			return false
+	var first_sequence: Array[String] = root_node.call("get_spawned_dirt_kinds_for_test")
+	root_node.call("reset_game", 6, "compact_city_profile_repeat")
+	if root_node.call("get_spawned_dirt_kinds_for_test") != first_sequence:
+		_fail("compact city profile must preserve deterministic level spawning")
+		return false
+	root_node.call("reset_game", 1, "compact_city_profile_cleanup")
 	return true
 
 
