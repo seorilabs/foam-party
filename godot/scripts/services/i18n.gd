@@ -131,6 +131,7 @@ const STRINGS := {
 	"UPG_DESC_SPONGE": ["닦는 속도 향상", "Faster scrubbing"],
 	# skin panel
 	"SKIN_TITLE": ["차량 꾸미기", "Car Customization"],
+	"CAR_PAINT_TAB": ["차량", "Car"],
 	"PLATE_TITLE": ["번호판 문구", "License Plate"],
 	"SKIN_SELECTED": ["선택됨", "Selected"],
 	"SKIN_SELECT": ["선택", "Select"],
@@ -144,6 +145,10 @@ const STRINGS := {
 	"SKIN_LAVENDER": ["라벤더", "Lavender"],
 	"SKIN_LIME": ["라임", "Lime"],
 	"SKIN_PURPLE": ["퍼플", "Purple"],
+	"SKIN_AUTO": ["자동 순환", "Auto"],
+	"SKIN_PAINT_CORAL": ["코랄", "Coral"],
+	"SKIN_PAINT_MINT": ["민트", "Mint"],
+	"SKIN_PAINT_VIOLET": ["바이올렛", "Violet"],
 }
 
 const SUPPORTED_LOCALES := ["ko", "en"]

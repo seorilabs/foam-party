@@ -63,7 +63,21 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_car_customization.png")):
 		quit(1)
 		return
+	node.set("_skin_panel_tab", 4)
+	node.set("coins", 500)
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_car_paint_customization.png")):
+		quit(1)
+		return
 	node.set("show_skin_panel", false)
+	node.set("selected_car_paint", "paint_violet")
+	node.call("_set_car_palette")
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_car_paint_applied_title.png")):
+		quit(1)
+		return
+	node.set("selected_car_paint", "")
+	node.call("_set_car_palette")
 	node.call("_select_license_plate", "BUBBLE")
 	node.set("level_index", 1)
 	node.set("best_times", {})

@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -313,6 +313,8 @@ func _run_smoke() -> void:
 	if not _test_stage_selection_and_retry_contract(root_node):
 		return
 	if not _test_license_plate_customization(root_node):
+		return
+	if not _test_car_paint_customization(root_node):
 		return
 
 	root_node.call("reset_game", 5)
@@ -902,6 +904,113 @@ func _test_license_plate_customization(root_node: Node) -> bool:
 	if not main_source.contains('tr("PLATE_TITLE")'):
 		_fail("license plate editor label must use its i18n key")
 		return false
+	return true
+
+
+func _test_car_paint_customization(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	var panel: Rect2 = root_node.call("_skin_panel_rect")
+	var previous_tab := Rect2()
+	for tab_index in range(5):
+		var tab: Rect2 = root_node.call("_skin_tab_rect", panel, tab_index)
+		if not panel.encloses(tab) or (tab_index > 0 and previous_tab.intersects(tab)):
+			_fail("five car customization tabs must fit without overlap inside the existing sheet")
+			return false
+		previous_tab = tab
+	var paints: Array = root_node.call("get_car_paint_options_for_test")
+	if paints.size() != 4:
+		_fail("car customization tab must expose auto plus three fixed paint cards")
+		return false
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_source.contains("Economy.resolve_skin_purchase(_car_paints, CAR_PAINT_TOOL"):
+		_fail("car paint purchase and selection must call the shared economy resolver")
+		return false
+	var draw_start := main_source.find("func _draw() -> void:")
+	var draw_end := main_source.find("\nfunc ", draw_start + 1)
+	var car_draw_start := main_source.find("func _draw_car() -> void:")
+	var car_draw_end := main_source.find("\nfunc ", car_draw_start + 1)
+	if draw_start < 0 or draw_end < 0 or car_draw_start < 0 or car_draw_end < 0:
+		_fail("shared car render functions must remain discoverable")
+		return false
+	var draw_body := main_source.substr(draw_start, draw_end - draw_start)
+	var car_draw_body := main_source.substr(car_draw_start, car_draw_end - car_draw_start)
+	if draw_body.count("\n\t_draw_car()\n") != 1 \
+			or not car_draw_body.contains("draw_colored_polygon(silhouette, car_color)"):
+		_fail("title, gameplay, and completion must share one unconditional car_color render path")
+		return false
+	for paint_index in range(paints.size()):
+		if not panel.encloses(root_node.call("_skin_card_rect", panel, paint_index)):
+			_fail("car paint cards must stay inside the existing customization sheet")
+			return false
+
+	var original_coins := int(root_node.get("coins"))
+	var original_owned: Dictionary = root_node.get("owned_car_paints").duplicate(true)
+	var original_selection := String(root_node.call("get_selected_car_paint_for_test"))
+	root_node.set("coins", 500)
+	root_node.set("owned_car_paints", {"auto": true})
+	root_node.set("selected_car_paint", "")
+	root_node.set("_skin_panel_tab", 4)
+	var coral_buy_rect: Rect2 = root_node.call("_skin_buy_rect", root_node.call("_skin_card_rect", panel, 1))
+	root_node.call("_handle_skin_panel_tap", coral_buy_rect.get_center())
+	if String(root_node.call("get_selected_car_paint_for_test")) != "paint_coral" \
+			or int(root_node.get("coins")) != 400 \
+			or not (root_node.call("get_car_color_for_test") as Color).is_equal_approx(Color("#ff6f61")):
+		_fail("buying a car paint must charge once, select it, and update the shared car color")
+		return false
+
+	root_node.call("reset_game", 2, "car_paint_fixed_color_smoke")
+	var sports_color: Color = root_node.call("get_car_color_for_test")
+	var sports_type := String(root_node.call("get_car_type_for_test"))
+	root_node.call("reset_game", 5, "car_paint_fixed_color_smoke")
+	var offroad_color: Color = root_node.call("get_car_color_for_test")
+	var offroad_type := String(root_node.call("get_car_type_for_test"))
+	if sports_type != "sports" or offroad_type != "offroad" \
+			or not sports_color.is_equal_approx(Color("#ff6f61")) \
+			or not offroad_color.is_equal_approx(Color("#ff6f61")):
+		_fail("fixed paint must preserve the existing car-type test hook across level resets")
+		return false
+
+	var saved_customization := ConfigFile.new()
+	root_node.call("_store_car_paint_customization", saved_customization)
+	root_node.set("selected_car_paint", "")
+	root_node.set("owned_car_paints", {"auto": true})
+	root_node.call("_load_car_paint_customization", saved_customization)
+	if String(root_node.call("get_selected_car_paint_for_test")) != "paint_coral" \
+			or not bool((root_node.get("owned_car_paints") as Dictionary).get("paint_coral", false)):
+		_fail("selected and owned car paints must round-trip through progress persistence")
+		return false
+
+	var auto_select_rect: Rect2 = root_node.call("_skin_buy_rect", root_node.call("_skin_card_rect", panel, 0))
+	root_node.call("_handle_skin_panel_tap", auto_select_rect.get_center())
+	if String(root_node.call("get_selected_car_paint_for_test")) != "":
+		_fail("selecting auto must restore the backward-compatible empty persisted selection")
+		return false
+	root_node.call("reset_game", 1, "car_paint_auto_color_smoke")
+	var compact_auto: Color = root_node.call("get_car_color_for_test")
+	root_node.call("reset_game", 2, "car_paint_auto_color_smoke")
+	var sports_auto: Color = root_node.call("get_car_color_for_test")
+	if not compact_auto.is_equal_approx(Color.from_hsv(0.10, 0.62, 1.0)) \
+			or not sports_auto.is_equal_approx(Color.from_hsv(0.28, 0.85, 1.0)) \
+			or compact_auto.is_equal_approx(sports_auto):
+		_fail("auto car paint must retain the existing per-level and per-car color rotation")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("car paint customization must not add a new HUD or modal node")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("car paint customization must keep existing HUD residency unchanged")
+		return false
+
+	root_node.set("coins", original_coins)
+	root_node.set("owned_car_paints", original_owned)
+	root_node.set("selected_car_paint", original_selection)
+	root_node.call("_set_car_palette")
 	return true
 
 

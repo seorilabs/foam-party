@@ -5,6 +5,7 @@ const GameConfig = preload("res://core/domain/game_config.gd")
 const DirtPatch = preload("res://core/domain/dirt_patch.gd")
 const WashParticle = preload("res://core/domain/wash_particle.gd")
 const SkinCatalog = preload("res://core/domain/skin_catalog.gd")
+const CarPaintCatalog = preload("res://core/domain/car_paint_catalog.gd")
 const Scoring = preload("res://core/use_cases/scoring.gd")
 const Economy = preload("res://core/use_cases/economy.gd")
 const Coaching = preload("res://core/use_cases/coaching.gd")
@@ -34,6 +35,8 @@ const TOOL_AIR := "air"
 const TOOL_WATER := "water"
 const TOOL_SOAP := "soap"
 const TOOL_SPONGE := "sponge"
+const CAR_PAINT_TOOL := CarPaintCatalog.TOOL_KEY
+const SKIN_PANEL_TAB_KEYS := [TOOL_WATER, TOOL_AIR, TOOL_SOAP, TOOL_SPONGE, CAR_PAINT_TOOL]
 const CAR_TYPES := GameConfig.CAR_TYPES
 const CLEAN_DAMAGE_RATE := GameConfig.CLEAN_DAMAGE_RATE
 const COMBO_WINDOW := GameConfig.COMBO_WINDOW
@@ -277,9 +280,12 @@ var skin_water := "classic"
 var skin_air := "classic"
 var skin_soap := "classic"
 var skin_sponge := "classic"
+var selected_car_paint := ""
 var license_plate_text := LicensePlate.DEFAULT_TEXT
 var owned_skins: Dictionary = {"classic": true}
+var owned_car_paints: Dictionary = {CarPaintCatalog.AUTO_ID: true}
 var _nozzle_skins: Dictionary = SkinCatalog.catalog()
+var _car_paints: Dictionary = CarPaintCatalog.catalog()
 var _main_save_dirty := false
 var _daily_save_timer: Timer = null
 
@@ -372,6 +378,7 @@ func _load_progress() -> void:
 		skin_air = String(config.get_value("skins", "air", "classic"))
 		skin_soap = String(config.get_value("skins", "soap", "classic"))
 		skin_sponge = String(config.get_value("skins", "sponge", "classic"))
+		_load_car_paint_customization(config)
 		license_plate_text = LicensePlate.safe_selection(String(config.get_value("customization", "license_plate", LicensePlate.DEFAULT_TEXT)))
 		var raw_owned: Variant = config.get_value("skins", "owned", {})
 		owned_skins = {"classic": true}
@@ -442,6 +449,24 @@ func _load_progress() -> void:
 		_main_save_dirty = true
 
 
+func _load_car_paint_customization(config: ConfigFile) -> void:
+	selected_car_paint = CarPaintCatalog.safe_selection(String(config.get_value("customization", "car_paint", "")))
+	owned_car_paints = {CarPaintCatalog.AUTO_ID: true}
+	var raw_owned: Variant = config.get_value("customization", "owned_car_paints", {})
+	if raw_owned is Dictionary:
+		for raw_id in (raw_owned as Dictionary):
+			var paint_id := String(raw_id)
+			if CarPaintCatalog.is_valid_id(paint_id):
+				owned_car_paints[paint_id] = true
+	if not selected_car_paint.is_empty() and not owned_car_paints.get(selected_car_paint, false):
+		selected_car_paint = ""
+
+
+func _store_car_paint_customization(config: ConfigFile) -> void:
+	config.set_value("customization", "car_paint", selected_car_paint)
+	config.set_value("customization", "owned_car_paints", owned_car_paints)
+
+
 func _save_progress() -> Error:
 	if not persistence_enabled:
 		return OK
@@ -463,6 +488,7 @@ func _save_progress() -> Error:
 	config.set_value("skins", "soap", skin_soap)
 	config.set_value("skins", "sponge", skin_sponge)
 	config.set_value("skins", "owned", owned_skins)
+	_store_car_paint_customization(config)
 	config.set_value("customization", "license_plate", license_plate_text)
 	return config.save(SAVE_PATH)
 
@@ -1237,6 +1263,21 @@ func get_car_type_for_test() -> String:
 	return car_type
 
 
+func get_car_color_for_test() -> Color:
+	return car_color
+
+
+func get_selected_car_paint_for_test() -> String:
+	return selected_car_paint
+
+
+func get_car_paint_options_for_test() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for paint in _car_paints.get(CAR_PAINT_TOOL, []):
+		result.append((paint as Dictionary).duplicate(true))
+	return result
+
+
 func get_customer_profile_for_test() -> Dictionary:
 	return _customer_profile()
 
@@ -2009,6 +2050,7 @@ func _set_car_palette() -> void:
 		car_color = Color.from_hsv(hue, 0.72, 0.84)
 	else:
 		car_color = Color.from_hsv(hue, 0.62, 1.0)
+	car_color = CarPaintCatalog.color_for(selected_car_paint, car_color)
 
 
 func _spawn_dirt() -> void:
@@ -5293,7 +5335,7 @@ func _active_skin_color(tool_key: String, alpha: float = 1.0) -> Color:
 
 
 func _skin_tab_rect(panel: Rect2, tab_idx: int) -> Rect2:
-	var tab_w: float = (panel.size.x - 20.0) / 4.0
+	var tab_w: float = (panel.size.x - 20.0) / float(SKIN_PANEL_TAB_KEYS.size())
 	return Rect2(panel.position.x + 10.0 + tab_idx * tab_w, panel.position.y + 74.0, tab_w, 34.0)
 
 
@@ -5330,18 +5372,20 @@ func _handle_skin_panel_tap(point: Vector2) -> void:
 		queue_redraw()
 		_play_ui_select()
 		return
-	var tab_keys: Array = [TOOL_WATER, TOOL_AIR, TOOL_SOAP, TOOL_SPONGE]
-	for t in range(4):
+	for t in range(SKIN_PANEL_TAB_KEYS.size()):
 		if _skin_tab_rect(panel, t).has_point(point):
 			_skin_panel_tab = t
 			queue_redraw()
 			_play_ui_select()
 			return
-	var tool_key: String = tab_keys[_skin_panel_tab]
-	var skins: Array = _nozzle_skins.get(tool_key, [])
+	var tool_key: String = SKIN_PANEL_TAB_KEYS[_skin_panel_tab]
+	var skins: Array = _car_paints.get(tool_key, []) if tool_key == CAR_PAINT_TOOL else _nozzle_skins.get(tool_key, [])
 	for ci in range(skins.size()):
 		if _skin_buy_rect(_skin_card_rect(panel, ci)).has_point(point):
-			_try_buy_or_select_skin(tool_key, ci)
+			if tool_key == CAR_PAINT_TOOL:
+				_try_buy_or_select_car_paint(ci)
+			else:
+				_try_buy_or_select_skin(tool_key, ci)
 			return
 	var plate_options := LicensePlate.options()
 	for choice_index in range(plate_options.size()):
@@ -5436,6 +5480,46 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 	queue_redraw()
 
 
+func _try_buy_or_select_car_paint(paint_idx: int) -> void:
+	var intent := Economy.resolve_skin_purchase(_car_paints, CAR_PAINT_TOOL, paint_idx, owned_car_paints, coins)
+	var action: String = intent["action"]
+	if action == "deny":
+		return
+	var paint_id: String = intent["id"]
+	var cost: int = intent["cost"]
+	var previous_selection := selected_car_paint
+	var next_selection := CarPaintCatalog.safe_selection(paint_id)
+
+	if action == "select":
+		selected_car_paint = next_selection
+		_set_car_palette()
+		if _save_progress() != OK:
+			selected_car_paint = previous_selection
+			_set_car_palette()
+			queue_redraw()
+			return
+		_emit_analytics(ContentEvents.skin_select(CAR_PAINT_TOOL, paint_id))
+		_play_ui_select()
+		queue_redraw()
+		return
+
+	# action == "buy"
+	coins -= cost
+	owned_car_paints[paint_id] = true
+	selected_car_paint = next_selection
+	_set_car_palette()
+	if _save_progress() != OK:
+		coins += cost
+		owned_car_paints.erase(paint_id)
+		selected_car_paint = previous_selection
+		_set_car_palette()
+		queue_redraw()
+		return
+	_emit_analytics(ContentEvents.skin_purchase(CAR_PAINT_TOOL, paint_id, cost))
+	_play_ui_select()
+	queue_redraw()
+
+
 func _draw_skin_panel() -> void:
 	var font: Font = _font()
 	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.05, 0.18, 0.72))
@@ -5450,9 +5534,8 @@ func _draw_skin_panel() -> void:
 	draw_style_box(_style("skin_close_bg", Color("#e8d8f8"), 10.0), close_rect)
 	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 26.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 18, Color("#2a0d50"))
 
-	var tab_keys: Array = [TOOL_WATER, TOOL_AIR, TOOL_SOAP, TOOL_SPONGE]
-	var tab_labels := [tr("TOOL_WATER"), tr("TOOL_AIR"), tr("TOOL_SOAP"), tr("TOOL_SPONGE")]
-	for t in range(4):
+	var tab_labels := [tr("TOOL_WATER"), tr("TOOL_AIR"), tr("TOOL_SOAP"), tr("TOOL_SPONGE"), tr("CAR_PAINT_TAB")]
+	for t in range(SKIN_PANEL_TAB_KEYS.size()):
 		var tr: Rect2 = _skin_tab_rect(panel, t)
 		var is_active: bool = _skin_panel_tab == t
 		var tab_col := Color("#7a35c8") if is_active else Color("#d0b8f0")
@@ -5460,24 +5543,37 @@ func _draw_skin_panel() -> void:
 		var lbl_col := Color(1.0, 1.0, 1.0) if is_active else Color("#4a2a7a")
 		draw_string(font, Vector2(tr.position.x, tr.position.y + 22.0), tab_labels[t], HORIZONTAL_ALIGNMENT_CENTER, tr.size.x, 12, lbl_col)
 
-	var tool_key: String = tab_keys[_skin_panel_tab]
+	var tool_key: String = SKIN_PANEL_TAB_KEYS[_skin_panel_tab]
 	var active_sid: String
-	if tool_key == TOOL_WATER:
+	var skins: Array
+	var owned_items: Dictionary
+	if tool_key == CAR_PAINT_TOOL:
+		active_sid = CarPaintCatalog.selected_catalog_id(selected_car_paint)
+		skins = _car_paints.get(tool_key, [])
+		owned_items = owned_car_paints
+	elif tool_key == TOOL_WATER:
 		active_sid = skin_water
+		skins = _nozzle_skins.get(tool_key, [])
+		owned_items = owned_skins
 	elif tool_key == TOOL_AIR:
 		active_sid = skin_air
+		skins = _nozzle_skins.get(tool_key, [])
+		owned_items = owned_skins
 	elif tool_key == TOOL_SOAP:
 		active_sid = skin_soap
+		skins = _nozzle_skins.get(tool_key, [])
+		owned_items = owned_skins
 	else:
 		active_sid = skin_sponge
+		skins = _nozzle_skins.get(tool_key, [])
+		owned_items = owned_skins
 
-	var skins: Array = _nozzle_skins.get(tool_key, [])
 	for ci in range(skins.size()):
 		var skin: Dictionary = skins[ci]
 		var sid: String = skin["id"]
 		var cost: int = skin["cost"]
 		var col: Color = skin["color"]
-		var is_owned: bool = owned_skins.get(sid, false)
+		var is_owned: bool = owned_items.get(sid, false)
 		var is_selected: bool = sid == active_sid
 		var card: Rect2 = _skin_card_rect(panel, ci)
 
@@ -5486,7 +5582,12 @@ func _draw_skin_panel() -> void:
 		draw_style_box(_style("skin_card_%d_%d_%s" % [ci, int(is_selected), sid], card_bg, 12.0, border_col, 2), card)
 
 		var circle_center := Vector2(card.position.x + card.size.x * 0.5, card.position.y + 38.0)
-		draw_circle(circle_center, 24.0, col)
+		if sid == CarPaintCatalog.AUTO_ID:
+			draw_circle(circle_center + Vector2(-9.0, 3.0), 15.0, Color("#ff6f61"))
+			draw_circle(circle_center + Vector2(9.0, 3.0), 15.0, Color("#39d9a0"))
+			draw_circle(circle_center + Vector2(0.0, -8.0), 15.0, Color("#9b6dff"))
+		else:
+			draw_circle(circle_center, 24.0, col)
 		draw_arc(circle_center, 24.0, 0.0, TAU, 24, Color(0.0, 0.0, 0.0, 0.18), 2.0)
 
 		var name_col := Color("#2a0d50") if is_owned else Color("#5a4a7a")

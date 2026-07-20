@@ -22,10 +22,11 @@ func _run_core_tests() -> void:
 	var DirtSpawnPlan: GDScript = load("res://core/use_cases/dirt_spawn_plan.gd")
 	var GoldSpot: GDScript = load("res://core/use_cases/gold_spot.gd")
 	var LicensePlate: GDScript = load("res://core/use_cases/license_plate.gd")
+	var CarPaintCatalog: GDScript = load("res://core/domain/car_paint_catalog.gd")
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
 	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
 	var I18n: GDScript = load("res://scripts/services/i18n.gd")
-	if Scoring == null or Economy == null or Coaching == null or ComboProtection == null or CustomerPresentation == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
+	if Scoring == null or Economy == null or Coaching == null or ComboProtection == null or CustomerPresentation == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or CarPaintCatalog == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
 		return
 	if not _test_combo_protection_rule(ComboProtection, GameConfig):
@@ -43,6 +44,8 @@ func _run_core_tests() -> void:
 	if not _test_gold_spot_rules(GoldSpot, GameConfig):
 		return
 	if not _test_license_plate_rules(LicensePlate):
+		return
+	if not _test_car_paint_catalog(CarPaintCatalog, Economy):
 		return
 
 	# --- Scoring: star boundaries (matches smoke_scene 3/2/1-star cases) ---
@@ -749,6 +752,68 @@ func _test_license_plate_rules(LicensePlate: GDScript) -> bool:
 		if String(LicensePlate.safe_selection(unsafe)) != LicensePlate.DEFAULT_TEXT:
 			_fail("unsafe or uncurated plate text must fall back to the default: " + unsafe)
 			return false
+	return true
+
+
+func _test_car_paint_catalog(CarPaintCatalog: GDScript, Economy: GDScript) -> bool:
+	var catalog_source := FileAccess.get_file_as_string("res://core/domain/car_paint_catalog.gd")
+	if catalog_source.is_empty():
+		_fail("car paint catalog must live in the product-core domain boundary")
+		return false
+	for forbidden_dependency in ["preload(", "load(", "JavaScriptBridge", "Firebase", "Control", "SceneTree"]:
+		if catalog_source.contains(forbidden_dependency):
+			_fail("car paint catalog must remain pure and adapter-independent: " + forbidden_dependency)
+			return false
+	var catalog: Dictionary = CarPaintCatalog.catalog()
+	var paints: Array = catalog.get(CarPaintCatalog.TOOL_KEY, [])
+	if paints.size() != 4 or String(paints[0]["id"]) != CarPaintCatalog.AUTO_ID:
+		_fail("car paint catalog must expose auto plus three fixed presets")
+		return false
+	var ids := {}
+	for paint in paints:
+		var paint_data: Dictionary = paint
+		var paint_id := String(paint_data.get("id", ""))
+		if paint_id.is_empty() or String(paint_data.get("name", "")).is_empty() \
+				or not paint_data.has("cost") or not paint_data.has("color") or ids.has(paint_id):
+			_fail("car paint presets must have unique ids, names, costs, and colors")
+			return false
+		ids[paint_id] = true
+	if String(CarPaintCatalog.safe_selection("auto")) != "" \
+			or String(CarPaintCatalog.safe_selection("unknown")) != "" \
+			or String(CarPaintCatalog.safe_selection("paint_mint")) != "paint_mint":
+		_fail("car paint selection must preserve only supported fixed presets")
+		return false
+	var automatic_color := Color("#4f90ff")
+	if not (CarPaintCatalog.color_for("", automatic_color) as Color).is_equal_approx(automatic_color):
+		_fail("empty car paint selection must retain the automatic level color")
+		return false
+	if not (CarPaintCatalog.color_for("paint_coral", automatic_color) as Color).is_equal_approx(Color("#ff6f61")):
+		_fail("fixed car paint must override the automatic level color")
+		return false
+
+	var owned_paints := {CarPaintCatalog.AUTO_ID: true}
+	var auto_intent: Dictionary = Economy.resolve_skin_purchase(catalog, CarPaintCatalog.TOOL_KEY, 0, owned_paints, 0)
+	if String(auto_intent["action"]) != "select":
+		_fail("free automatic car paint must reuse the shared owned-item selection path")
+		return false
+	var buy_intent: Dictionary = Economy.resolve_skin_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, owned_paints, 100)
+	if String(buy_intent["action"]) != "buy" or int(buy_intent["cost"]) != 100:
+		_fail("fixed car paint purchase must reuse the shared economy judgement")
+		return false
+	var deny_intent: Dictionary = Economy.resolve_skin_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, owned_paints, 99)
+	if String(deny_intent["action"]) != "deny":
+		_fail("insufficient coins must deny a car paint purchase")
+		return false
+	var nozzle_owned_only := {"coral": true, CarPaintCatalog.AUTO_ID: true}
+	var isolated_intent: Dictionary = Economy.resolve_skin_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, nozzle_owned_only, 100)
+	if String(isolated_intent["action"]) != "buy":
+		_fail("nozzle skin ownership must not unlock a car paint")
+		return false
+	owned_paints["paint_coral"] = true
+	var select_intent: Dictionary = Economy.resolve_skin_purchase(catalog, CarPaintCatalog.TOOL_KEY, 1, owned_paints, 0)
+	if String(select_intent["action"]) != "select":
+		_fail("owned car paint must be selectable through the shared economy judgement")
+		return false
 	return true
 
 
