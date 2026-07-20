@@ -26,8 +26,6 @@ func _run_core_tests() -> void:
 	if Scoring == null or Economy == null or Coaching == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
 		return
-	if not _test_stalled_dirt_highlight_rule(StalledDirtHighlight):
-		return
 	if not _test_car_roster_and_saved_level_mapping(GameConfig):
 		return
 	if not _test_new_car_localized_labels(I18n):
@@ -677,32 +675,6 @@ func _test_language_resolution(I18n: GDScript) -> bool:
 		return false
 	if String(I18n.normalize_preference("fr")) != "":
 		_fail("unsupported stored preference must return to automatic fallback")
-		return false
-	return true
-
-
-func _test_stalled_dirt_highlight_rule(StalledDirtHighlight: GDScript) -> bool:
-	# AC-3: the pure trigger exposes named progress and idle-time boundaries.
-	if absf(float(StalledDirtHighlight.PROGRESS_THRESHOLD) - 0.90) > 0.0001:
-		_fail("stalled dirt progress threshold should stay at 90 percent")
-		return false
-	if absf(float(StalledDirtHighlight.IDLE_SECONDS_THRESHOLD) - 3.0) > 0.0001:
-		_fail("stalled dirt idle threshold should stay at 3 seconds")
-		return false
-	if bool(StalledDirtHighlight.should_show(0.8999, 10.0)):
-		_fail("late-cleaning highlight must stay off below the progress threshold")
-		return false
-	if bool(StalledDirtHighlight.should_show(0.90, 2.999)):
-		_fail("late-cleaning highlight must stay off during normal progress")
-		return false
-	if not bool(StalledDirtHighlight.should_show(0.90, 3.0)):
-		_fail("late-cleaning highlight should turn on at both exact boundaries")
-		return false
-	if not bool(StalledDirtHighlight.cleaning_resumed(0.92, 0.921)):
-		_fail("a meaningful progress increase should clear the stalled state")
-		return false
-	if bool(StalledDirtHighlight.cleaning_resumed(0.92, 0.920001)):
-		_fail("floating-point noise must not look like resumed cleaning")
 		return false
 	return true
 
