@@ -243,6 +243,10 @@ func _run_core_tests() -> void:
 	if not bool(WashRules.is_patch_removed(fresh)):
 		_fail("a zero-health patch should be removed")
 		return
+	if not _test_misapplied_tool_damage(WashRules, Coaching, DirtPatch):
+		return
+	if not _test_correct_wash_snapshots(WashRules, DirtPatch):
+		return
 
 	# --- Analytics seam: port no-op contract + adapter buffer/flush (no Firebase) ---
 	var AnalyticsPort: GDScript = load("res://core/ports/analytics_port.gd")
@@ -422,6 +426,87 @@ func _test_dirt_spawn_plan(DirtSpawnPlan: GDScript) -> bool:
 		return false
 	if DirtSpawnPlan.BASE_PATCH_COUNT <= 0 or DirtSpawnPlan.PATCHES_PER_LEVEL <= 0 or DirtSpawnPlan.MAX_PATCH_COUNT < 38 or DirtSpawnPlan.MIN_CENTER_DISTANCE <= 0.0 or DirtSpawnPlan.DENSE_RADIUS_MIN_SCALE <= 0.0:
 		_fail("dirt density tuning constants must remain named and positive")
+		return false
+	return true
+
+
+func _test_misapplied_tool_damage(WashRules: GDScript, Coaching: GDScript, DirtPatch: GDScript) -> bool:
+	var cases := [
+		{"kind": "mud", "wrong": "sponge", "correct": "water"},
+		{"kind": "dust", "wrong": "soap", "correct": "sponge"},
+		{"kind": "leaf", "wrong": "water", "correct": "air"},
+		{"kind": "leaf", "wrong": "soap", "correct": "air"},
+		{"kind": "leaf", "wrong": "sponge", "correct": "air"},
+		{"kind": "oil", "wrong": "water", "correct": "soap"},
+		{"kind": "oil", "wrong": "sponge", "correct": "soap"},
+		{"kind": "bug", "wrong": "water", "correct": "soap"},
+		{"kind": "bug", "wrong": "sponge", "correct": "soap"},
+		{"kind": "poop", "wrong": "water", "correct": "soap"},
+		{"kind": "poop", "wrong": "sponge", "correct": "soap"},
+		{"kind": "road_grime", "wrong": "sponge", "correct": "soap"},
+	]
+	for test_case in cases:
+		var kind := String(test_case["kind"])
+		var wrong_tool := String(test_case["wrong"])
+		var correct_tool := String(test_case["correct"])
+		var flagged_patch = DirtPatch.new(kind, Vector2.ZERO, 18.0, 100.0, 0.5)
+		if not bool(Coaching.tool_misapplied(wrong_tool, flagged_patch)):
+			_fail("wrong-tool damage case is not flagged: %s/%s" % [kind, wrong_tool])
+			return false
+		var wrong_damage := _damage_after_one_second(WashRules, DirtPatch, kind, wrong_tool)
+		var correct_damage := _damage_after_one_second(WashRules, DirtPatch, kind, correct_tool)
+		if wrong_damage <= 0.0:
+			_fail("active wrong tool must keep tiny progress: %s/%s" % [kind, wrong_tool])
+			return false
+		if wrong_damage > correct_damage * 0.05 + 0.0001:
+			_fail("wrong tool exceeded 5 percent DPS: %s/%s" % [kind, wrong_tool])
+			return false
+		if correct_damage < wrong_damage * 10.0:
+			_fail("correct tool must be at least 10x faster: %s/%s" % [kind, wrong_tool])
+			return false
+
+	for kind in ["mud", "oil", "bug", "poop", "road_grime"]:
+		var heavy = DirtPatch.new(kind, Vector2.ZERO, 18.0, 100.0, 0.5)
+		WashRules.apply_air(heavy, 1.0, Vector2(0.0, 20.0), 1.0, 20.0)
+		if absf(heavy.health - 100.0) > 0.0001:
+			_fail("air must keep zero damage on heavy dirt: " + kind)
+			return false
+	return true
+
+
+func _damage_after_one_second(WashRules: GDScript, DirtPatch: GDScript, kind: String, tool: String) -> float:
+	var patch = DirtPatch.new(kind, Vector2.ZERO, 18.0, 100.0, 0.5)
+	match tool:
+		"air":
+			WashRules.apply_air(patch, 1.0, Vector2(0.0, 20.0), 1.0, 20.0)
+		"water":
+			WashRules.apply_water(patch, 1.0, 1.0, 1.0)
+		"soap":
+			WashRules.apply_soap(patch, 1.0, 1.0, 1.0)
+		"sponge":
+			WashRules.apply_sponge(patch, 1.0, Vector2(0.0, 20.0), 1.0, 1.0)
+	return 100.0 - patch.health
+
+
+func _test_correct_wash_snapshots(WashRules: GDScript, DirtPatch: GDScript) -> bool:
+	var mud = DirtPatch.new("mud", Vector2.ZERO, 18.0, 100.0, 0.5)
+	WashRules.apply_water(mud, 0.5, 1.0, 1.0)
+	if absf(mud.health - 19.0) > 0.001:
+		_fail("correct mud rinse timing changed")
+		return false
+
+	var oil = DirtPatch.new("oil", Vector2.ZERO, 18.0, 100.0, 0.5)
+	WashRules.apply_soap(oil, 0.5, 1.0, 1.0)
+	WashRules.apply_sponge(oil, 0.5, Vector2(0.0, 20.0), 1.0, 1.0)
+	if absf(oil.health - 27.1) > 0.001:
+		_fail("correct oil soap-and-sponge timing changed")
+		return false
+
+	var poop = DirtPatch.new("poop", Vector2.ZERO, 18.0, 100.0, 0.5)
+	WashRules.apply_soap(poop, 0.5, 1.0, 1.0)
+	WashRules.apply_water(poop, 0.5, 1.0, 1.0)
+	if absf(poop.health - 2.8) > 0.001:
+		_fail("correct poop soap-and-rinse timing changed")
 		return false
 	return true
 

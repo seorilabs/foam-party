@@ -131,8 +131,9 @@ func _run_smoke() -> void:
 	var oil_index: int = root_node.call("spawn_patch_for_test", "oil")
 	var oil_initial: float = root_node.call("get_patch_health_for_test", oil_index)
 	var oil_after_water: float = root_node.call("apply_tool_to_patch_for_test", "water", oil_index, 1.0)
-	if oil_after_water < oil_initial - 12.0:
-		_fail("water alone cleaned oil too much")
+	var wrong_water_damage := oil_initial - oil_after_water
+	if wrong_water_damage <= 0.0 or wrong_water_damage > 0.2:
+		_fail("water alone should make only tiny progress on dry oil")
 		return
 
 	root_node.call("apply_tool_to_patch_for_test", "soap", oil_index, 0.8)
