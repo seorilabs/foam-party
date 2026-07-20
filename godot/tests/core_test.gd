@@ -15,6 +15,7 @@ func _run_core_tests() -> void:
 	var Coaching: GDScript = load("res://core/use_cases/coaching.gd")
 	var ComboProtection: GDScript = load("res://core/use_cases/combo_protection.gd")
 	var CustomerPresentation: GDScript = load("res://core/use_cases/customer_presentation.gd")
+	var CustomerPatience: GDScript = load("res://core/use_cases/customer_patience.gd")
 	var StalledDirtHighlight: GDScript = load("res://core/use_cases/stalled_dirt_highlight.gd")
 	var DailyMission: GDScript = load("res://core/use_cases/daily_mission.gd")
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
@@ -26,12 +27,14 @@ func _run_core_tests() -> void:
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
 	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
 	var I18n: GDScript = load("res://scripts/services/i18n.gd")
-	if Scoring == null or Economy == null or Coaching == null or ComboProtection == null or CustomerPresentation == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or CarPaintCatalog == null or DirtPatch == null or GameConfig == null or I18n == null:
+	if Scoring == null or Economy == null or Coaching == null or ComboProtection == null or CustomerPresentation == null or CustomerPatience == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or CarPaintCatalog == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
 		return
 	if not _test_combo_protection_rule(ComboProtection, GameConfig):
 		return
 	if not _test_customer_presentation_rule(CustomerPresentation, GameConfig):
+		return
+	if not _test_customer_patience_rule(CustomerPatience, GameConfig):
 		return
 	if not _test_car_roster_and_saved_level_mapping(GameConfig):
 		return
@@ -484,6 +487,37 @@ func _test_customer_presentation_rule(CustomerPresentation: GDScript, GameConfig
 	var three_stars := float(CustomerPresentation.reaction_strength(3))
 	if not (one_star < two_stars and two_stars < three_stars):
 		_fail("customer completion reaction must grow with earned stars")
+		return false
+	return true
+
+
+func _test_customer_patience_rule(CustomerPatience: GDScript, GameConfig: GDScript) -> bool:
+	var weight := float(GameConfig.PATIENCE_PROGRESS_WEIGHT)
+	if weight <= 0.0 or weight >= 1.0:
+		_fail("patience progress weight must expose a bounded gameplay tuning value")
+		return false
+	for elapsed_seconds in [0.0, 35.0, 70.0, 130.0, 140.0, 210.0]:
+		var expected := clampf(1.0 - elapsed_seconds / float(GameConfig.STAR2_TIME), 0.0, 1.0)
+		if absf(float(CustomerPatience.value(elapsed_seconds, 0.0)) - expected) > 0.0001:
+			_fail("zero-progress patience must preserve the former time-only curve")
+			return false
+	var dirty_late := float(CustomerPatience.value(130.0, 0.0))
+	var halfway_late := float(CustomerPatience.value(130.0, 0.5))
+	var nearly_clean_late := float(CustomerPatience.value(130.0, 0.9))
+	if not (dirty_late < halfway_late and halfway_late < nearly_clean_late and nearly_clean_late > 0.5):
+		_fail("cleaning progress must monotonically relieve patience loss at the same time")
+		return false
+	if int(CustomerPatience.zone(dirty_late)) != 0 or int(CustomerPatience.zone(nearly_clean_late)) != 2:
+		_fail("late dirty and near-clean customers must resolve to different matching mood zones")
+		return false
+	var previous_zone := 2
+	var warning_count := 0
+	for current_zone in [2, 1, 1, 2, 2]:
+		if bool(CustomerPatience.should_warn(previous_zone, current_zone)):
+			warning_count += 1
+		previous_zone = current_zone
+	if warning_count != 1:
+		_fail("patience warning policy must fire once for one downgrade and stay silent otherwise")
 		return false
 	return true
 

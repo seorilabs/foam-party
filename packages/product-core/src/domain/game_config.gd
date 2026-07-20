@@ -8,6 +8,9 @@ extends RefCounted
 const STAR3_TIME := 75.0
 const STAR3_COMBO := 4
 const STAR2_TIME := 140.0
+# Washing progress offsets this fraction of elapsed-time pressure at 100%
+# cleanliness. The customer still reaches zero patience after a longer idle.
+const PATIENCE_PROGRESS_WEIGHT := 0.65
 const STAR_WARN_SECONDS := 15.0
 const COMBO_WINDOW := 2.5
 const COMBO_GRACE := 1.0

@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -166,6 +166,8 @@ func _run_smoke() -> void:
 	if not _test_dirt_spawn_density_contract(root_node):
 		return
 	if not _test_wheel_dirt_contract(root_node):
+		return
+	if not _test_customer_patience_contract(root_node):
 		return
 	if not _test_oil_sheen_contract(root_node):
 		return
@@ -1262,6 +1264,63 @@ func _test_wheel_dirt_contract(root_node: Node) -> bool:
 	root_node.set("best_times", original_best_times)
 	root_node.set("best_stars", original_best_stars)
 	root_node.call("reset_game", 1, "wheel_dirt_smoke_cleanup")
+	return true
+
+
+func _test_customer_patience_contract(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	for elapsed_seconds in [0.0, 35.0, 70.0, 130.0, 140.0, 210.0]:
+		var expected := clampf(1.0 - elapsed_seconds / 140.0, 0.0, 1.0)
+		if absf(float(root_node.call("get_customer_patience_for_test", elapsed_seconds, 0.0)) - expected) > 0.0001:
+			_fail("zero-progress customer patience must retain the original time-only curve")
+			return false
+	var dirty_late := float(root_node.call("get_customer_patience_for_test", 130.0, 0.0))
+	var nearly_clean_late := float(root_node.call("get_customer_patience_for_test", 130.0, 0.9))
+	if nearly_clean_late <= dirty_late or nearly_clean_late <= 0.5:
+		_fail("high cleaning progress must visibly relieve patience loss at the same elapsed time")
+		return false
+	if int(root_node.call("get_customer_patience_zone_for_test", 130.0, 0.0)) != 0 \
+			or int(root_node.call("get_customer_patience_zone_for_test", 130.0, 0.9)) != 2:
+		_fail("patience value, face, mood label, and gauge color must share the new zone model")
+		return false
+	var previous_zone := 2
+	var warning_count := 0
+	for current_zone in [2, 1, 1, 2, 2]:
+		if bool(root_node.call("should_customer_patience_warn_for_test", previous_zone, current_zone)):
+			warning_count += 1
+		previous_zone = current_zone
+	if warning_count != 1:
+		_fail("one patience downgrade must trigger exactly one warning")
+		return false
+
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var draw_start := main_source.find("func _draw_customer_patience() -> void:")
+	var draw_end := main_source.find("\nfunc ", draw_start + 1)
+	var draw_body := main_source.substr(draw_start, draw_end - draw_start)
+	if not draw_body.contains("var patience := _current_customer_patience()") \
+			or not draw_body.contains("var patience_zone := CustomerPatience.zone(patience)") \
+			or draw_body.count("patience_zone ==") < 5 \
+			or main_source.contains("clampf(1.0 - level_time / STAR2_TIME"):
+		_fail("customer face, mood label, gauge, and warning paths must use the shared progress-aware value")
+		return false
+	var warning_guard := main_source.find("if CustomerPatience.should_warn(_prev_patience_zone, _pzone):")
+	var warning_call := main_source.find("audio.play_patience_warn()", warning_guard)
+	var warning_state_update := main_source.find("_prev_patience_zone = _pzone", warning_call)
+	if warning_guard < 0 or warning_call < warning_guard or warning_state_update < warning_call:
+		_fail("patience warning must remain guarded by one downgrade transition before state sync")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("progress-aware patience must not add persistent UI controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("progress-aware patience must keep the existing HUD residency unchanged")
+		return false
 	return true
 
 
