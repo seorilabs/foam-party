@@ -71,6 +71,18 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return
+	if not bool(node.call("set_patch_gold_spot_for_test", 0, true)):
+		push_error("gold spot screenshot setup failed")
+		quit(1)
+		return
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_gold_spot.png")):
+		quit(1)
+		return
+	node.call("_mark_patch_removed", node.get("dirt_patches")[0])
+	if not await _capture(out_dir.path_join("shot_gold_spot_reward.png")):
+		quit(1)
+		return
 	node.call("_begin_car_entry", true)
 	node.set("_car_transition_elapsed", 0.20)
 	if not await _capture(out_dir.path_join("shot_car_entry_transition.png")):

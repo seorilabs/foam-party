@@ -17,11 +17,12 @@ func _run_core_tests() -> void:
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
 	var StageSelection: GDScript = load("res://core/use_cases/stage_selection.gd")
 	var DirtSpawnPlan: GDScript = load("res://core/use_cases/dirt_spawn_plan.gd")
+	var GoldSpot: GDScript = load("res://core/use_cases/gold_spot.gd")
 	var LicensePlate: GDScript = load("res://core/use_cases/license_plate.gd")
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
 	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
 	var I18n: GDScript = load("res://scripts/services/i18n.gd")
-	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
+	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
 		return
 	if not _test_car_roster_and_saved_level_mapping(GameConfig):
@@ -31,6 +32,8 @@ func _run_core_tests() -> void:
 	if not _test_language_resolution(I18n):
 		return
 	if not _test_dirt_spawn_plan(DirtSpawnPlan):
+		return
+	if not _test_gold_spot_rules(GoldSpot, GameConfig):
 		return
 	if not _test_license_plate_rules(LicensePlate):
 		return
@@ -562,6 +565,44 @@ func _test_wash_tuning_profiles(GameConfig: GDScript) -> bool:
 	var coaching_source := FileAccess.get_file_as_string("res://core/use_cases/coaching.gd")
 	if not coaching_source.contains("GameConfig.WATER_WASH_PROFILES") or not coaching_source.contains("GameConfig.SPONGE_WASH_PROFILES"):
 		_fail("coaching must share the same preparation thresholds as wash rules")
+		return false
+	return true
+
+
+func _test_gold_spot_rules(GoldSpot: GDScript, GameConfig: GDScript) -> bool:
+	if int(GameConfig.GOLD_SPOT_SPAWN_PERCENT) != 25 or int(GameConfig.GOLD_SPOT_BONUS_COINS) != 8 or int(GameConfig.GOLD_SPOT_REWARD_CAP_PER_LEVEL) != 1:
+		_fail("gold spot balance hooks changed unexpectedly")
+		return false
+	if int(GoldSpot.spawn_index(1, 0, 42787)) != -1:
+		_fail("gold spot cannot spawn without a dirt patch")
+		return false
+
+	var spawned_levels := 0
+	for level in range(1, 101):
+		var patch_count := mini(40, 18 + level * 2)
+		var seed := 42690 + level * 97
+		var first_index: int = GoldSpot.spawn_index(level, patch_count, seed)
+		var retry_index: int = GoldSpot.spawn_index(level, patch_count, seed)
+		if first_index != retry_index:
+			_fail("gold spot selection must reproduce the level seed")
+			return false
+		if first_index >= patch_count:
+			_fail("gold spot index must stay inside the spawned patch list")
+			return false
+		if first_index >= 0:
+			spawned_levels += 1
+	if spawned_levels < 10 or spawned_levels > 40:
+		_fail("gold spot should remain a low-probability level event")
+		return false
+
+	if int(GoldSpot.reward_for_removal(false, 0)) != 0:
+		_fail("ordinary dirt must not grant a gold spot reward")
+		return false
+	if int(GoldSpot.reward_for_removal(true, 0)) != int(GameConfig.GOLD_SPOT_BONUS_COINS):
+		_fail("first gold spot removal should grant the configured bonus")
+		return false
+	if int(GoldSpot.reward_for_removal(true, GameConfig.GOLD_SPOT_REWARD_CAP_PER_LEVEL)) != 0:
+		_fail("gold spot reward must stop at the per-level cap")
 		return false
 	return true
 

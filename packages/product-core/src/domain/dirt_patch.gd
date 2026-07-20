@@ -20,11 +20,13 @@ var resist_time: float = 0.0
 var hint_time: float = 0.0
 var hint_tool: String = ""
 var shake_x: float = 0.0
+var is_gold_spot: bool = false
 
-func _init(new_kind: String, new_position: Vector2, new_radius: float, new_health: float, new_seed: float) -> void:
+func _init(new_kind: String, new_position: Vector2, new_radius: float, new_health: float, new_seed: float, new_is_gold_spot: bool = false) -> void:
 	kind = new_kind
 	position = new_position
 	radius = new_radius
 	health = new_health
 	max_health = new_health
 	seed_offset = new_seed
+	is_gold_spot = new_is_gold_spot
