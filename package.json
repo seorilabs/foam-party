@@ -12,7 +12,7 @@
     "test:core": "bash scripts/test_core.sh && CORE_TEST_SCENE=res://tests/dirt_progression_test.gd bash scripts/test_core.sh",
     "test:godot": "bash scripts/godot_quality_gate.sh --project godot --smoke-scene res://tests/smoke_scene.gd",
     "check:architecture": "bash scripts/check_architecture.sh",
-    "check:workflows": "python3 tools/check_release_workflow_contract.py",
+    "check:workflows": "bash scripts/check_workflows.sh",
     "check:docs": "bash scripts/check_docs.sh",
     "check:release": "bash scripts/check_release_readiness.sh",
     "check:app-store": "tools/check_app_store_readiness.py"
