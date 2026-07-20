@@ -13,11 +13,12 @@ Usage:
   godot_quality_gate.sh [--project PATH] [--smoke-scene RES://SCENE_OR_SCRIPT] [--godot-bin PATH] [--skip-import]
 
 Checks:
-  1. Runs: godot --headless --path <project> --import --quit
-  2. Runs: godot --headless --path <project> --quit
-  3. Fails when Godot exits non-zero
-  4. Fails when Godot logs lines beginning with SCRIPT ERROR or ERROR:
-  5. Optionally runs a smoke scene or .gd script with the same log rules
+  1. Validates the Godot art asset manifest JSON and POSIX EOF newline
+  2. Runs: godot --headless --path <project> --import --quit
+  3. Runs: godot --headless --path <project> --quit
+  4. Fails when Godot exits non-zero
+  5. Fails when Godot logs lines beginning with SCRIPT ERROR or ERROR:
+  6. Optionally runs a smoke scene or .gd script with the same log rules
 USAGE
 }
 
@@ -50,6 +51,10 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHONDONTWRITEBYTECODE=1 python3 "${script_dir}/../tools/test_asset_manifest.py"
+python3 "${script_dir}/../tools/check_asset_manifest.py" "${project}/assets/art/asset-manifest.json"
 
 if [ -z "${log_dir}" ]; then
   log_dir="$(mktemp -d)"
