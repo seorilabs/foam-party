@@ -756,6 +756,14 @@ func _test_license_plate_rules(LicensePlate: GDScript) -> bool:
 
 
 func _test_car_paint_catalog(CarPaintCatalog: GDScript, Economy: GDScript) -> bool:
+	var catalog_source := FileAccess.get_file_as_string("res://core/domain/car_paint_catalog.gd")
+	if catalog_source.is_empty():
+		_fail("car paint catalog must live in the product-core domain boundary")
+		return false
+	for forbidden_dependency in ["preload(", "load(", "JavaScriptBridge", "Firebase", "Control", "SceneTree"]:
+		if catalog_source.contains(forbidden_dependency):
+			_fail("car paint catalog must remain pure and adapter-independent: " + forbidden_dependency)
+			return false
 	var catalog: Dictionary = CarPaintCatalog.catalog()
 	var paints: Array = catalog.get(CarPaintCatalog.TOOL_KEY, [])
 	if paints.size() != 4 or String(paints[0]["id"]) != CarPaintCatalog.AUTO_ID:
