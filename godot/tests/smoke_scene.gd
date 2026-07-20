@@ -468,6 +468,16 @@ func _run_smoke() -> void:
 			_fail("pause/settings sheet must contain all five actions")
 			return
 
+	# Keep the implementation contract explicit: these visible strings must stay
+	# connected to TranslationServer through tr(), rather than becoming literals.
+	var main_script_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_script_source.contains('return tr("PAUSE_TITLE")'):
+		_fail("pause/settings title must be sourced from the PAUSE_TITLE i18n key")
+		return
+	if not main_script_source.contains('tr("GUIDE")'):
+		_fail("pause/settings guide action must be sourced from the GUIDE i18n key")
+		return
+
 	var previous_locale := TranslationServer.get_locale()
 	TranslationServer.set_locale("ko")
 	var pause_labels_ko: Array = root_node.call("_pause_action_labels")
