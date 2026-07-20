@@ -12,6 +12,7 @@ const DailyMission = preload("res://core/use_cases/daily_mission.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
 const StageSelection = preload("res://core/use_cases/stage_selection.gd")
 const DirtSpawnPlan = preload("res://core/use_cases/dirt_spawn_plan.gd")
+const GoldSpot = preload("res://core/use_cases/gold_spot.gd")
 const WashRules = preload("res://core/use_cases/wash_rules.gd")
 const LicensePlate = preload("res://core/use_cases/license_plate.gd")
 const AnalyticsPort = preload("res://core/ports/analytics_port.gd")
@@ -166,6 +167,10 @@ var _halo_phase := 0.0
 var best_combo := 0
 var _combo_bonus_time := -10.0
 var _combo_bonus_amount := 0
+var _gold_spot_rewards_granted := 0
+var _gold_spot_pop_time := -10.0
+var _gold_spot_pop_position := Vector2.ZERO
+var _gold_spot_pop_amount := 0
 var level_time := 0.0
 var earned_stars := 0
 var combo_pop_time := -10.0
@@ -283,6 +288,7 @@ var art_tex: Dictionary = {}
 var _hint_pill_box: StyleBoxFlat
 var _hint_shadow_box: StyleBoxFlat
 var _tool_hint_box: StyleBoxFlat
+var _gold_spot_pop_box: StyleBoxFlat
 var _hint_patch: DirtPatch = null
 var car_shapes: Dictionary = {}
 var _body_foam_spot_cache: Dictionary = {}
@@ -970,6 +976,7 @@ func _draw() -> void:
 		_draw_toolbar()
 		_draw_completion_panel()
 		_draw_combo_milestone_flash()
+		_draw_gold_spot_reward_pop()
 	# Playing HUD exposes one pause/settings entry only. Sound and guide actions
 	# live inside that sheet; title-screen shortcuts remain available before play.
 	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm and not _car_transition_blocks_gameplay():
@@ -1029,6 +1036,10 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_combo_milestone_flash_color = Color.WHITE
 	_combo_milestone_fanfare = ""
 	_combo_milestone_count = 0
+	_gold_spot_rewards_granted = 0
+	_gold_spot_pop_time = -10.0
+	_gold_spot_pop_position = Vector2.ZERO
+	_gold_spot_pop_amount = 0
 	_customer_cheer_text = ""
 	_customer_cheer_time = -10.0
 	is_new_record = false
@@ -1262,6 +1273,37 @@ func get_spawned_dirt_kinds_for_test() -> Array[String]:
 	for raw_patch in dirt_patches:
 		kinds.append((raw_patch as DirtPatch).kind)
 	return kinds
+
+
+func get_gold_spot_count_for_test() -> int:
+	var count := 0
+	for raw_patch in dirt_patches:
+		if (raw_patch as DirtPatch).is_gold_spot:
+			count += 1
+	return count
+
+
+func get_gold_spot_index_for_test() -> int:
+	for index in range(dirt_patches.size()):
+		if (dirt_patches[index] as DirtPatch).is_gold_spot:
+			return index
+	return -1
+
+
+func get_gold_spot_rewards_granted_for_test() -> int:
+	return _gold_spot_rewards_granted
+
+
+func get_gold_spot_pop_amount_for_test() -> int:
+	return _gold_spot_pop_amount
+
+
+func set_patch_gold_spot_for_test(patch_index: int, enabled: bool) -> bool:
+	if patch_index < 0 or patch_index >= dirt_patches.size():
+		return false
+	(dirt_patches[patch_index] as DirtPatch).is_gold_spot = enabled
+	queue_redraw()
+	return true
 
 
 func spawn_patch_for_test(kind: String) -> int:
@@ -1869,7 +1911,8 @@ func _set_car_palette() -> void:
 func _spawn_dirt() -> void:
 	dirt_patches.clear()
 	_hint_patch = null
-	rng.seed = 42690 + int(active_level_index) * 97
+	var spawn_seed := 42690 + int(active_level_index) * 97
+	rng.seed = spawn_seed
 
 	var pool: Array[Vector2] = _dirt_spawn_positions()
 	for index in range(pool.size() - 1, 0, -1):
@@ -1907,6 +1950,7 @@ func _spawn_dirt() -> void:
 			health_base_max = 150.0
 
 	var spawn_count: int = DirtSpawnPlan.spawn_count(active_level_index, pool.size())
+	var gold_spot_index := GoldSpot.spawn_index(active_level_index, spawn_count, spawn_seed)
 	var density_radius_scale: float = DirtSpawnPlan.radius_scale_for_count(spawn_count)
 	var health_scale := 1.0 + float(active_level_index - 1) * 0.06
 	for index in range(spawn_count):
@@ -1920,7 +1964,7 @@ func _spawn_dirt() -> void:
 			health += 15.0 * health_scale
 		elif kind == "road_grime":
 			health += 20.0 * health_scale
-		var patch := DirtPatch.new(kind, base_position, radius, health, rng.randf_range(0.0, 10.0))
+		var patch := DirtPatch.new(kind, base_position, radius, health, rng.randf_range(0.0, 10.0), index == gold_spot_index)
 		dirt_patches.append(patch)
 
 	initial_dirt_total = 0.0
@@ -2165,6 +2209,15 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 	if _hint_patch == patch:
 		_hint_patch = null
 	if not completed:
+		var gold_reward := GoldSpot.reward_for_removal(patch.is_gold_spot, _gold_spot_rewards_granted)
+		if gold_reward > 0:
+			coins += gold_reward
+			_gold_spot_rewards_granted += 1
+			_gold_spot_pop_time = float(Time.get_ticks_msec()) / 1000.0
+			_gold_spot_pop_position = burst_center
+			_gold_spot_pop_amount = gold_reward
+			_spawn_gold_spot_burst(burst_center, burst_radius)
+			audio.play_coin_bonus()
 		combo_count += 1
 		combo_timer = COMBO_WINDOW
 		best_combo = max(best_combo, combo_count)
@@ -2274,6 +2327,14 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(60.0, 130.0)
 		_append_particle(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.35, 0.55), rng.randf_range(3.5, 6.0), pop_color, STYLE_SPARKLE))
+
+
+func _spawn_gold_spot_burst(center: Vector2, radius: float) -> void:
+	for index in range(12):
+		var angle := TAU * float(index) / 12.0
+		var speed := rng.randf_range(85.0, 155.0)
+		_append_particle(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.45, 0.75), rng.randf_range(4.0, 7.0), Color("#ffd84a"), STYLE_SPARKLE))
+	_append_particle(WashParticle.new(center, Vector2.ZERO, 0.42, radius + 8.0, Color(1.0, 0.78, 0.12, 0.9), STYLE_RING))
 
 
 func _spawn_water_removal_splash(center: Vector2, radius: float) -> void:
@@ -3291,6 +3352,8 @@ func _draw_dirt() -> void:
 			_draw_wet_gloss(center, patch.radius, patch.wetness)
 		if patch.soap > 0.05:
 			_draw_soap_foam(center, patch.radius, patch.soap)
+		if patch.is_gold_spot:
+			_draw_gold_spot_marker(patch, center, strength)
 
 	# Coaching hints are drawn last so they stay above any overlapping dirt.
 	for raw_patch in dirt_patches:
@@ -3299,6 +3362,32 @@ func _draw_dirt() -> void:
 			continue
 		if hint_patch.hint_time > 0.0 and hint_patch.hint_tool != "":
 			_draw_patch_hint(hint_patch, _patch_center(hint_patch) + Vector2(hint_patch.shake_x, 0.0))
+
+
+func _draw_gold_spot_marker(patch: DirtPatch, center: Vector2, strength: float) -> void:
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var pulse := 1.0 + sin(time_now * 5.0 + patch.seed_offset) * 0.08
+	var radius := (patch.radius + 5.0) * pulse
+	var alpha := lerpf(0.72, 1.0, clampf(strength, 0.0, 1.0))
+	var outline := Color(0.35, 0.22, 0.02, 0.92 * alpha)
+	var gold := Color(1.0, 0.82, 0.18, alpha)
+	draw_arc(center, radius, 0.0, TAU, 28, outline, 5.0)
+	draw_arc(center, radius, 0.0, TAU, 28, gold, 2.5)
+	# Four diamond sparkles make the target readable without relying on hue.
+	for index in range(4):
+		var direction := Vector2.from_angle(TAU * float(index) / 4.0 + PI * 0.25)
+		var sparkle_center := center + direction * radius
+		var tangent := Vector2(-direction.y, direction.x)
+		var sparkle := PackedVector2Array([
+			sparkle_center + direction * 6.0,
+			sparkle_center + tangent * 3.0,
+			sparkle_center - direction * 6.0,
+			sparkle_center - tangent * 3.0,
+		])
+		draw_colored_polygon(sparkle, Color(1.0, 0.96, 0.58, alpha))
+		var closed_sparkle := sparkle.duplicate()
+		closed_sparkle.append(sparkle[0])
+		draw_polyline(closed_sparkle, outline, 1.5)
 
 
 func _draw_patch_hint(patch: DirtPatch, center: Vector2) -> void:
@@ -4192,6 +4281,28 @@ func _draw_combo_badge() -> void:
 		var ring_points := clampi(int(ring_r * TAU), 32, 128)
 		draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU, ring_points, Color(0.0, 0.0, 0.0, 0.22 * ring_alpha), 5.0, true)
 		draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU * fill_frac, ring_points, ring_col, 3.5, true)
+
+
+func _draw_gold_spot_reward_pop() -> void:
+	if _gold_spot_pop_time < 0.0 or _gold_spot_pop_amount <= 0:
+		return
+	var age := float(Time.get_ticks_msec()) / 1000.0 - _gold_spot_pop_time
+	if age >= 1.5:
+		_gold_spot_pop_time = -10.0
+		return
+	var alpha := clampf(1.0 - maxf(age - 0.8, 0.0) / 0.7, 0.0, 1.0)
+	var pop_scale := 1.0 + exp(-age * 8.0) * 0.32
+	var center := _gold_spot_pop_position + Vector2(0.0, -34.0 - age * 34.0)
+	var chip := Rect2(center - Vector2(35.0, 15.0) * pop_scale, Vector2(70.0, 30.0) * pop_scale)
+	if _gold_spot_pop_box == null:
+		_gold_spot_pop_box = StyleBoxFlat.new()
+		_gold_spot_pop_box.set_corner_radius_all(15)
+	_gold_spot_pop_box.bg_color = Color(0.13, 0.09, 0.02, 0.86 * alpha)
+	draw_style_box(_gold_spot_pop_box, chip)
+	var coin_center := Vector2(chip.position.x + 16.0 * pop_scale, chip.get_center().y)
+	draw_circle(coin_center, 8.5 * pop_scale, Color(1.0, 0.82, 0.18, alpha))
+	draw_arc(coin_center, 8.5 * pop_scale, 0.0, TAU, 20, Color(0.45, 0.29, 0.02, alpha), 1.5)
+	draw_string(_font(), Vector2(chip.position.x + 28.0 * pop_scale, chip.get_center().y + 6.0 * pop_scale), "+%d" % _gold_spot_pop_amount, HORIZONTAL_ALIGNMENT_LEFT, chip.size.x - 30.0 * pop_scale, int(16.0 * pop_scale), Color(1.0, 0.94, 0.55, alpha))
 
 
 func _trigger_combo_milestone_flash(count: int) -> void:

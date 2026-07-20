@@ -237,6 +237,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_new_car_types_reuse_existing_ui_residency(root_node):
 		return
+	if not _test_gold_spot_contract(root_node):
+		return
 	if not _test_water_impact_presentation_contract(root_node):
 		return
 	if not _test_particle_budget_contract(root_node):
@@ -910,6 +912,90 @@ func _test_new_car_types_reuse_existing_ui_residency(root_node: Node) -> bool:
 			_fail("new car types must not add persistent HUD controls")
 			return false
 	root_node.call("reset_game", 1, "car_ui_residency_smoke_cleanup")
+	return true
+
+
+func _test_gold_spot_contract(root_node: Node) -> bool:
+	var required_methods := [
+		"get_gold_spot_count_for_test",
+		"get_gold_spot_index_for_test",
+		"get_gold_spot_rewards_granted_for_test",
+		"get_gold_spot_pop_amount_for_test",
+		"set_patch_gold_spot_for_test",
+	]
+	for method_name in required_methods:
+		if not root_node.has_method(method_name):
+			_fail("gold spot helper API missing: " + method_name)
+			return false
+
+	var original_coins: int = root_node.call("get_coins_for_test")
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+
+	root_node.call("reset_game", 2, "gold_spot_seed_smoke")
+	if int(root_node.call("get_gold_spot_count_for_test")) != 1:
+		_fail("configured level 2 seed should spawn exactly one gold spot")
+		return false
+	var first_index: int = root_node.call("get_gold_spot_index_for_test")
+	var first_kinds: Array[String] = root_node.call("get_spawned_dirt_kinds_for_test")
+	root_node.call("reset_game", 2, "gold_spot_seed_retry")
+	if int(root_node.call("get_gold_spot_count_for_test")) != 1 or int(root_node.call("get_gold_spot_index_for_test")) != first_index:
+		_fail("gold spot retry must reproduce the deterministic target index")
+		return false
+	if root_node.call("get_spawned_dirt_kinds_for_test") != first_kinds:
+		_fail("gold spot selection must not change the underlying dirt sequence")
+		return false
+
+	root_node.call("reset_game", 1, "gold_spot_reward_smoke")
+	for raw_patch in root_node.get("dirt_patches"):
+		raw_patch.set("is_gold_spot", false)
+	root_node.set("coins", 0)
+	if not bool(root_node.call("set_patch_gold_spot_for_test", 0, true)):
+		_fail("gold spot test target setup failed")
+		return false
+	root_node.call("_mark_patch_removed", root_node.get("dirt_patches")[0])
+	if int(root_node.call("get_coins_for_test")) != 8 or int(root_node.call("get_gold_spot_rewards_granted_for_test")) != 1:
+		_fail("first gold spot removal should grant the capped +8 reward")
+		return false
+	if int(root_node.call("get_gold_spot_pop_amount_for_test")) != 8:
+		_fail("gold spot reward should create a local transient coin pop")
+		return false
+
+	root_node.call("set_patch_gold_spot_for_test", 0, false)
+	root_node.call("set_patch_gold_spot_for_test", 1, true)
+	root_node.call("_mark_patch_removed", root_node.get("dirt_patches")[1])
+	if int(root_node.call("get_coins_for_test")) != 8 or int(root_node.call("get_gold_spot_rewards_granted_for_test")) != 1:
+		_fail("a second gold flag must not bypass the per-level reward cap")
+		return false
+
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("gold spot presentation must not add persistent HUD controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("gold spot presentation must not change HUD residency")
+		return false
+
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var marker_start := source.find("func _draw_gold_spot_marker(")
+	if marker_start < 0:
+		_fail("gold spot marker renderer is missing")
+		return false
+	var marker_end := source.find("\nfunc ", marker_start + 1)
+	var marker_body := source.substr(marker_start, marker_end - marker_start)
+	if marker_body.find("draw_arc") < 0 or marker_body.find("PackedVector2Array") < 0:
+		_fail("gold spot marker must combine an outline with a non-color sparkle shape")
+		return false
+	if source.find("func _draw_gold_spot_reward_pop()") < 0:
+		_fail("gold spot reward must stay in a transient local popup renderer")
+		return false
+
+	root_node.set("coins", original_coins)
+	root_node.call("reset_game", 1, "gold_spot_smoke_cleanup")
 	return true
 
 

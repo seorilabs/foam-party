@@ -114,6 +114,11 @@ const BOMB_COST := 40
 # Rewarded ad grants at most this many free foam bombs per level; beyond the cap
 # the bomb falls back to the coin price so ad inventory is not farmed endlessly.
 const FREE_AD_BOMB_PER_LEVEL := 3
+# Rare cleanup target: one deterministic roll per level, one possible target,
+# and one small payout keep the discovery moment from inflating the economy.
+const GOLD_SPOT_SPAWN_PERCENT := 25
+const GOLD_SPOT_BONUS_COINS := 8
+const GOLD_SPOT_REWARD_CAP_PER_LEVEL := 1
 const UPGRADE_COSTS := [[90, 190, 320], [90, 190, 320], [90, 190, 320]]
 const UPGRADE_MULTS := [1.0, 1.3, 1.6, 2.0]
 const UPGRADE_KEYS := ["water", "soap", "sponge"]
