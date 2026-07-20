@@ -54,6 +54,12 @@ const STATE_PLAYING := "playing"
 const GAMEPLAY_SCALE := 1.16
 const GAMEPLAY_PIVOT := Vector2(195.0, 545.0)
 const GAMEPLAY_OFFSET := Vector2(0.0, 0.0)
+const CAR_TRANSITION_IDLE := "idle"
+const CAR_TRANSITION_ENTERING := "entering"
+const CAR_TRANSITION_EXITING := "exiting"
+const CAR_ENTRY_DURATION := 0.52
+const CAR_EXIT_DURATION := 0.48
+const CAR_TRANSITION_DISTANCE := 450.0
 const HUD_TOP_Y := 12.0
 const HUD_SAFE_PADDING := 8.0
 const TOP_BUTTON_Y := 104.0
@@ -136,6 +142,9 @@ var level_index := 1
 var active_level_index := 1
 var completed := false
 var completion_burst_done := false
+var _car_transition_phase := CAR_TRANSITION_IDLE
+var _car_transition_elapsed := 0.0
+var _pending_next_level := -1
 var _gleam_time := -1.0
 const GLEAM_DURATION := 0.72
 # Single tuning hook for low-end/reduced-motion policy (#75). The clean-shine
@@ -469,6 +478,7 @@ func start_game(target_level: int = -1, load_reason: String = "title_start") -> 
 	if active_level_index != resolved_level:
 		reset_game(resolved_level, load_reason)
 	game_state = STATE_PLAYING
+	_begin_car_entry()
 	_emit_analytics(ContentEvents.game_start(active_level_index))
 	_mark_level_started()
 	if not tutorial_seen:
@@ -476,11 +486,80 @@ func start_game(target_level: int = -1, load_reason: String = "title_start") -> 
 	queue_redraw()
 
 
-func _advance_to_next_level() -> void:
+func _advance_to_next_level(force_transition: bool = false) -> void:
 	var next_level := active_level_index + 1
+	if _car_transition_phase == CAR_TRANSITION_EXITING:
+		return
+	if _car_transition_motion_enabled() or force_transition:
+		_pending_next_level = next_level
+		_car_transition_phase = CAR_TRANSITION_EXITING
+		_car_transition_elapsed = 0.0
+		is_washing = false
+		_stop_tool_loop()
+		queue_redraw()
+		return
+	_commit_next_level(next_level)
+
+
+func _commit_next_level(next_level: int) -> void:
 	level_index = maxi(level_index, next_level)
 	reset_game(next_level, "next")
 	_save_progress()
+	_begin_car_entry()
+
+
+func _car_transition_motion_enabled() -> bool:
+	# Standard headless and screenshot captures must stay deterministic and fully
+	# settled. FOAM_REDUCE_MOTION is the forward-compatible hook for #75.
+	return DisplayServer.get_name() != "headless" \
+		and OS.get_environment("FOAM_DISABLE_SAVE") != "1" \
+		and OS.get_environment("FOAM_REDUCE_MOTION") != "1"
+
+
+func _begin_car_entry(force_transition: bool = false) -> void:
+	_pending_next_level = -1
+	if not (_car_transition_motion_enabled() or force_transition):
+		_car_transition_phase = CAR_TRANSITION_IDLE
+		_car_transition_elapsed = 0.0
+		return
+	_car_transition_phase = CAR_TRANSITION_ENTERING
+	_car_transition_elapsed = 0.0
+	is_washing = false
+	_stop_tool_loop()
+	queue_redraw()
+
+
+func _car_transition_blocks_gameplay() -> bool:
+	return _car_transition_phase != CAR_TRANSITION_IDLE
+
+
+func _car_transition_offset() -> Vector2:
+	if _car_transition_phase == CAR_TRANSITION_ENTERING:
+		var progress := clampf(_car_transition_elapsed / CAR_ENTRY_DURATION, 0.0, 1.0)
+		var eased := 1.0 - pow(1.0 - progress, 3.0)
+		return Vector2(lerpf(CAR_TRANSITION_DISTANCE, 0.0, eased), 0.0)
+	if _car_transition_phase == CAR_TRANSITION_EXITING:
+		var progress := clampf(_car_transition_elapsed / CAR_EXIT_DURATION, 0.0, 1.0)
+		return Vector2(-CAR_TRANSITION_DISTANCE * pow(progress, 3.0), 0.0)
+	return Vector2.ZERO
+
+
+func _update_car_transition(delta: float) -> void:
+	if _car_transition_phase == CAR_TRANSITION_IDLE or show_tutorial or show_pause or show_quit_confirm:
+		return
+	var duration := CAR_ENTRY_DURATION if _car_transition_phase == CAR_TRANSITION_ENTERING else CAR_EXIT_DURATION
+	_car_transition_elapsed = minf(_car_transition_elapsed + maxf(delta, 0.0), duration)
+	if _car_transition_elapsed < duration:
+		queue_redraw()
+		return
+	var finished_phase := _car_transition_phase
+	_car_transition_phase = CAR_TRANSITION_IDLE
+	_car_transition_elapsed = 0.0
+	if finished_phase == CAR_TRANSITION_EXITING and _pending_next_level > 0:
+		var next_level := _pending_next_level
+		_pending_next_level = -1
+		_commit_next_level(next_level)
+	queue_redraw()
 
 
 func _mark_level_started() -> void:
@@ -552,7 +631,8 @@ func _quit_app() -> void:
 
 func _process(delta: float) -> void:
 	_ensure_back_handler()
-	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm:
+	var transition_blocks_gameplay := _car_transition_blocks_gameplay()
+	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm and not transition_blocks_gameplay:
 		level_time += delta
 		_check_star_time_loss()
 		var _warn_time := _grade_time_to_downgrade()
@@ -587,9 +667,10 @@ func _process(delta: float) -> void:
 			var _patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
 			_prev_patience_zone = 3 if _patience > 0.65 else (2 if _patience > 0.35 else (1 if _patience > 0.1 else 0))
 
-	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial:
+	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial and not transition_blocks_gameplay:
 		_apply_tool_at(pointer_position, delta)
 
+	_update_car_transition(delta)
 	_update_wash_trail(delta)
 	_update_dirt_motion(delta)
 	_update_particles(delta)
@@ -787,7 +868,7 @@ func _input(event: InputEvent) -> void:
 				return
 			# Only start washing inside the car/dirt band; taps in the top HUD or
 			# elsewhere do nothing (and never steal touches from the HUD buttons).
-			if _point_in_wash_area(design_point):
+			if _point_in_wash_area(design_point) and not _car_transition_blocks_gameplay():
 				pointer_position = design_point
 				is_washing = true
 		else:
@@ -812,7 +893,7 @@ func _input(event: InputEvent) -> void:
 			var touch_point := _to_design(touch_event.position)
 			if _handle_tap(touch_point):
 				return
-			if _point_in_wash_area(touch_point):
+			if _point_in_wash_area(touch_point) and not _car_transition_blocks_gameplay():
 				pointer_position = touch_point
 				is_washing = true
 		else:
@@ -835,12 +916,14 @@ func _draw() -> void:
 	_draw_background()
 	if game_state == STATE_PLAYING:
 		_draw_status()
-	_set_gameplay_draw_transform()
+	var transition_offset := _car_transition_offset()
+	_set_gameplay_draw_transform(transition_offset)
 	_draw_car()
-	_set_design_draw_transform()
+	_set_design_draw_transform(transition_offset)
 	_draw_dirt()
 	_draw_particles()
 	_draw_gleam()
+	_set_design_draw_transform()
 	if game_state == STATE_TITLE:
 		_draw_title_screen()
 		if show_upgrade_panel:
@@ -864,7 +947,7 @@ func _draw() -> void:
 		_draw_combo_milestone_flash()
 	# Playing HUD exposes one pause/settings entry only. Sound and guide actions
 	# live inside that sheet; title-screen shortcuts remain available before play.
-	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm:
+	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm and not _car_transition_blocks_gameplay():
 		_draw_pause_entry()
 	elif game_state == STATE_TITLE and not (show_upgrade_panel or show_skin_panel or show_stage_panel):
 		_draw_top_buttons()
@@ -882,6 +965,9 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_level_started = false
 	completed = false
 	completion_burst_done = false
+	_car_transition_phase = CAR_TRANSITION_IDLE
+	_car_transition_elapsed = 0.0
+	_pending_next_level = -1
 	body_foam_coverage = 0.0
 	body_foam_runoff = 0.0
 	_foam_bomb_burst_count = 0
@@ -1036,6 +1122,14 @@ func get_grade_time_to_downgrade_for_test() -> float:
 
 func get_car_type_for_test() -> String:
 	return car_type
+
+
+func get_car_transition_phase_for_test() -> String:
+	return _car_transition_phase
+
+
+func get_car_transition_offset_for_test() -> Vector2:
+	return _car_transition_offset()
 
 
 func get_license_plate_text_for_test() -> String:
@@ -1323,13 +1417,13 @@ func _to_design(screen_point: Vector2) -> Vector2:
 	return (screen_point - canvas_origin) / canvas_scale
 
 
-func _set_design_draw_transform() -> void:
-	draw_set_transform(canvas_origin, 0.0, Vector2(canvas_scale, canvas_scale))
+func _set_design_draw_transform(offset: Vector2 = Vector2.ZERO) -> void:
+	draw_set_transform(canvas_origin + offset * canvas_scale, 0.0, Vector2(canvas_scale, canvas_scale))
 
 
-func _set_gameplay_draw_transform() -> void:
+func _set_gameplay_draw_transform(offset: Vector2 = Vector2.ZERO) -> void:
 	var gameplay_origin := GAMEPLAY_OFFSET + GAMEPLAY_PIVOT * (1.0 - GAMEPLAY_SCALE)
-	draw_set_transform(canvas_origin + gameplay_origin * canvas_scale, 0.0, Vector2(canvas_scale * GAMEPLAY_SCALE, canvas_scale * GAMEPLAY_SCALE))
+	draw_set_transform(canvas_origin + (gameplay_origin + offset) * canvas_scale, 0.0, Vector2(canvas_scale * GAMEPLAY_SCALE, canvas_scale * GAMEPLAY_SCALE))
 
 
 func _gameplay_point(point: Vector2) -> Vector2:
@@ -1348,6 +1442,8 @@ func _handle_key(keycode: Key) -> void:
 	if show_tutorial:
 		if keycode == KEY_SPACE or keycode == KEY_ENTER or keycode == KEY_ESCAPE:
 			_dismiss_tutorial()
+		return
+	if _car_transition_blocks_gameplay():
 		return
 	if keycode == KEY_1:
 		if selected_tool != TOOL_AIR:
@@ -1370,6 +1466,7 @@ func _handle_key(keycode: Key) -> void:
 		_play_ui_select()
 	elif keycode == KEY_R and completed:
 		reset_game(active_level_index, "retry")
+		_begin_car_entry()
 		_play_ui_select()
 
 
@@ -1450,29 +1547,33 @@ func _handle_tap(point: Vector2) -> bool:
 			_play_ui_select()
 		return true
 
-	if completed and _double_offer_shown and not _double_claimed and ads != null and ads.is_rewarded_ready("level_reward_2x") and _get_double_rect().has_point(point):
+	if completed and _car_transition_phase != CAR_TRANSITION_EXITING and _double_offer_shown and not _double_claimed and ads != null and ads.is_rewarded_ready("level_reward_2x") and _get_double_rect().has_point(point):
 		_play_ui_select()
 		_try_double_coins()
 		return true
 
-	if completed and _get_retry_rect().has_point(point):
+	if completed and _car_transition_phase != CAR_TRANSITION_EXITING and _get_retry_rect().has_point(point):
 		_maybe_show_game_over_interstitial()
 		reset_game(active_level_index, "retry")
+		_begin_car_entry()
 		_play_ui_select()
 		return true
 
-	if completed and _get_next_rect().has_point(point):
+	if completed and _car_transition_phase != CAR_TRANSITION_EXITING and _get_next_rect().has_point(point):
 		_maybe_show_game_over_interstitial()
 		_advance_to_next_level()
 		_play_ui_select()
 		return true
 
-	if not completed and _get_pause_entry_rect().has_point(point):
+	if not completed and not _car_transition_blocks_gameplay() and _get_pause_entry_rect().has_point(point):
 		show_pause = true
 		is_washing = false
 		_stop_tool_loop()
 		_play_ui_select()
 		queue_redraw()
+		return true
+
+	if _car_transition_blocks_gameplay():
 		return true
 
 	if not completed and _get_bomb_rect().has_point(point):
@@ -2154,7 +2255,7 @@ func _update_wash_trail(delta: float) -> void:
 		if float(point["age"]) > TRAIL_LIFETIME:
 			wash_trail.remove_at(index)
 
-	var active := is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial
+	var active := is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial and not _car_transition_blocks_gameplay()
 	var in_play_area := _point_in_wash_area(pointer_position)
 	if active and in_play_area:
 		if _trail_has_last:
@@ -4188,7 +4289,7 @@ func _draw_quit_confirm() -> void:
 
 
 func _draw_completion_panel() -> void:
-	if not completed:
+	if not completed or _car_transition_phase == CAR_TRANSITION_EXITING:
 		return
 	var font: Font = _font()
 	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.35))

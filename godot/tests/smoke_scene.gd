@@ -28,7 +28,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test"]:
+	for method_name in ["get_combo_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -626,6 +626,8 @@ func _run_smoke() -> void:
 	if bool(root_node.get("show_pause")):
 		_fail("resume action should close pause/settings")
 		return
+	if not _test_car_transition_contract(root_node):
+		return
 
 	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])
 	get_root().remove_child(root_node)
@@ -687,6 +689,72 @@ func _test_license_plate_customization(root_node: Node) -> bool:
 	if not main_source.contains('tr("PLATE_TITLE")'):
 		_fail("license plate editor label must use its i18n key")
 		return false
+	return true
+
+
+func _test_car_transition_contract(root_node: Node) -> bool:
+	root_node.call("reset_game", 2, "car_transition_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("show_tutorial", false)
+	root_node.set("show_pause", false)
+	root_node.set("show_quit_confirm", false)
+	root_node.call("_begin_car_entry", true)
+	if String(root_node.call("get_car_transition_phase_for_test")) != "entering":
+		_fail("forced car entry should begin in the entering phase")
+		return false
+	var entry_start: Vector2 = root_node.call("get_car_transition_offset_for_test")
+	if absf(entry_start.x - 450.0) > 0.001 or entry_start.y != 0.0:
+		_fail("car entry must start outside the right edge")
+		return false
+	root_node.set("is_washing", false)
+	root_node.call("_update_canvas_transform")
+	var entry_touch := InputEventScreenTouch.new()
+	entry_touch.device = 0
+	entry_touch.index = 169
+	entry_touch.position = root_node.get("canvas_origin") + Vector2(195.0, 520.0) * float(root_node.get("canvas_scale"))
+	entry_touch.pressed = true
+	root_node.call("_input", entry_touch)
+	if bool(root_node.get("is_washing")):
+		_fail("car entry must swallow wash-area input")
+		return false
+	entry_touch.pressed = false
+	root_node.call("_input", entry_touch)
+	root_node.set("level_time", 5.0)
+	root_node.call("_process", 0.10)
+	if absf(float(root_node.call("get_level_time_for_test")) - 5.0) > 0.001:
+		_fail("car entry must pause the scored level timer")
+		return false
+	root_node.call("_update_car_transition", 0.16)
+	var entry_mid: Vector2 = root_node.call("get_car_transition_offset_for_test")
+	if entry_mid.x <= 0.0 or entry_mid.x >= entry_start.x:
+		_fail("car entry offset must move toward the settled position")
+		return false
+	root_node.call("_update_car_transition", 0.30)
+	if String(root_node.call("get_car_transition_phase_for_test")) != "idle" or root_node.call("get_car_transition_offset_for_test") != Vector2.ZERO:
+		_fail("car entry must settle after about half a second")
+		return false
+
+	root_node.set("completed", true)
+	root_node.call("_advance_to_next_level", true)
+	if String(root_node.call("get_car_transition_phase_for_test")) != "exiting" or int(root_node.get("active_level_index")) != 2:
+		_fail("next-car action must start exit before replacing the active level")
+		return false
+	root_node.call("_update_car_transition", 0.24)
+	var exit_mid: Vector2 = root_node.call("get_car_transition_offset_for_test")
+	if exit_mid.x >= 0.0 or exit_mid.x <= -450.0:
+		_fail("car exit offset must move toward the left edge")
+		return false
+	root_node.call("_update_car_transition", 0.25)
+	if int(root_node.get("active_level_index")) != 3 or String(root_node.call("get_car_transition_phase_for_test")) != "idle":
+		_fail("next level must load only after the exit finishes in headless mode")
+		return false
+
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_source.contains("_set_gameplay_draw_transform(transition_offset)") \
+			or not main_source.contains("_set_design_draw_transform(transition_offset)"):
+		_fail("car, dirt, and particles must share one transition offset")
+		return false
+	root_node.call("reset_game", 1, "car_transition_smoke_cleanup")
 	return true
 
 
