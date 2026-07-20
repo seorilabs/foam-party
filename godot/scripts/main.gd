@@ -259,6 +259,7 @@ var _level_transitions := 0
 var daily_mission_type := ""
 var daily_mission_label := ""
 var daily_mission_target := 0
+var daily_mission_reward := DAILY_MISSION_REWARD
 var daily_mission_progress := 0
 var daily_mission_claimed := false
 var daily_mission_date := ""
@@ -428,6 +429,7 @@ func _load_progress() -> void:
 	daily_mission_type = loaded_type
 	daily_mission_label = loaded_label
 	daily_mission_target = loaded_target
+	daily_mission_reward = DailyMission.reward_for_type(loaded_type)
 	daily_mission_progress = clampi(int(daily_config.get_value("daily", "progress", 0)), 0, daily_mission_target)
 	daily_mission_claimed = bool(daily_config.get_value("daily", "claimed", false))
 	if daily_mission_claimed or daily_mission_progress >= daily_mission_target or main_claimed_date == today:
@@ -436,7 +438,7 @@ func _load_progress() -> void:
 			daily_mission_progress = daily_mission_target
 	daily_mission_date = saved_date
 	if main_save_ok and daily_mission_claimed and main_claimed_date != today:
-		coins += DAILY_MISSION_REWARD
+		_grant_daily_mission_coins()
 		_main_save_dirty = true
 
 
@@ -472,6 +474,7 @@ func _save_daily() -> Error:
 	config.set_value("daily", "type", daily_mission_type)
 	config.set_value("daily", "label", daily_mission_label)
 	config.set_value("daily", "target", daily_mission_target)
+	config.set_value("daily", "reward", daily_mission_reward)
 	config.set_value("daily", "progress", daily_mission_progress)
 	config.set_value("daily", "claimed", daily_mission_claimed)
 	config.set_value("daily", "date", daily_mission_date)
@@ -1280,6 +1283,28 @@ func get_best_stars_for_test(level: int) -> int:
 
 func get_coins_for_test() -> int:
 	return coins
+
+
+func get_daily_mission_reward_for_test() -> int:
+	return daily_mission_reward
+
+
+func prepare_daily_mission_for_test(mission_type: String) -> void:
+	daily_mission_type = mission_type
+	daily_mission_target = 1
+	daily_mission_progress = 1
+	daily_mission_reward = DailyMission.reward_for_type(mission_type)
+	daily_mission_claimed = false
+
+
+func claim_daily_mission_for_test() -> bool:
+	return _claim_daily_mission_reward()
+
+
+func grant_daily_mission_retroactive_for_test(mission_type: String) -> int:
+	daily_mission_type = mission_type
+	daily_mission_reward = DailyMission.reward_for_type(mission_type)
+	return _grant_daily_mission_coins()
 
 
 func get_wash_trail_count_for_test() -> int:
@@ -2331,18 +2356,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 			daily_mission_progress += 1
 			if daily_mission_progress >= daily_mission_target:
 				daily_mission_progress = daily_mission_target
-				daily_mission_claimed = true
-				coins += DAILY_MISSION_REWARD
-				_emit_analytics(ContentEvents.daily_mission_claim(daily_mission_type, DAILY_MISSION_REWARD))
-				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
-				var daily_err := _save_daily()
-				if daily_err != OK:
-					_daily_progress_dirty = true
-				var prog_err := _save_progress()
-				if prog_err != OK:
-					_main_save_dirty = true
-				if OS.has_feature("mobile"):
-					Input.vibrate_handheld(60)
+				_claim_daily_mission_reward()
 			else:
 				_daily_progress_dirty = true
 	_spawn_removal_burst(burst_center, burst_radius)
@@ -3998,7 +4012,7 @@ func _draw_title_screen() -> void:
 		draw_string(font, Vector2(dm_rect.position.x + 12.0, dm_rect.position.y + 18.0),
 			tr("DM_HEADER"), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.6, 0.85, 1.0, 0.8))
 		draw_string(font, Vector2(dm_rect.position.x, dm_rect.position.y + 18.0),
-			tr("DM_REWARD") % DAILY_MISSION_REWARD, HORIZONTAL_ALIGNMENT_RIGHT, dm_rect.size.x - 10.0, 11,
+			tr("DM_REWARD") % daily_mission_reward, HORIZONTAL_ALIGNMENT_RIGHT, dm_rect.size.x - 10.0, 11,
 			Color(1.0, 0.85, 0.25, 0.9))
 		var mission_col := Color(0.72, 1.0, 0.78) if dm_claimed else Color(0.90, 0.96, 1.0)
 		draw_string(font, Vector2(dm_rect.position.x + 12.0, dm_rect.position.y + 40.0),
@@ -4056,8 +4070,32 @@ func _generate_daily_mission(today: String) -> void:
 	daily_mission_type = m["type"]
 	daily_mission_target = m["target"]
 	daily_mission_label = m["label"]
+	daily_mission_reward = m["reward"]
 	daily_mission_progress = 0
 	daily_mission_claimed = false
+
+
+func _claim_daily_mission_reward() -> bool:
+	if daily_mission_claimed or daily_mission_target <= 0 or daily_mission_progress < daily_mission_target:
+		return false
+	daily_mission_claimed = true
+	var granted_reward := _grant_daily_mission_coins()
+	_emit_analytics(ContentEvents.daily_mission_claim(daily_mission_type, granted_reward))
+	_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
+	var daily_err := _save_daily()
+	if daily_err != OK:
+		_daily_progress_dirty = true
+	var prog_err := _save_progress()
+	if prog_err != OK:
+		_main_save_dirty = true
+	if OS.has_feature("mobile"):
+		Input.vibrate_handheld(60)
+	return true
+
+
+func _grant_daily_mission_coins() -> int:
+	coins += daily_mission_reward
+	return daily_mission_reward
 
 
 func _draw_daily_mission() -> void:
@@ -4101,7 +4139,7 @@ func _draw_daily_mission() -> void:
 		if age < 2.8:
 			var alpha := clampf(1.0 - (age - 1.6) / 1.2, 0.0, 1.0)
 			var rise := age * 26.0
-			var pop_text := tr("DM_CLEAR_POP") % DAILY_MISSION_REWARD
+			var pop_text := tr("DM_CLEAR_POP") % daily_mission_reward
 			draw_string(font, Vector2(rect.position.x - 30.0, rect.end.y + 18.0 - rise),
 				pop_text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x + 30.0, 11, Color(1.0, 0.9, 0.3, alpha))
 		else:
