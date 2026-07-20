@@ -101,6 +101,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_dirt_spawn_density_contract(root_node):
 		return
+	if not _test_oil_sheen_contract(root_node):
+		return
 	root_node.call("reset_game", 1, "dirt_density_smoke_cleanup")
 
 	var progress_before: float = root_node.call("get_clean_progress_for_test")
@@ -1094,6 +1096,51 @@ func _test_clean_shine_progression_contract(root_node: Node) -> bool:
 	root_node.call("reset_game", 1, "clean_shine_smoke_cleanup")
 	if float(root_node.call("get_clean_progress_for_test")) > 0.001 or float(root_node.call("get_clean_shine_alpha_for_test", root_node.call("get_clean_progress_for_test"))) > 0.001:
 		_fail("level reset should return clean shine to matte")
+		return false
+	return true
+
+
+func _test_oil_sheen_contract(root_node: Node) -> bool:
+	for method_name in ["get_oil_sheen_band_count_for_test", "get_oil_sheen_alpha_for_test", "get_oil_sheen_saturation_for_test"]:
+		if not root_node.has_method(method_name):
+			_fail("oil sheen test helper API missing: " + method_name)
+			return false
+
+	var band_count: int = root_node.call("get_oil_sheen_band_count_for_test")
+	if band_count != 5 or band_count > 6:
+		_fail("oil sheen must keep a small, fixed band budget")
+		return false
+	var zero_alpha: float = root_node.call("get_oil_sheen_alpha_for_test", 0.0)
+	var faded_alpha: float = root_node.call("get_oil_sheen_alpha_for_test", 0.35)
+	var full_alpha: float = root_node.call("get_oil_sheen_alpha_for_test", 1.0)
+	if zero_alpha > 0.001 or faded_alpha <= zero_alpha or full_alpha <= faded_alpha:
+		_fail("oil sheen alpha must fade monotonically with patch strength")
+		return false
+	var faded_saturation: float = root_node.call("get_oil_sheen_saturation_for_test", 0.35)
+	var full_saturation: float = root_node.call("get_oil_sheen_saturation_for_test", 1.0)
+	if faded_saturation <= 0.0 or full_saturation <= faded_saturation or full_saturation > 1.0:
+		_fail("oil sheen saturation must fade with patch strength")
+		return false
+
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var oil_start := source.find("func _draw_oil_patch(")
+	var oil_end := source.find("\nfunc ", oil_start + 1)
+	var oil_body := source.substr(oil_start, oil_end - oil_start)
+	var sheen_start := source.find("func _draw_oil_sheen(")
+	var sheen_end := source.find("\nfunc ", sheen_start + 1)
+	var sheen_body := source.substr(sheen_start, sheen_end - sheen_start)
+	var bug_start := source.find("func _draw_bug_patch(")
+	var bug_end := source.find("\nfunc ", bug_start + 1)
+	var bug_body := source.substr(bug_start, bug_end - bug_start)
+	if oil_body.find("_draw_oil_sheen(") < 0 or sheen_body.find("Color.from_hsv") < 0 or sheen_body.find("draw_arc") < 0:
+		_fail("oil renderer must contain HSV film bands and a shaped gloss arc")
+		return false
+	if bug_body.find("_draw_oil_sheen") >= 0:
+		_fail("oil sheen must stay isolated from bug rendering")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("oil sheen must not add persistent HUD controls")
 		return false
 	return true
 
