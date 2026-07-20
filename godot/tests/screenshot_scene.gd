@@ -39,6 +39,16 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_title.png")):
 		quit(1)
 		return
+	node.set("daily_mission_type", "road_grime")
+	node.set("daily_mission_target", 8)
+	node.set("daily_mission_reward", 85)
+	node.set("daily_mission_progress", 3)
+	node.set("daily_mission_claimed", false)
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_daily_mission_reward.png")):
+		quit(1)
+		return
+	node.call("_generate_daily_mission", node.call("_today_string"))
 	node.set("level_index", 5)
 	node.set("best_times", {1: 92.0, 2: 84.0, 3: 78.0, 5: 70.0})
 	node.set("best_stars", {1: 2, 2: 3, 3: 1, 5: 3})

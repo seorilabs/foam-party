@@ -186,8 +186,30 @@ func _run_core_tests() -> void:
 	if mission != mission_again:
 		_fail("daily mission must be deterministic for a fixed date")
 		return
-	if String(mission["type"]) != "dust" or int(mission["target"]) != 20 or String(mission["label"]) != "먼지 20개 제거하기":
+	if String(mission["type"]) != "dust" or int(mission["target"]) != 20 or String(mission["label"]) != "먼지 20개 제거하기" or int(mission["reward"]) != 55:
 		_fail("daily mission for 2026-07-06 changed: " + str(mission))
+		return
+	var expected_mission_rewards := {
+		"leaf": 50,
+		"dust": 55,
+		"mud": 60,
+		"oil": 70,
+		"bug": 75,
+		"poop": 80,
+		"road_grime": 85,
+	}
+	var previous_reward := 0
+	for mission_type in ["leaf", "dust", "mud", "oil", "bug", "poop", "road_grime"]:
+		var reward := int(DailyMission.reward_for_type(mission_type))
+		if reward != int(expected_mission_rewards[mission_type]):
+			_fail("daily mission reward changed for %s: %d" % [mission_type, reward])
+			return
+		if reward <= previous_reward:
+			_fail("harder daily missions must always pay more than easier missions")
+			return
+		previous_reward = reward
+	if int(DailyMission.reward_for_type("unknown")) != int(GameConfig.DAILY_MISSION_REWARD):
+		_fail("unknown daily mission should use the legacy reward fallback")
 		return
 
 	# --- Best time records ---
@@ -330,8 +352,8 @@ func _run_core_tests() -> void:
 	if String(e_bomb_coin["params"]["source"]) != "coins" or String(e_bomb_coin["params"]["cost"]) != "40":
 		_fail("coin-sourced foam bomb should report source=coins and its coin cost: " + str(e_bomb_coin))
 		return
-	var e_mission: Dictionary = ContentEvents.daily_mission_claim("dust", 50)
-	if String(e_mission["params"]["mission_type"]) != "dust" or String(e_mission["params"]["reward"]) != "50":
+	var e_mission: Dictionary = ContentEvents.daily_mission_claim("dust", 55)
+	if String(e_mission["params"]["mission_type"]) != "dust" or String(e_mission["params"]["reward"]) != "55":
 		_fail("daily_mission_claim params changed: " + str(e_mission))
 		return
 	var e_upgrade: Dictionary = ContentEvents.upgrade_purchase("water", 2, 160)
