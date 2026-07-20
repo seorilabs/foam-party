@@ -95,6 +95,23 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return
+	node.set("level_time", 130.0)
+	for dirty_patch in node.get("dirt_patches"):
+		dirty_patch.set("health", dirty_patch.get("max_health"))
+	node.call("_update_clean_progress")
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_patience_dirty_late.png")):
+		quit(1)
+		return
+	for nearly_clean_patch in node.get("dirt_patches"):
+		nearly_clean_patch.set("health", float(nearly_clean_patch.get("max_health")) * 0.1)
+	node.call("_update_clean_progress")
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_patience_nearly_clean_late.png")):
+		quit(1)
+		return
+	node.call("reset_game", 1, "patience_screenshot_cleanup")
+	await _settle(3)
 	if not await _capture(out_dir.path_join("shot_wheel_dirt.png")):
 		quit(1)
 		return

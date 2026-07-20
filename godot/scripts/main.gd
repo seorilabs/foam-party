@@ -11,6 +11,7 @@ const Economy = preload("res://core/use_cases/economy.gd")
 const Coaching = preload("res://core/use_cases/coaching.gd")
 const ComboProtection = preload("res://core/use_cases/combo_protection.gd")
 const CustomerPresentation = preload("res://core/use_cases/customer_presentation.gd")
+const CustomerPatience = preload("res://core/use_cases/customer_patience.gd")
 const StalledDirtHighlight = preload("res://core/use_cases/stalled_dirt_highlight.gd")
 const DailyMission = preload("res://core/use_cases/daily_mission.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
@@ -43,7 +44,6 @@ const COMBO_WINDOW := GameConfig.COMBO_WINDOW
 const COMBO_GRACE := GameConfig.COMBO_GRACE
 const STAR3_TIME := GameConfig.STAR3_TIME
 const STAR3_COMBO := GameConfig.STAR3_COMBO
-const STAR2_TIME := GameConfig.STAR2_TIME
 const STAR_WARN_SECONDS := GameConfig.STAR_WARN_SECONDS
 const GRADE_SLOT_EARNED := "earned"
 const GRADE_SLOT_TARGET := "target"
@@ -714,15 +714,12 @@ func _process(delta: float) -> void:
 		if _in_warn and not _prev_in_warn_zone:
 			audio.play_star_warn()
 		_prev_in_warn_zone = _in_warn
-		if STAR2_TIME > 0.0:
-			var _patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
-			var _pzone := 3 if _patience > 0.65 else (2 if _patience > 0.35 else (1 if _patience > 0.1 else 0))
-			# Policy: one alert per downgrade event. Patience decreases linearly
-			# over 140s so multi-zone skips in one frame are not a realistic
-			# concern; a single alert per event is the correct UX choice.
-			if _pzone < _prev_patience_zone:
-				audio.play_patience_warn()
-			_prev_patience_zone = _pzone
+		var _pzone := CustomerPatience.zone(_current_customer_patience())
+		# Policy: one alert per observed downgrade. Cleaning may recover a zone,
+		# while equal or upgraded zones stay silent.
+		if CustomerPatience.should_warn(_prev_patience_zone, _pzone):
+			audio.play_patience_warn()
+		_prev_patience_zone = _pzone
 		if combo_timer > 0.0:
 			combo_timer -= delta
 			if combo_timer <= 0.0:
@@ -734,9 +731,7 @@ func _process(delta: float) -> void:
 	else:
 		var _wt := _grade_time_to_downgrade()
 		_prev_in_warn_zone = _wt >= 0.0 and _wt <= STAR_WARN_SECONDS
-		if STAR2_TIME > 0.0:
-			var _patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
-			_prev_patience_zone = 3 if _patience > 0.65 else (2 if _patience > 0.35 else (1 if _patience > 0.1 else 0))
+		_prev_patience_zone = CustomerPatience.zone(_current_customer_patience())
 
 	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial and not transition_blocks_gameplay:
 		_apply_tool_at(pointer_position, delta)
@@ -1075,14 +1070,9 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_combo_grace_flash_time = -10.0
 	best_combo = 0
 	level_time = 0.0
-	# Sync _prev_patience_zone immediately after level_time reset so there is
-	# no gap between the two values that could produce a false downgrade on
-	# the first playing frame. With level_time=0 this always evaluates to 3.
-	if STAR2_TIME > 0.0:
-		var _p0 := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
-		_prev_patience_zone = 3 if _p0 > 0.65 else (2 if _p0 > 0.35 else (1 if _p0 > 0.1 else 0))
-	else:
-		_prev_patience_zone = 3
+	# Sync immediately after the time reset so the first playing frame cannot
+	# emit a false downgrade. At level_time=0 the shared model always returns 1.
+	_prev_patience_zone = CustomerPatience.zone(_current_customer_patience())
 	_prev_star3_time_ok = true
 	_prev_star2_time_ok = true
 	_star3_combo_unlocked = false
@@ -1160,6 +1150,18 @@ func get_dirt_spawn_min_center_distance_for_test() -> float:
 
 func get_clean_progress_for_test() -> float:
 	return clean_progress
+
+
+func get_customer_patience_for_test(elapsed_seconds: float, progress: float) -> float:
+	return CustomerPatience.value(elapsed_seconds, progress)
+
+
+func get_customer_patience_zone_for_test(elapsed_seconds: float, progress: float) -> int:
+	return CustomerPatience.zone(CustomerPatience.value(elapsed_seconds, progress))
+
+
+func should_customer_patience_warn_for_test(previous_zone: int, current_zone: int) -> bool:
+	return CustomerPatience.should_warn(previous_zone, current_zone)
 
 
 func get_stalled_dirt_highlight_for_test() -> bool:
@@ -4404,14 +4406,17 @@ func _draw_grade_tracker() -> void:
 	draw_string(font, Vector2(rect.position.x + 4.0, line_y), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 8.0, text_font_size, col)
 
 
+func _current_customer_patience() -> float:
+	return CustomerPatience.value(level_time, clean_progress)
+
+
 func _draw_customer_patience() -> void:
 	if completed:
 		return
-	# 손님 인내 게이지: STAR2_TIME(140s)을 기준으로 1.0 → 0.0으로 감소.
+	# 손님 인내 게이지: 경과 시간 압력을 세차 진행도가 일부 완화한다.
 	# 별점과 일일 미션 사이의 같은 높이 요약 카드에 배치한다.
-	if STAR2_TIME <= 0.0:
-		return
-	var patience := clampf(1.0 - level_time / STAR2_TIME, 0.0, 1.0)
+	var patience := _current_customer_patience()
+	var patience_zone := CustomerPatience.zone(patience)
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
 	var rect := _get_customer_rect()
 
@@ -4460,10 +4465,10 @@ func _draw_customer_patience() -> void:
 	if patience > 0.0:
 		var bar_key: String
 		var bar_col: Color
-		if patience > 0.65:
+		if patience_zone == 3:
 			bar_key = "cust_bar_g"
 			bar_col = Color(0.22, 0.87, 0.55)
-		elif patience > 0.35:
+		elif patience_zone == 2:
 			bar_key = "cust_bar_y"
 			bar_col = Color(0.97, 0.82, 0.22)
 		else:
@@ -4476,11 +4481,11 @@ func _draw_customer_patience() -> void:
 	var font: Font = _font()
 	var mood_label: String
 	var mood_col := Color(0.86, 0.93, 0.97)
-	if patience > 0.65:
+	if patience_zone == 3:
 		mood_label = tr("MOOD_HAPPY")
-	elif patience > 0.35:
+	elif patience_zone == 2:
 		mood_label = tr("MOOD_OK")
-	elif patience > 0.1:
+	elif patience_zone == 1:
 		mood_label = tr("MOOD_HURRY")
 	else:
 		var blink := 0.55 + 0.45 * sin(time_now * 8.0)
