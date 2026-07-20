@@ -508,6 +508,16 @@ func _run_smoke() -> void:
 		if not pause_panel.encloses(root_node.call("_pause_button_rect", pause_index)):
 			_fail("pause/settings sheet must contain all six actions")
 			return
+	var language_rect: Rect2 = root_node.call("_pause_language_rect")
+	var language_ko_rect: Rect2 = root_node.call("_pause_language_option_rect", "ko")
+	var language_en_rect: Rect2 = root_node.call("_pause_language_option_rect", "en")
+	if not pause_panel.encloses(language_rect) or not language_rect.encloses(language_ko_rect) or not language_rect.encloses(language_en_rect) or language_ko_rect.intersects(language_en_rect):
+		_fail("pause/settings sheet must contain two separate language options")
+		return
+	for pause_index in range(6):
+		if root_node.call("_pause_button_rect", pause_index).intersects(language_rect):
+			_fail("language selector must not overlap pause actions")
+			return
 
 	# Keep the implementation contract explicit: these visible strings must stay
 	# connected to TranslationServer through tr(), rather than becoming literals.
@@ -521,6 +531,27 @@ func _run_smoke() -> void:
 	if not main_script_source.contains('tr("PAUSE_RESTART")'):
 		_fail("pause restart action must be sourced from the PAUSE_RESTART i18n key")
 		return
+	if not main_script_source.contains('config.get_value("settings", "language", "")') or not main_script_source.contains('config.set_value("settings", "language", language_preference)'):
+		_fail("manual language preference must load from and save to the main settings file")
+		return
+	var language_save_path := OS.get_temp_dir().path_join("foam_party_language_smoke.cfg")
+	var stored_config := ConfigFile.new()
+	root_node.set("language_preference", "en")
+	root_node.call("_store_language_preference", stored_config)
+	if stored_config.save(language_save_path) != OK:
+		_fail("language preference fixture failed to save")
+		return
+	var reloaded_config := ConfigFile.new()
+	if reloaded_config.load(language_save_path) != OK:
+		_fail("language preference fixture failed to reload")
+		return
+	root_node.set("language_preference", "")
+	root_node.call("_load_language_preference", reloaded_config)
+	DirAccess.remove_absolute(language_save_path)
+	if String(root_node.call("get_language_preference_for_test")) != "en":
+		_fail("explicit language preference must survive a ConfigFile disk round trip")
+		return
+	root_node.set("language_preference", "")
 
 	var previous_locale := TranslationServer.get_locale()
 	TranslationServer.set_locale("ko")
@@ -588,6 +619,24 @@ func _run_smoke() -> void:
 		_fail("releasing the primary touch must clear its opaque identifier")
 		return
 
+	# The two language segments stay inside the modal sheet, apply immediately,
+	# and persist an explicit preference instead of replacing device fallback by
+	# default. Cached tool/car labels must rebuild along with tr() draw sites.
+	root_node.call("_handle_tap", language_en_rect.get_center())
+	if String(root_node.call("get_active_locale_for_test")) != "en" or String(root_node.call("get_language_preference_for_test")) != "en":
+		_fail("English selection must immediately become the explicit preference")
+		return
+	if root_node.call("_pause_title_text") != "Paused · Settings" or String(root_node.call("get_selected_tool_label_for_test")) != "Jet" or not bool(root_node.get("show_pause")):
+		_fail("English selection must redraw dynamic and cached labels without closing settings")
+		return
+	root_node.call("_handle_tap", language_ko_rect.get_center())
+	if String(root_node.call("get_active_locale_for_test")) != "ko" or String(root_node.call("get_language_preference_for_test")) != "ko":
+		_fail("Korean selection must immediately become the explicit preference")
+		return
+	if root_node.call("_pause_title_text") != "일시정지 · 설정" or String(root_node.call("get_selected_tool_label_for_test")) != "고압수":
+		_fail("Korean selection must redraw dynamic and cached labels immediately")
+		return
+
 	var restart_level: int = int(root_node.get("active_level_index"))
 	root_node.set("level_time", 12.5)
 	root_node.set("combo_count", 4)
@@ -630,6 +679,9 @@ func _run_smoke() -> void:
 		return
 	if not _test_car_transition_contract(root_node):
 		return
+	root_node.set("language_preference", "")
+	TranslationServer.set_locale(previous_locale)
+	root_node.call("_rebuild_i18n_labels")
 
 	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])
 	get_root().remove_child(root_node)

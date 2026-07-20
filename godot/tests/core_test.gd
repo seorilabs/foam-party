@@ -28,6 +28,8 @@ func _run_core_tests() -> void:
 		return
 	if not _test_new_car_localized_labels(I18n):
 		return
+	if not _test_language_resolution(I18n):
+		return
 	if not _test_dirt_spawn_plan(DirtSpawnPlan):
 		return
 	if not _test_license_plate_rules(LicensePlate):
@@ -568,6 +570,25 @@ func _test_new_car_localized_labels(I18n: GDScript) -> bool:
 		return false
 	if I18n.STRINGS.get("CAR_OFFROAD", []) != ["오프로더", "Off-roader"]:
 		_fail("off-roader must have exact Korean and English labels")
+		return false
+	return true
+
+
+func _test_language_resolution(I18n: GDScript) -> bool:
+	if String(I18n.resolve_locale("ko", "ja")) != "ko":
+		_fail("explicit Korean preference must override a non-Korean device")
+		return false
+	if String(I18n.resolve_locale("en", "ko")) != "en":
+		_fail("explicit English preference must override a Korean device")
+		return false
+	if String(I18n.resolve_locale("", "ko_KR")) != "ko":
+		_fail("unset preference must preserve Korean device fallback")
+		return false
+	if String(I18n.resolve_locale("", "ja_JP")) != "en":
+		_fail("unsupported device language must fall back to English")
+		return false
+	if String(I18n.normalize_preference("fr")) != "":
+		_fail("unsupported stored preference must return to automatic fallback")
 		return false
 	return true
 
