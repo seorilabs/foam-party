@@ -88,8 +88,9 @@ const STRINGS := {
 	"DOUBLE_COINS": ["광고 보고 코인 2배", "Watch ad — 2× coins"],
 	"DOUBLE_DONE": ["코인 2배 획득!", "Coins doubled!"],
 	# pause menu + quit confirm (AIT back button)
-	"PAUSE_TITLE": ["일시정지", "Paused"],
+	"PAUSE_TITLE": ["일시정지 · 설정", "Paused · Settings"],
 	"RESUME": ["계속하기", "Resume"],
+	"GUIDE": ["세차 가이드", "Wash Guide"],
 	"HOME": ["홈으로", "Home"],
 	"QUIT": ["종료", "Quit"],
 	"SOUND_ON": ["소리 끄기", "Mute"],

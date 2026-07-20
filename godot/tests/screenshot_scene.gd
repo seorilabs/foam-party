@@ -52,6 +52,12 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return
+	node.call("_on_back_pressed")
+	await _settle(5)
+	if not await _capture(out_dir.path_join("shot_pause.png")):
+		quit(1)
+		return
+	node.call("_on_back_pressed")
 
 	var wash_points := {
 		"water": Vector2(140.0, 510.0),
