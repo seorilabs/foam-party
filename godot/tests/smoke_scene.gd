@@ -99,6 +99,9 @@ func _run_smoke() -> void:
 	if root_node.call("get_spawned_dirt_kinds_for_test") != level_one_sequence:
 		_fail("level 1 dirt sequence should be deterministic for the fixed seed")
 		return
+	if not _test_dirt_spawn_density_contract(root_node):
+		return
+	root_node.call("reset_game", 1, "dirt_density_smoke_cleanup")
 
 	var progress_before: float = root_node.call("get_clean_progress_for_test")
 	var mud_index: int = root_node.call("get_patch_index_by_kind_for_test", "mud")
@@ -632,6 +635,48 @@ func _test_ftue_entry_and_tutorial_event_order_and_params(events: Array[Dictiona
 		_fail("tutorial completion params changed: " + str(events[5]))
 		return false
 	print("FTUE analytics smoke passed: " + " -> ".join(expected_names))
+	return true
+
+
+func _test_dirt_spawn_density_contract(root_node: Node) -> bool:
+	for method_name in ["get_patch_centers_for_test", "get_dirt_spawn_pool_size_for_test", "get_dirt_spawn_min_center_distance_for_test"]:
+		if not root_node.has_method(method_name):
+			_fail("dirt density helper API missing: " + method_name)
+			return false
+	var expected_counts := {1: 20, 2: 22, 3: 24, 4: 26, 5: 28, 6: 30, 10: 38, 30: 40}
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	for level in expected_counts:
+		root_node.call("reset_game", level, "dirt_density_smoke")
+		var count: int = root_node.call("get_patch_count_for_test")
+		if count != expected_counts[level]:
+			_fail("level %d dirt count changed: got %d, want %d" % [level, count, expected_counts[level]])
+			return false
+		if int(root_node.call("get_dirt_spawn_pool_size_for_test")) < 40:
+			_fail("level %d car silhouette must retain the 40-slot density cap" % level)
+			return false
+		var centers: Array[Vector2] = root_node.call("get_patch_centers_for_test")
+		var minimum_distance: float = root_node.call("get_dirt_spawn_min_center_distance_for_test")
+		for first_index in range(centers.size()):
+			if not bool(root_node.call("_point_in_wash_area", centers[first_index])):
+				_fail("level %d spawned dirt outside the washable area" % level)
+				return false
+			for second_index in range(first_index + 1, centers.size()):
+				if centers[first_index].distance_to(centers[second_index]) < minimum_distance - 0.01:
+					_fail("level %d dirt centers violated the overlap guard" % level)
+					return false
+
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("dirt density must not add persistent HUD controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("dirt density must not change top HUD residency")
+		return false
 	return true
 
 
