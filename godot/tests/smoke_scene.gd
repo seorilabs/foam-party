@@ -927,6 +927,10 @@ func _test_car_paint_customization(root_node: Node) -> bool:
 	if paints.size() != 4:
 		_fail("car customization tab must expose auto plus three fixed paint cards")
 		return false
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_source.contains("Economy.resolve_skin_purchase(_car_paints, CAR_PAINT_TOOL"):
+		_fail("car paint purchase and selection must call the shared economy resolver")
+		return false
 	for paint_index in range(paints.size()):
 		if not panel.encloses(root_node.call("_skin_card_rect", panel, paint_index)):
 			_fail("car paint cards must stay inside the existing customization sheet")
@@ -949,10 +953,14 @@ func _test_car_paint_customization(root_node: Node) -> bool:
 
 	root_node.call("reset_game", 2, "car_paint_fixed_color_smoke")
 	var sports_color: Color = root_node.call("get_car_color_for_test")
+	var sports_type := String(root_node.call("get_car_type_for_test"))
 	root_node.call("reset_game", 5, "car_paint_fixed_color_smoke")
 	var offroad_color: Color = root_node.call("get_car_color_for_test")
-	if not sports_color.is_equal_approx(Color("#ff6f61")) or not offroad_color.is_equal_approx(Color("#ff6f61")):
-		_fail("selected fixed car paint must survive level resets and car-type changes")
+	var offroad_type := String(root_node.call("get_car_type_for_test"))
+	if sports_type != "sports" or offroad_type != "offroad" \
+			or not sports_color.is_equal_approx(Color("#ff6f61")) \
+			or not offroad_color.is_equal_approx(Color("#ff6f61")):
+		_fail("fixed paint must preserve the existing car-type test hook across level resets")
 		return false
 
 	var saved_customization := ConfigFile.new()
