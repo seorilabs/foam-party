@@ -229,6 +229,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_expanded_car_roster_and_gameplay(root_node):
 		return
+	if not _test_new_car_types_reuse_existing_ui_residency(root_node):
+		return
 
 	root_node.call("reset_game", 5)
 	root_node.set("level_time", 90.0)
@@ -654,6 +656,31 @@ func _test_expanded_car_roster_and_gameplay(root_node: Node) -> bool:
 			_fail("new car type did not integrate with star scoring: " + expected_type)
 			return false
 	root_node.call("reset_game", 1, "car_roster_smoke_cleanup")
+	return true
+
+
+func _test_new_car_types_reuse_existing_ui_residency(root_node: Node) -> bool:
+	var hud_rect_methods := [
+		"_get_status_rect",
+		"_get_grade_rect",
+		"_get_customer_rect",
+		"_get_daily_mission_rect",
+		"_get_pause_entry_rect",
+	]
+	var baseline_rects: Dictionary = {}
+	for method_name in hud_rect_methods:
+		baseline_rects[method_name] = root_node.call(method_name)
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	for level in [4, 5]:
+		root_node.call("reset_game", level, "car_ui_residency_smoke")
+		for method_name in hud_rect_methods:
+			if root_node.call(method_name) != baseline_rects[method_name]:
+				_fail("car type must not change top HUD residency: " + method_name)
+				return false
+		if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+			_fail("new car types must not add persistent HUD controls")
+			return false
+	root_node.call("reset_game", 1, "car_ui_residency_smoke_cleanup")
 	return true
 
 
