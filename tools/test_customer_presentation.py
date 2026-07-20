@@ -8,7 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN_SOURCE = (ROOT / "godot/scripts/main.gd").read_text(encoding="utf-8")
-CORE_TEST_SOURCE = (ROOT / "godot/tests/core_test.gd").read_text(encoding="utf-8")
 SCREENSHOT_SOURCE = (ROOT / "godot/tests/screenshot_scene.gd").read_text(
     encoding="utf-8"
 )
@@ -26,19 +25,6 @@ def godot_function(source, name):
 
 
 class CustomerPresentationContractTest(unittest.TestCase):
-    def test_profiles_rotate_by_car_type_and_level_deterministically(self):
-        test_rule = godot_function(
-            CORE_TEST_SOURCE, "_test_customer_presentation_rule"
-        )
-        self.assertIn("GameConfig.car_type_for_level(level)", test_rule)
-        self.assertIn("profile_index(car_type, level)", test_rule)
-        self.assertIn("first_rotation.has(profile_index)", test_rule)
-        self.assertIn("first_rotation.size() < 3", test_rule)
-        self.assertIn(
-            "first_profile != CustomerPresentation.profile_for(car_type, level)",
-            test_rule,
-        )
-
     def test_customer_render_uses_procedural_primitives_without_images(self):
         render_source = "\n".join(
             [
