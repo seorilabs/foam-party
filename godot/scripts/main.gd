@@ -263,6 +263,7 @@ var _level_transitions := 0
 var daily_mission_type := ""
 var daily_mission_label := ""
 var daily_mission_target := 0
+var daily_mission_requirement := 0
 var daily_mission_reward := DAILY_MISSION_REWARD
 var daily_mission_progress := 0
 var daily_mission_claimed := false
@@ -417,6 +418,7 @@ func _load_progress() -> void:
 	var loaded_type: String = daily_config.get_value("daily", "type", "")
 	var loaded_label: String = daily_config.get_value("daily", "label", "")
 	var loaded_target: int = int(daily_config.get_value("daily", "target", 0))
+	var loaded_requirement: int = int(daily_config.get_value("daily", "requirement", 0))
 	# Preserve today's progress for installs that generated the retired sticker
 	# mission before road grime replaced that dirt type.
 	if loaded_type == "sticker":
@@ -437,6 +439,9 @@ func _load_progress() -> void:
 	daily_mission_type = loaded_type
 	daily_mission_label = loaded_label
 	daily_mission_target = loaded_target
+	daily_mission_requirement = maxi(0, loaded_requirement)
+	if daily_mission_requirement == 0:
+		daily_mission_requirement = int(DailyMission.mission_for_type(loaded_type).get("requirement", 0))
 	daily_mission_reward = DailyMission.reward_for_type(loaded_type)
 	daily_mission_progress = clampi(int(daily_config.get_value("daily", "progress", 0)), 0, daily_mission_target)
 	daily_mission_claimed = bool(daily_config.get_value("daily", "claimed", false))
@@ -501,6 +506,7 @@ func _save_daily() -> Error:
 	config.set_value("daily", "type", daily_mission_type)
 	config.set_value("daily", "label", daily_mission_label)
 	config.set_value("daily", "target", daily_mission_target)
+	config.set_value("daily", "requirement", daily_mission_requirement)
 	config.set_value("daily", "reward", daily_mission_reward)
 	config.set_value("daily", "progress", daily_mission_progress)
 	config.set_value("daily", "claimed", daily_mission_claimed)
@@ -1364,10 +1370,21 @@ func get_daily_mission_reward_for_test() -> int:
 
 
 func prepare_daily_mission_for_test(mission_type: String) -> void:
-	daily_mission_type = mission_type
-	daily_mission_target = 1
-	daily_mission_progress = 1
-	daily_mission_reward = DailyMission.reward_for_type(mission_type)
+	configure_daily_mission_for_test(mission_type)
+	daily_mission_progress = daily_mission_target
+	daily_mission_claimed = false
+
+
+func configure_daily_mission_for_test(mission_type: String) -> void:
+	var mission := DailyMission.mission_for_type(mission_type)
+	if mission.is_empty():
+		return
+	daily_mission_type = String(mission["type"])
+	daily_mission_label = String(mission["label"])
+	daily_mission_target = int(mission["target"])
+	daily_mission_requirement = int(mission["requirement"])
+	daily_mission_reward = int(mission["reward"])
+	daily_mission_progress = 0
 	daily_mission_claimed = false
 
 
@@ -2446,13 +2463,8 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 			audio.play_combo_milestone()
 			if OS.has_feature("mobile"):
 				Input.vibrate_handheld(38)
-		if not daily_mission_claimed and patch.kind == daily_mission_type:
-			daily_mission_progress += 1
-			if daily_mission_progress >= daily_mission_target:
-				daily_mission_progress = daily_mission_target
-				_claim_daily_mission_reward()
-			else:
-				_daily_progress_dirty = true
+		if patch.kind == daily_mission_type:
+			_advance_daily_mission()
 	_spawn_removal_burst(burst_center, burst_radius)
 	if selected_tool == TOOL_WATER:
 		_spawn_water_removal_splash(burst_center, burst_radius)
@@ -2468,6 +2480,8 @@ func _register_combo_removal() -> void:
 	combo_timer = COMBO_WINDOW
 	combo_grace_active = false
 	best_combo = max(best_combo, combo_count)
+	if daily_mission_type == "combo" and combo_count == daily_mission_requirement:
+		_advance_daily_mission()
 
 
 func _spawn_removal_burst(center: Vector2, radius: float) -> void:
@@ -2837,6 +2851,7 @@ func _update_clean_progress() -> void:
 		_emit_analytics(ContentEvents.level_complete(
 			active_level_index, earned_stars, int(level_time), best_combo, coin_reward, is_new_record
 		))
+		_record_completion_daily_mission()
 		_save_progress()
 		_stop_tool_loop()
 		_play_completion_sound()
@@ -3106,7 +3121,10 @@ func _tool_hint() -> String:
 # follows the active locale (the persisted `daily_mission_label` stays for save
 # compatibility but does not drive display).
 func _daily_mission_display_label() -> String:
-	return tr("DM_" + daily_mission_type.to_upper()) % daily_mission_target
+	var display_value := DailyMission.display_value(
+		daily_mission_type, daily_mission_target, daily_mission_requirement
+	)
+	return tr("DM_" + daily_mission_type.to_upper()) % display_value
 
 
 func _build_car_shapes() -> void:
@@ -4181,6 +4199,7 @@ func _generate_daily_mission(today: String) -> void:
 	var m := DailyMission.mission_for(today)
 	daily_mission_type = m["type"]
 	daily_mission_target = m["target"]
+	daily_mission_requirement = m["requirement"]
 	daily_mission_label = m["label"]
 	daily_mission_reward = m["reward"]
 	daily_mission_progress = 0
@@ -4195,14 +4214,35 @@ func _claim_daily_mission_reward() -> bool:
 	_emit_analytics(ContentEvents.daily_mission_claim(daily_mission_type, granted_reward))
 	_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
 	var daily_err := _save_daily()
-	if daily_err != OK:
-		_daily_progress_dirty = true
+	_daily_progress_dirty = daily_err != OK
 	var prog_err := _save_progress()
 	if prog_err != OK:
 		_main_save_dirty = true
 	if OS.has_feature("mobile"):
 		Input.vibrate_handheld(60)
 	return true
+
+
+func _advance_daily_mission(amount: int = 1) -> bool:
+	if daily_mission_claimed or daily_mission_target <= 0 or amount <= 0:
+		return false
+	var previous_progress := daily_mission_progress
+	daily_mission_progress = mini(daily_mission_target, daily_mission_progress + amount)
+	if daily_mission_progress == previous_progress:
+		return false
+	if daily_mission_progress >= daily_mission_target:
+		return _claim_daily_mission_reward()
+	_daily_progress_dirty = true
+	return true
+
+
+func _record_completion_daily_mission() -> void:
+	if daily_mission_claimed:
+		return
+	if daily_mission_type == "fast" and level_time <= float(daily_mission_requirement):
+		_advance_daily_mission()
+	elif daily_mission_type == "perfect3" and earned_stars == daily_mission_requirement:
+		_advance_daily_mission()
 
 
 func _grant_daily_mission_coins() -> int:

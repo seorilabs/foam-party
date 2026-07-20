@@ -141,6 +141,9 @@ const DAILY_MISSION_POOL := [
 	{"type": "bug", "label": "벌레 자국 %d개 닦기", "target": 12, "reward": 75},
 	{"type": "poop", "label": "새똥 %d개 닦기", "target": 10, "reward": 80},
 	{"type": "road_grime", "label": "도로 때 %d개 닦기", "target": 8, "reward": 85},
+	{"type": "combo", "label": "한 판에서 콤보 x%d 달성", "target": 1, "requirement": 8, "reward": 90},
+	{"type": "fast", "label": "%d초 이내 세차 완료", "target": 1, "requirement": 75, "reward": 95},
+	{"type": "perfect3", "label": "별 3개 세차 %d회", "target": 2, "requirement": 3, "reward": 100},
 ]
 const COMBO_BONUS_AMOUNTS := {5: 5, 10: 10, 15: 15, 20: 20}
 const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"]
