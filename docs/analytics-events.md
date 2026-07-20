@@ -26,6 +26,25 @@
 
 > `foam_bomb_use.cost`는 신규(경제 흐름 집계용). `source=ad`면 `cost=0`으로 보고해 코인 소비 합산 시 광고 지급분이 중복되지 않는다.
 
+## FTUE 퍼널 이벤트
+
+FTUE 이벤트의 이름과 파라미터 원본은 `packages/product-core/src/analytics/ftue_events.gd`다. Android와 iOS는 동일한 Godot 호출부와 `FirebaseAnalyticsAdapter`를 사용하므로 플랫폼별 이벤트 이름이 갈라지지 않는다.
+
+| 이벤트 | 주요 파라미터 | 발화 시점 |
+|---|---|---|
+| `title_screen_view` | `entry`(`cold_start` \| `pause_home`) | 최초 타이틀 진입 또는 플레이 중 홈 복귀 |
+| `level_load_start` | `level`, `reason` | 보드 준비 시작 |
+| `level_load_complete` | `level`, `car_type`, `reason` | 오염 배치와 초기 진행도 계산 완료 |
+| `play_tap` | `level` | 타이틀의 플레이 버튼 탭 |
+| `tutorial_step_view` | `step`(`overview`), `source` | 단일 화면 세차 가이드 표시 |
+| `tutorial_complete` | `step`(`overview`), `source` | 표시된 세차 가이드 닫기 |
+
+콜드 스타트의 커스텀 이벤트 순서는 `title_screen_view → level_load_start → level_load_complete`다. 플레이 버튼을 누르면 `play_tap → game_start → level_start`가 이어지고, 첫 실행이면 `tutorial_step_view → tutorial_complete`가 추가된다. 재도전/다음 레벨은 `level_load_start → level_load_complete → level_start` 순서다.
+
+`level_start`는 보드가 타이틀 뒤에서 미리 준비됐다는 이유만으로 발화하지 않는다. 실제 플레이 상태에 처음 진입했을 때 한 번만 발화하며, 홈 화면에서 같은 레벨로 복귀해도 중복 발화하지 않는다.
+
+앱 버전은 별도 커스텀 `release_version`을 중복 전송하지 않고 GA4 export의 `app_info.version`과 `app_info.id`로 귀속한다. 따라서 BigQuery에서는 최신 계측 버전만 필터해 `first_open → title_screen_view → level_load_complete → play_tap → level_start → tutorial_complete` 전환율을 비교한다.
+
 ## 광고 이벤트 (신규)
 
 광고는 Clean Architecture `AdPort`(core/ports/ad_port.gd) + `AdService`(scripts/services/ad_service.gd) 시맨틱으로 통일한다. 두 층위로 로깅한다.

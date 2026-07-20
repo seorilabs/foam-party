@@ -14,6 +14,7 @@ const WashRules = preload("res://core/use_cases/wash_rules.gd")
 const DirtProgression = preload("res://core/use_cases/dirt_progression.gd")
 const AnalyticsPort = preload("res://core/ports/analytics_port.gd")
 const ContentEvents = preload("res://core/analytics/content_events.gd")
+const FtueEvents = preload("res://core/analytics/ftue_events.gd")
 const AdPort = preload("res://core/ports/ad_port.gd")
 
 # --- godot-layer services ---
@@ -157,6 +158,7 @@ var sound_enabled := true
 var tutorial_seen := false
 var show_tutorial := false
 var _tutorial_returns_to_pause := false
+var _tutorial_event_source := ""
 var persistence_enabled := true
 var last_particle_spawn := 0.0
 var car_color := Color("#ffcf5a")
@@ -182,10 +184,10 @@ var audio: AudioService
 
 # Analytics adapter (Firebase). Instantiated in _ready() and always set, so call
 # sites can invoke analytics.log_event(...) unguarded. No-ops when the Firebase
-# singletons are absent (headless / plugin not bundled). Content events go
-# through _emit_content(ContentEvents.<builder>(...)) so the event taxonomy lives
-# in the pure core catalog, not in scattered inline dictionaries here.
+# singletons are absent (headless / plugin not bundled). Events go through
+# _emit_analytics with a pure-core catalog builder, not scattered dictionaries.
 var analytics: Node = null
+var _level_started := false
 var ads: Node = null
 # Show a game-over interstitial only every Nth level transition, so ads never
 # interrupt every single completion.
@@ -267,6 +269,7 @@ func _ready() -> void:
 	analytics = FirebaseAnalyticsAdapter.new()
 	add_child(analytics)
 	analytics.setup()
+	_emit_analytics(FtueEvents.title_screen_view(FtueEvents.ENTRY_COLD_START))
 	ads = AdService.new()
 	add_child(ads)
 	ads.configure(analytics)
@@ -275,7 +278,7 @@ func _ready() -> void:
 	_bar_fill_style.bg_color = BAR_COL_START
 	_bar_fill_style.set_corner_radius_all(12)
 	_apply_sound_setting()
-	reset_game(level_index)
+	reset_game(level_index, "cold_start")
 
 
 func _load_progress() -> void:
@@ -409,19 +412,26 @@ func _apply_sound_setting() -> void:
 	audio.apply_sound_setting(sound_enabled)
 
 
-# Forward a catalog-built content event through the analytics port. Content call
-# sites build the event with ContentEvents.<builder>(...) and pass it here, so
-# the event name + param schema stay locked in the pure core catalog.
-func _emit_content(ev: Dictionary) -> void:
+# Forward a catalog-built event through the analytics port. Call sites use the
+# pure-core ContentEvents or FtueEvents builders so names and params stay locked.
+func _emit_analytics(ev: Dictionary) -> void:
 	analytics.log_event(ev["name"], ev["params"])
 
 
 func start_game() -> void:
 	game_state = STATE_PLAYING
-	_emit_content(ContentEvents.game_start(level_index))
+	_emit_analytics(ContentEvents.game_start(level_index))
+	_mark_level_started()
 	if not tutorial_seen:
-		show_tutorial = true
+		_show_tutorial("first_run")
 	queue_redraw()
+
+
+func _mark_level_started() -> void:
+	if _level_started:
+		return
+	_level_started = true
+	_emit_analytics(ContentEvents.level_start(level_index, car_type))
 
 
 # Register the Godot back handler with the AIT wrapper once the bridge is present
@@ -468,6 +478,7 @@ func _go_home() -> void:
 	show_quit_confirm = false
 	is_washing = false
 	game_state = STATE_TITLE
+	_emit_analytics(FtueEvents.title_screen_view(FtueEvents.ENTRY_PAUSE_HOME))
 	_stop_tool_loop()
 	_play_ui_select()
 	queue_redraw()
@@ -801,8 +812,10 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-func reset_game(new_level: int) -> void:
+func reset_game(new_level: int, load_reason: String = "manual") -> void:
+	_emit_analytics(FtueEvents.level_load_start(new_level, load_reason))
 	level_index = new_level
+	_level_started = false
 	completed = false
 	completion_burst_done = false
 	_free_ad_bombs_used = 0
@@ -852,7 +865,9 @@ func reset_game(new_level: int) -> void:
 	_set_car_palette()
 	_spawn_dirt()
 	_update_clean_progress()
-	_emit_content(ContentEvents.level_start(level_index, car_type))
+	_emit_analytics(FtueEvents.level_load_complete(level_index, car_type, load_reason))
+	if game_state == STATE_PLAYING:
+		_mark_level_started()
 	queue_redraw()
 
 
@@ -1196,11 +1211,11 @@ func _handle_key(keycode: Key) -> void:
 			selected_tool = TOOL_SPONGE
 			_play_ui_select()
 	elif keycode == KEY_SPACE and completed:
-		reset_game(level_index + 1)
+		reset_game(level_index + 1, "next")
 		_save_progress()
 		_play_ui_select()
 	elif keycode == KEY_R and completed:
-		reset_game(level_index)
+		reset_game(level_index, "retry")
 		_play_ui_select()
 
 
@@ -1226,8 +1241,8 @@ func _handle_tap(point: Vector2) -> bool:
 			queue_redraw()
 		elif _pause_button_rect(2).has_point(point):
 			show_pause = false
-			show_tutorial = true
 			_tutorial_returns_to_pause = true
+			_show_tutorial("pause_guide")
 			_play_ui_select()
 			queue_redraw()
 		elif _pause_button_rect(3).has_point(point):
@@ -1251,6 +1266,7 @@ func _handle_tap(point: Vector2) -> bool:
 			_handle_skin_panel_tap(point)
 			return true
 		if _get_start_rect().has_point(point):
+			_emit_analytics(FtueEvents.play_tap(level_index))
 			start_game()
 			_play_ui_select()
 		elif _get_upgrade_btn_rect().has_point(point):
@@ -1264,7 +1280,7 @@ func _handle_tap(point: Vector2) -> bool:
 		elif _get_title_sound_rect().has_point(point):
 			_toggle_sound()
 		elif _get_title_help_rect().has_point(point):
-			show_tutorial = true
+			_show_tutorial("title_help")
 			_play_ui_select()
 		return true
 
@@ -1275,13 +1291,13 @@ func _handle_tap(point: Vector2) -> bool:
 
 	if completed and _get_retry_rect().has_point(point):
 		_maybe_show_game_over_interstitial()
-		reset_game(level_index)
+		reset_game(level_index, "retry")
 		_play_ui_select()
 		return true
 
 	if completed and _get_next_rect().has_point(point):
 		_maybe_show_game_over_interstitial()
-		reset_game(level_index + 1)
+		reset_game(level_index + 1, "next")
 		_save_progress()
 		_play_ui_select()
 		return true
@@ -1323,7 +1339,14 @@ func _handle_tap(point: Vector2) -> bool:
 
 
 func _dismiss_tutorial() -> void:
+	if not show_tutorial:
+		return
 	show_tutorial = false
+	_emit_analytics(FtueEvents.tutorial_complete(
+		FtueEvents.TUTORIAL_STEP_OVERVIEW,
+		_tutorial_event_source if not _tutorial_event_source.is_empty() else "unknown",
+	))
+	_tutorial_event_source = ""
 	if _tutorial_returns_to_pause and game_state == STATE_PLAYING and not completed:
 		show_pause = true
 	_tutorial_returns_to_pause = false
@@ -1331,6 +1354,12 @@ func _dismiss_tutorial() -> void:
 	if not tutorial_seen:
 		tutorial_seen = true
 		_save_progress()
+
+
+func _show_tutorial(source: String) -> void:
+	show_tutorial = true
+	_tutorial_event_source = source
+	_emit_analytics(FtueEvents.tutorial_step_view(FtueEvents.TUTORIAL_STEP_OVERVIEW, source))
 
 
 func _toggle_sound() -> void:
@@ -1379,7 +1408,7 @@ func apply_foam_bomb(free := false) -> bool:
 	if not free:
 		coins -= BOMB_COST
 	audio.play_bomb()
-	_emit_content(ContentEvents.foam_bomb_use(level_index, free, BOMB_COST))
+	_emit_analytics(ContentEvents.foam_bomb_use(level_index, free, BOMB_COST))
 	_save_progress()
 	return true
 
@@ -1427,7 +1456,7 @@ func _on_double_coins_reward() -> void:
 	_double_claimed = true
 	var bonus := coin_reward
 	coins += bonus
-	_emit_content(ContentEvents.reward_double_coins(level_index, bonus))
+	_emit_analytics(ContentEvents.reward_double_coins(level_index, bonus))
 	audio.play_coin_bonus()
 	_save_progress()
 	queue_redraw()
@@ -1767,7 +1796,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				daily_mission_progress = daily_mission_target
 				daily_mission_claimed = true
 				coins += DAILY_MISSION_REWARD
-				_emit_content(ContentEvents.daily_mission_claim(daily_mission_type, DAILY_MISSION_REWARD))
+				_emit_analytics(ContentEvents.daily_mission_claim(daily_mission_type, DAILY_MISSION_REWARD))
 				_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
 				var daily_err := _save_daily()
 				if daily_err != OK:
@@ -2011,7 +2040,7 @@ func _update_clean_progress() -> void:
 		# completion panel reserves a stable button row for the life of this screen.
 		_double_offer_shown = ads != null and ads.is_rewarded_ready("level_reward_2x")
 		_register_best_time()
-		_emit_content(ContentEvents.level_complete(
+		_emit_analytics(ContentEvents.level_complete(
 			level_index, earned_stars, int(level_time), best_combo, coin_reward, is_new_record
 		))
 		_save_progress()
@@ -3835,7 +3864,7 @@ func _try_buy_upgrade(idx: int) -> void:
 		else:
 			upgrade_sponge -= 1
 		return
-	_emit_content(ContentEvents.upgrade_purchase(UPGRADE_KEYS[idx], lvl + 1, cost))
+	_emit_analytics(ContentEvents.upgrade_purchase(UPGRADE_KEYS[idx], lvl + 1, cost))
 	_play_ui_select()
 	queue_redraw()
 
@@ -3996,7 +4025,7 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 			queue_redraw()
 			return
 		queue_redraw()
-		_emit_content(ContentEvents.skin_select(tool_key, sid))
+		_emit_analytics(ContentEvents.skin_select(tool_key, sid))
 		_play_ui_select()
 		return
 
@@ -4024,7 +4053,7 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 			skin_sponge = prev_sid
 		queue_redraw()
 		return
-	_emit_content(ContentEvents.skin_purchase(tool_key, sid, cost))
+	_emit_analytics(ContentEvents.skin_purchase(tool_key, sid, cost))
 	_play_ui_select()
 	queue_redraw()
 

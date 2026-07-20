@@ -294,8 +294,58 @@ func _run_core_tests() -> void:
 			_fail("event not registered in ContentEvents.ALL: " + String(built["name"]))
 			return
 
+	# --- FTUE events: title -> load -> play -> tutorial funnel contract ---
+	var FtueEvents: GDScript = load("res://core/analytics/ftue_events.gd")
+	if FtueEvents == null:
+		_fail("ftue_events failed to load through res://core symlink")
+		return
+	if not _test_ftue_release_attribution_and_shared_native_path(FtueEvents):
+		return
+	var e_title: Dictionary = FtueEvents.title_screen_view("cold_start")
+	var e_play: Dictionary = FtueEvents.play_tap(2)
+	var e_load_start: Dictionary = FtueEvents.level_load_start(2, "cold_start")
+	var e_load_complete: Dictionary = FtueEvents.level_load_complete(2, "sports", "cold_start")
+	var e_tutorial_view: Dictionary = FtueEvents.tutorial_step_view("overview", "first_run")
+	var e_tutorial_complete: Dictionary = FtueEvents.tutorial_complete("overview", "first_run")
+	if e_title != {"name": "title_screen_view", "params": {"entry": "cold_start"}}:
+		_fail("title_screen_view event schema changed: " + str(e_title))
+		return
+	if e_play != {"name": "play_tap", "params": {"level": "2"}}:
+		_fail("play_tap event schema changed: " + str(e_play))
+		return
+	if e_load_start != {"name": "level_load_start", "params": {"level": "2", "reason": "cold_start"}}:
+		_fail("level_load_start event schema changed: " + str(e_load_start))
+		return
+	if e_load_complete != {"name": "level_load_complete", "params": {"level": "2", "car_type": "sports", "reason": "cold_start"}}:
+		_fail("level_load_complete event schema changed: " + str(e_load_complete))
+		return
+	if e_tutorial_view != {"name": "tutorial_step_view", "params": {"step": "overview", "source": "first_run"}}:
+		_fail("tutorial_step_view event schema changed: " + str(e_tutorial_view))
+		return
+	if e_tutorial_complete != {"name": "tutorial_complete", "params": {"step": "overview", "source": "first_run"}}:
+		_fail("tutorial_complete event schema changed: " + str(e_tutorial_complete))
+		return
+	for built in [e_title, e_play, e_load_start, e_load_complete, e_tutorial_view, e_tutorial_complete]:
+		if not FtueEvents.ALL.has(String(built["name"])):
+			_fail("event not registered in FtueEvents.ALL: " + String(built["name"]))
+			return
+
 	print("CORE TESTS PASSED")
 	quit(0)
+
+
+func _test_ftue_release_attribution_and_shared_native_path(FtueEvents: GDScript) -> bool:
+	if String(FtueEvents.VERSION_DIMENSION) != "app_info.version":
+		_fail("FTUE release dimension must remain GA4 app_info.version")
+		return false
+	var native_adapter_source := FileAccess.get_file_as_string("res://scripts/services/firebase_analytics_adapter.gd")
+	if not native_adapter_source.contains('OS.has_feature("ios")') or not native_adapter_source.contains('OS.has_feature("android")'):
+		_fail("Android and iOS must share FirebaseAnalyticsAdapter")
+		return false
+	if not native_adapter_source.contains("func log_event(event_name: String, params: Dictionary = {})"):
+		_fail("native FTUE events must keep the shared AnalyticsPort log_event path")
+		return false
+	return true
 
 
 func _fail(message: String) -> void:
