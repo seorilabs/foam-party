@@ -60,6 +60,9 @@ func _run_core_tests() -> void:
 	if int(GameConfig.STAR3_COMBO_LEVEL_STEP) != 3 or int(GameConfig.STAR3_COMBO_MAX) != 10:
 		_fail("third-star combo scaling constants changed unexpectedly")
 		return
+	if int(Scoring.star3_combo_requirement(1)) != 4:
+		_fail("level one must preserve the original third-star combo requirement of four")
+		return
 	if int(Scoring.star_time_threshold(3, 1)) != 75:
 		_fail("3-star threshold at level 1 should be 75s")
 		return

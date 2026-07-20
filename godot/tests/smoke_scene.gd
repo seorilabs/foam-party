@@ -171,6 +171,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_scaled_star3_combo_gate_contract(root_node):
 		return
+	if not _test_scaled_grade_tracker_prompt_contract(root_node):
+		return
 	if not _test_oil_sheen_contract(root_node):
 		return
 	root_node.call("reset_game", 1, "dirt_density_smoke_cleanup")
@@ -1385,6 +1387,43 @@ func _test_scaled_star3_combo_gate_contract(root_node: Node) -> bool:
 		_fail("scaled combo gate must keep the existing grade tracker residency unchanged")
 		return false
 	root_node.call("reset_game", 1, "scaled_combo_gate_smoke_cleanup")
+	return true
+
+
+func _test_scaled_grade_tracker_prompt_contract(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	root_node.call("reset_game", 4, "scaled_grade_tracker_prompt_smoke")
+	root_node.set("level_time", 60.0)
+	root_node.set("best_combo", 4)
+	if String(root_node.call("_grade_slot_state", 2)) != "target":
+		_fail("scaled grade tracker prompt requires the third star to remain a reachable target")
+		return false
+	var expected_prompt := TranslationServer.translate("GRADE_COMBO_FOR3") % 5
+	var actual_prompt := String(root_node.call("_grade_combo_prompt"))
+	if actual_prompt != expected_prompt:
+		_fail("existing grade tracker must display the scaled level 4 combo requirement x5")
+		return false
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var tracker_start := main_source.find("func _draw_grade_tracker() -> void:")
+	var tracker_end := main_source.find("\nfunc ", tracker_start + 1)
+	var tracker_body := main_source.substr(tracker_start, tracker_end - tracker_start)
+	if not tracker_body.contains("text = _grade_combo_prompt()") \
+			or not tracker_body.contains('text = tr("GRADE_COMBO_URGENT") % [combo_requirement, secs]'):
+		_fail("existing grade tracker draw path must render the scaled combo prompt")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("scaled grade tracker prompt must not add persistent UI controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("scaled grade tracker prompt must keep existing HUD residency unchanged")
+		return false
+	root_node.call("reset_game", 1, "scaled_grade_tracker_prompt_smoke_cleanup")
 	return true
 
 
