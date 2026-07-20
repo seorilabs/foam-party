@@ -56,6 +56,9 @@ const STRINGS := {
 	"DM_BUG": ["벌레 자국 %d개 닦기", "Wipe %d bug marks"],
 	"DM_POOP": ["새똥 %d개 닦기", "Wipe %d droppings"],
 	"DM_ROAD_GRIME": ["도로 때 %d개 닦기", "Wipe %d road-grime spots"],
+	"DM_COMBO": ["한 판에서 콤보 x%d 달성", "Reach combo x%d in one wash"],
+	"DM_FAST": ["%d초 이내 세차 완료", "Finish a wash within %d seconds"],
+	"DM_PERFECT3": ["별 3개 세차 %d회", "Earn 3 stars on %d washes"],
 	# grade tracker
 	"GRADE_COMBO_URGENT": ["콤보 x%d! %d초", "Combo x%d! %ds"],
 	"GRADE_KEEP_STAR": ["별 %d 유지: %d초", "Keep star %d: %ds"],

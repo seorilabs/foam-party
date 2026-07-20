@@ -210,9 +210,43 @@ func _run_core_tests() -> void:
 	if mission != mission_again:
 		_fail("daily mission must be deterministic for a fixed date")
 		return
-	if String(mission["type"]) != "dust" or int(mission["target"]) != 20 or String(mission["label"]) != "먼지 20개 제거하기" or int(mission["reward"]) != 55:
+	if String(mission["type"]) != "mud" or int(mission["target"]) != 15 or int(mission["requirement"]) != 0 or String(mission["label"]) != "흙탕물 15개 씻기" or int(mission["reward"]) != 60:
 		_fail("daily mission for 2026-07-06 changed: " + str(mission))
 		return
+	var seen_style_missions: Dictionary = {}
+	var style_mission_dates: Dictionary = {}
+	for month in range(1, 13):
+		for day in range(1, 29):
+			var candidate_date := "2026-%02d-%02d" % [month, day]
+			var rotated: Dictionary = DailyMission.mission_for(candidate_date)
+			if String(rotated["type"]) in ["combo", "fast", "perfect3"]:
+				seen_style_missions[String(rotated["type"])] = true
+				if not style_mission_dates.has(String(rotated["type"])):
+					style_mission_dates[String(rotated["type"])] = candidate_date
+	if seen_style_missions.size() != 3:
+		_fail("date-hash rotation must include combo, fast, and perfect3 missions")
+		return
+	# AC-5: each new type must resolve identically when its own date is queried again.
+	for mission_type in ["combo", "fast", "perfect3"]:
+		var representative_date := String(style_mission_dates[mission_type])
+		var first_pick: Dictionary = DailyMission.mission_for(representative_date)
+		var repeated_pick: Dictionary = DailyMission.mission_for(representative_date)
+		if first_pick != repeated_pick or String(first_pick["type"]) != mission_type:
+			_fail("same date must deterministically repeat new mission type %s" % mission_type)
+			return
+	var expected_style_missions := {
+		"combo": {"target": 1, "requirement": 8, "label": "한 판에서 콤보 x8 달성"},
+		"fast": {"target": 1, "requirement": 75, "label": "75초 이내 세차 완료"},
+		"perfect3": {"target": 2, "requirement": 3, "label": "별 3개 세차 2회"},
+	}
+	for mission_type in expected_style_missions:
+		var style_mission: Dictionary = DailyMission.mission_for_type(mission_type)
+		var expected_style: Dictionary = expected_style_missions[mission_type]
+		if int(style_mission["target"]) != int(expected_style["target"]) \
+				or int(style_mission["requirement"]) != int(expected_style["requirement"]) \
+				or String(style_mission["label"]) != String(expected_style["label"]):
+			_fail("style daily mission config mismatch for %s: %s" % [mission_type, style_mission])
+			return
 	var expected_mission_rewards := {
 		"leaf": 50,
 		"dust": 55,
@@ -221,10 +255,13 @@ func _run_core_tests() -> void:
 		"bug": 75,
 		"poop": 80,
 		"road_grime": 85,
+		"combo": 90,
+		"fast": 95,
+		"perfect3": 100,
 	}
 	var previous_reward := 0
 	var seen_rewards: Array[int] = []
-	for mission_type in ["leaf", "dust", "mud", "oil", "bug", "poop", "road_grime"]:
+	for mission_type in ["leaf", "dust", "mud", "oil", "bug", "poop", "road_grime", "combo", "fast", "perfect3"]:
 		var reward := int(DailyMission.reward_for_type(mission_type))
 		if reward != int(expected_mission_rewards[mission_type]):
 			_fail("daily mission reward changed for %s: %d" % [mission_type, reward])

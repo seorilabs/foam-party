@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -295,6 +295,8 @@ func _run_smoke() -> void:
 		_fail("expected 50 coins for 3-star clear")
 		return
 	if not _test_daily_mission_reward_contract(root_node, analytics_recorder):
+		return
+	if not _test_daily_mission_style_contract(root_node, analytics_recorder):
 		return
 
 	if String(root_node.call("get_car_type_for_test")) != "compact":
@@ -855,6 +857,158 @@ func _test_daily_mission_reward_contract(root_node: Node, analytics_recorder: An
 			root_node.set("coins", original_state[key])
 		else:
 			root_node.set("daily_mission_" + key, original_state[key])
+	analytics_recorder.events.clear()
+	return true
+
+
+func _test_daily_mission_style_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
+	# AC-1 and AC-2: combo, fast, and perfect3 missions advance only from their
+	# real gameplay events and reuse the existing one-shot claim path.
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	var original_daily := {
+		"type": root_node.get("daily_mission_type"),
+		"label": root_node.get("daily_mission_label"),
+		"target": root_node.get("daily_mission_target"),
+		"requirement": root_node.get("daily_mission_requirement"),
+		"reward": root_node.get("daily_mission_reward"),
+		"progress": root_node.get("daily_mission_progress"),
+		"claimed": root_node.get("daily_mission_claimed"),
+		"date": root_node.get("daily_mission_date"),
+	}
+	var original_progress := {
+		"active_level": root_node.call("get_active_level_for_test"),
+		"coins": root_node.get("coins"),
+		"total_stars": root_node.get("total_stars"),
+		"best_times": root_node.get("best_times").duplicate(true),
+		"best_stars": root_node.get("best_stars").duplicate(true),
+	}
+	var previous_locale := TranslationServer.get_locale()
+
+	# AC-3: every new mission label resolves through the ko/en translation table.
+	var localized_labels := {
+		"combo": {"ko": "한 판에서 콤보 x8 달성", "en": "Reach combo x8 in one wash"},
+		"fast": {"ko": "75초 이내 세차 완료", "en": "Finish a wash within 75 seconds"},
+		"perfect3": {"ko": "별 3개 세차 2회", "en": "Earn 3 stars on 2 washes"},
+	}
+	var localized_done := {"ko": "완료!", "en": "Done!"}
+	for locale in ["ko", "en"]:
+		TranslationServer.set_locale(locale)
+		if TranslationServer.translate("DM_DONE") != String(localized_done[locale]):
+			_fail("daily mission completion state must be localized for %s" % locale)
+			return false
+		for mission_type in localized_labels:
+			root_node.call("configure_daily_mission_for_test", mission_type)
+			var actual_label := String(root_node.call("_daily_mission_display_label"))
+			if actual_label != String(localized_labels[mission_type][locale]):
+				_fail("style daily mission label must be localized for %s/%s" % [locale, mission_type])
+				return false
+
+	TranslationServer.set_locale("ko")
+	root_node.call("reset_game", 1, "daily_combo_mission_smoke")
+	root_node.set("coins", 0)
+	root_node.call("configure_daily_mission_for_test", "combo")
+	var combo_patches: Array = root_node.get("dirt_patches")
+	for patch_index in range(7):
+		root_node.call("_mark_patch_removed", combo_patches[patch_index])
+	if int(root_node.get("daily_mission_progress")) != 0 or bool(root_node.get("daily_mission_claimed")):
+		_fail("combo mission must stay pending below combo x8")
+		return false
+	var coins_before_combo := int(root_node.get("coins"))
+	root_node.call("_mark_patch_removed", combo_patches[7])
+	if int(root_node.get("daily_mission_progress")) != 1 \
+			or not bool(root_node.get("daily_mission_claimed")) \
+			or int(root_node.get("coins")) != coins_before_combo + 90:
+		_fail("combo x8 must claim the combo mission reward exactly at its requirement")
+		return false
+	var coins_after_combo_claim := int(root_node.get("coins"))
+	root_node.call("_mark_patch_removed", combo_patches[8])
+	if int(root_node.get("coins")) != coins_after_combo_claim:
+		_fail("claimed combo mission must not grant its reward twice")
+		return false
+
+	root_node.call("reset_game", 1, "daily_fast_mission_miss_smoke")
+	root_node.call("configure_daily_mission_for_test", "fast")
+	root_node.set("level_time", 76.0)
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	if int(root_node.get("daily_mission_progress")) != 0 or bool(root_node.get("daily_mission_claimed")):
+		_fail("76-second clear must not advance the 75-second fast mission")
+		return false
+
+	root_node.call("reset_game", 1, "daily_fast_mission_success_smoke")
+	root_node.set("coins", 0)
+	root_node.call("configure_daily_mission_for_test", "fast")
+	root_node.set("level_time", 75.0)
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	if int(root_node.get("daily_mission_progress")) != 1 \
+			or not bool(root_node.get("daily_mission_claimed")) \
+			or int(root_node.get("coins")) != int(root_node.get("coin_reward")) + 95:
+		_fail("75-second clear must claim the fast mission and add its reward once")
+		return false
+	var coins_after_fast_claim := int(root_node.get("coins"))
+	root_node.call("_update_clean_progress")
+	if int(root_node.get("coins")) != coins_after_fast_claim:
+		_fail("completed fast mission must not grant its reward twice")
+		return false
+
+	root_node.call("reset_game", 1, "daily_perfect3_mission_first_smoke")
+	root_node.set("coins", 0)
+	root_node.call("configure_daily_mission_for_test", "perfect3")
+	root_node.set("level_time", 30.0)
+	root_node.set("best_combo", 4)
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	if int(root_node.get("earned_stars")) != 3 \
+			or int(root_node.get("daily_mission_progress")) != 1 \
+			or bool(root_node.get("daily_mission_claimed")):
+		_fail("first three-star clear must advance perfect3 to one of two without claiming")
+		return false
+	root_node.call("reset_game", 1, "daily_perfect3_mission_second_smoke")
+	root_node.set("level_time", 30.0)
+	root_node.set("best_combo", 4)
+	var coins_before_perfect_claim := int(root_node.get("coins"))
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	if int(root_node.get("daily_mission_progress")) != 2 \
+			or not bool(root_node.get("daily_mission_claimed")) \
+			or int(root_node.get("coins")) != coins_before_perfect_claim + int(root_node.get("coin_reward")) + 100:
+		_fail("second three-star clear must claim perfect3 and add its reward once")
+		return false
+
+	# AC-4: the same title card and top HUD chip remain the only resident mission UI.
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("style daily missions must not add persistent UI controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("style daily missions must reuse the existing title card and HUD chip residency")
+		return false
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var claim_start := main_source.find("func _claim_daily_mission_reward() -> bool:")
+	var claim_end := main_source.find("\nfunc ", claim_start + 1)
+	var claim_body := main_source.substr(claim_start, claim_end - claim_start)
+	if not claim_body.contains("_save_daily()") or not claim_body.contains("_save_progress()"):
+		_fail("all daily mission types must persist the shared one-shot claim")
+		return false
+
+	root_node.call("reset_game", int(original_progress["active_level"]), "daily_style_mission_smoke_cleanup")
+	root_node.set("coins", original_progress["coins"])
+	root_node.set("total_stars", original_progress["total_stars"])
+	root_node.set("best_times", original_progress["best_times"])
+	root_node.set("best_stars", original_progress["best_stars"])
+	for key in original_daily:
+		root_node.set("daily_mission_" + key, original_daily[key])
+	TranslationServer.set_locale(previous_locale)
 	analytics_recorder.events.clear()
 	return true
 
