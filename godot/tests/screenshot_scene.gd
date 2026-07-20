@@ -71,6 +71,13 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return
+	node.call("_begin_car_entry", true)
+	node.set("_car_transition_elapsed", 0.20)
+	if not await _capture(out_dir.path_join("shot_car_entry_transition.png")):
+		quit(1)
+		return
+	node.set("_car_transition_phase", "idle")
+	node.set("_car_transition_elapsed", 0.0)
 	node.call("apply_body_foam_tool_for_test", "soap", 1.35)
 	if not await _capture(out_dir.path_join("shot_body_foam_partial.png")):
 		quit(1)
