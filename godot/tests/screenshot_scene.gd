@@ -243,6 +243,13 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_complete.png")):
 		quit(1)
 		return
+	for stars in [1, 2, 3]:
+		node.set("earned_stars", stars)
+		node.set("_customer_completion_time", float(Time.get_ticks_msec()) / 1000.0)
+		await _settle(1)
+		if not await _capture(out_dir.path_join("shot_customer_reaction_%d_star.png" % stars)):
+			quit(1)
+			return
 
 	node.call("reset_game", node.get("level_index"))
 	node.get("best_times")[int(node.get("level_index"))] = 30.0

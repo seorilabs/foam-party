@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -291,6 +291,8 @@ func _run_smoke() -> void:
 		_fail("level 1 should be a compact car")
 		return
 	if not _test_compact_city_dirt_profile(root_node):
+		return
+	if not await _test_customer_completion_contract(root_node):
 		return
 	if not _test_expanded_car_roster_and_gameplay(root_node):
 		return
@@ -980,6 +982,62 @@ func _test_dirt_spawn_density_contract(root_node: Node) -> bool:
 	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
 		_fail("dirt density must not change top HUD residency")
 		return false
+	return true
+
+
+func _test_customer_completion_contract(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	var profile_signatures: Array[String] = []
+	for level in range(1, 6):
+		root_node.call("reset_game", level, "customer_profile_smoke")
+		var profile: Dictionary = root_node.call("get_customer_profile_for_test")
+		var signature := "%s|%s|%s" % [profile["face_hex"], profile["accent_hex"], profile["accessory"]]
+		if not profile_signatures.has(signature):
+			profile_signatures.append(signature)
+	if profile_signatures.size() < 3:
+		_fail("the first car rotation should expose at least three customer profiles")
+		return false
+	root_node.call("reset_game", 3, "customer_profile_repeat_a")
+	var repeated_profile: Dictionary = root_node.call("get_customer_profile_for_test")
+	root_node.call("reset_game", 4, "customer_profile_separator")
+	root_node.call("reset_game", 3, "customer_profile_repeat_b")
+	if root_node.call("get_customer_profile_for_test") != repeated_profile:
+		_fail("replaying the same level should restore the same customer")
+		return false
+	var one_star := float(root_node.call("get_customer_reaction_strength_for_test", 1))
+	var two_stars := float(root_node.call("get_customer_reaction_strength_for_test", 2))
+	var three_stars := float(root_node.call("get_customer_reaction_strength_for_test", 3))
+	if not (one_star < two_stars and two_stars < three_stars):
+		_fail("completion customer reaction should grow with earned stars")
+		return false
+	var completion_panel: Rect2 = root_node.call("_completion_panel_rect")
+	var reaction_rect: Rect2 = root_node.call("get_completion_customer_rect_for_test")
+	if not completion_panel.encloses(reaction_rect):
+		_fail("customer reaction must stay inside the completion panel")
+		return false
+	root_node.set("completed", true)
+	root_node.set("_customer_completion_time", float(Time.get_ticks_msec()) / 1000.0)
+	for stars in [1, 2, 3]:
+		root_node.set("earned_stars", stars)
+		root_node.queue_redraw()
+		await process_frame
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_source.contains("_draw_customer_patience()") or not main_source.contains("_draw_completion_customer_reaction(panel, time_now)") or not main_source.contains("_customer_cheer_text"):
+		_fail("gameplay customer mood and cheer paths must remain wired beside completion reaction")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("completion customer reaction must not add persistent HUD controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("completion customer reaction must not change gameplay HUD residency")
+		return false
+	root_node.call("reset_game", 1, "customer_completion_smoke_cleanup")
 	return true
 
 
