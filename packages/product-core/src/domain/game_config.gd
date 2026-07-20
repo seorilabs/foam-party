@@ -10,6 +10,7 @@ const STAR3_COMBO := 4
 const STAR2_TIME := 140.0
 const STAR_WARN_SECONDS := 15.0
 const COMBO_WINDOW := 2.5
+const COMBO_GRACE := 1.0
 const CLEAN_DAMAGE_RATE := 72.0
 
 # Tool/dirt mutation rates are data, while wash_rules.gd owns state transitions

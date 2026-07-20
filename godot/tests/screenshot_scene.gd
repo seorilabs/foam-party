@@ -217,6 +217,25 @@ func _run() -> void:
 	if not combo_saved:
 		quit(1)
 		return
+	node.set("combo_count", 4)
+	node.set("combo_timer", 2.5)
+	node.set("combo_protection_available", true)
+	node.set("combo_grace_active", false)
+	await _settle(1)
+	if not await _capture(out_dir.path_join("shot_combo_protection.png")):
+		quit(1)
+		return
+	node.set("combo_timer", 1.0)
+	node.set("combo_protection_available", false)
+	node.set("combo_grace_active", true)
+	node.set("_combo_grace_flash_time", float(Time.get_ticks_msec()) / 1000.0)
+	await _settle(1)
+	if not await _capture(out_dir.path_join("shot_combo_grace.png")):
+		quit(1)
+		return
+	node.set("combo_count", 0)
+	node.set("combo_timer", 0.0)
+	node.set("combo_grace_active", false)
 
 	for patch in node.get("dirt_patches"):
 		patch.set("health", 0.0)
