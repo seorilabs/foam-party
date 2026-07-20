@@ -39,6 +39,18 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_title.png")):
 		quit(1)
 		return
+	node.set("level_index", 5)
+	node.set("best_times", {1: 92.0, 2: 84.0, 3: 78.0, 5: 70.0})
+	node.set("best_stars", {1: 2, 2: 3, 3: 1, 5: 3})
+	node.set("show_stage_panel", true)
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_stage_select.png")):
+		quit(1)
+		return
+	node.set("show_stage_panel", false)
+	node.set("level_index", 1)
+	node.set("best_times", {})
+	node.set("best_stars", {})
 
 	node.call("start_game")
 	await _settle(5)

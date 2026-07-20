@@ -15,10 +15,11 @@ func _run_core_tests() -> void:
 	var Coaching: GDScript = load("res://core/use_cases/coaching.gd")
 	var DailyMission: GDScript = load("res://core/use_cases/daily_mission.gd")
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
+	var StageSelection: GDScript = load("res://core/use_cases/stage_selection.gd")
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
 	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
 	var I18n: GDScript = load("res://scripts/services/i18n.gd")
-	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or DirtPatch == null or GameConfig == null or I18n == null:
+	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or StageSelection == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
 		return
 	if not _test_car_roster_and_saved_level_mapping(GameConfig):
@@ -180,6 +181,27 @@ func _run_core_tests() -> void:
 		return
 	if absf(float(BestTime.best_time({}, 3)) - 0.0) > 0.001:
 		_fail("missing level should report zero best time")
+		return
+
+	# --- Stage selection projection ---
+	var first_page: Array[Dictionary] = StageSelection.cards(1, {1: 82.5}, {1: 2}, 0)
+	if first_page.size() != 6 or not bool(first_page[0]["unlocked"]) or bool(first_page[1]["unlocked"]):
+		_fail("stage page should expose level 1 and lock the future preview")
+		return
+	if absf(float(first_page[0]["best_time"]) - 82.5) > 0.001 or int(first_page[0]["best_stars"]) != 2:
+		_fail("stage cards should project persisted time and stars")
+		return
+	if int(StageSelection.page_count(7)) != 2:
+		_fail("seven unlocked levels plus preview should require two pages")
+		return
+	var second_page: Array[Dictionary] = StageSelection.cards(7, {7: 70.0}, {7: 3}, 99)
+	if int(second_page[0]["level"]) != 7 or not bool(second_page[0]["unlocked"]) or int(second_page[1]["level"]) != 8 or bool(second_page[1]["unlocked"]):
+		_fail("stage page should clamp and preserve the next locked preview")
+		return
+	var improved_stars: Dictionary = StageSelection.record_best_stars({3: 1}, 3, 3)
+	var preserved_stars: Dictionary = StageSelection.record_best_stars(improved_stars, 3, 2)
+	if int(improved_stars[3]) != 3 or int(preserved_stars[3]) != 3:
+		_fail("stage best stars should improve monotonically")
 		return
 
 	# --- Wash rules: deterministic patch mutation (lift/mult injected) ---

@@ -235,6 +235,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_clean_shine_progression_contract(root_node):
 		return
+	if not _test_stage_selection_and_retry_contract(root_node):
+		return
 
 	root_node.call("reset_game", 5)
 	root_node.set("level_time", 90.0)
@@ -828,6 +830,102 @@ func _test_clean_shine_progression_contract(root_node: Node) -> bool:
 	if float(root_node.call("get_clean_progress_for_test")) > 0.001 or float(root_node.call("get_clean_shine_alpha_for_test", root_node.call("get_clean_progress_for_test"))) > 0.001:
 		_fail("level reset should return clean shine to matte")
 		return false
+	return true
+
+
+func _test_stage_selection_and_retry_contract(root_node: Node) -> bool:
+	var original_unlocked: int = root_node.call("get_unlocked_level_for_test")
+	var original_best_times: Dictionary = root_node.get("best_times").duplicate(true)
+	var original_best_stars: Dictionary = root_node.get("best_stars").duplicate(true)
+	root_node.set("level_index", 5)
+	root_node.set("best_times", {1: 90.0, 2: 84.0, 4: 76.0})
+	root_node.set("best_stars", {1: 2, 2: 3, 4: 1})
+	root_node.call("_go_home")
+
+	var stage_button: Rect2 = root_node.call("_get_stage_btn_rect")
+	for other_rect in [root_node.call("_get_start_rect"), root_node.call("_get_upgrade_btn_rect"), root_node.call("_get_skin_btn_rect")]:
+		if stage_button.intersects(other_rect):
+			_fail("stage title button must not overlap existing title actions")
+			return false
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	root_node.call("_handle_tap", stage_button.get_center())
+	if not bool(root_node.get("show_stage_panel")) or String(root_node.get("game_state")) != "title":
+		_fail("stage button should open a title-only sheet")
+		return false
+	var cards: Array[Dictionary] = root_node.call("get_stage_cards_for_test", 0)
+	if cards.size() != 6 or int(cards[0]["level"]) != 1 or not bool(cards[4]["unlocked"]) or bool(cards[5]["unlocked"]):
+		_fail("stage sheet should expose levels 1-5 and lock level 6")
+		return false
+	if absf(float(cards[1]["best_time"]) - 84.0) > 0.001 or int(cards[1]["best_stars"]) != 3:
+		_fail("stage sheet should project per-level time and stars")
+		return false
+	if float(cards[2]["best_time"]) != 0.0 or int(cards[2]["best_stars"]) != 0:
+		_fail("stage sheet should keep missing records empty")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("stage sheet must not add persistent HUD controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("stage sheet must not change gameplay HUD residency")
+		return false
+
+	var panel: Rect2 = root_node.call("_stage_panel_rect")
+	root_node.call("_handle_stage_panel_tap", root_node.call("_stage_card_rect", panel, 0).get_center())
+	if String(root_node.get("game_state")) != "playing" or int(root_node.call("get_active_level_for_test")) != 1:
+		_fail("unlocked stage card should start that level")
+		return false
+	if int(root_node.call("get_unlocked_level_for_test")) != 5:
+		_fail("stage retry must preserve highest unlocked progression")
+		return false
+	var first_seed_sequence: Array[String] = root_node.call("get_spawned_dirt_kinds_for_test")
+	root_node.call("reset_game", 1, "stage_seed_repeat")
+	if root_node.call("get_spawned_dirt_kinds_for_test") != first_seed_sequence:
+		_fail("stage retry should reproduce the deterministic level seed")
+		return false
+
+	root_node.set("level_time", 70.0)
+	root_node.set("earned_stars", 3)
+	root_node.call("register_best_time_for_test")
+	if absf(float(root_node.call("get_best_time_for_test", 1)) - 70.0) > 0.001 or int(root_node.call("get_best_stars_for_test", 1)) != 3:
+		_fail("faster stage retry should update time and best stars")
+		return false
+	root_node.set("level_time", 100.0)
+	root_node.set("earned_stars", 2)
+	root_node.call("register_best_time_for_test")
+	if absf(float(root_node.call("get_best_time_for_test", 1)) - 70.0) > 0.001 or int(root_node.call("get_best_stars_for_test", 1)) != 3:
+		_fail("slower retry must not overwrite stage records")
+		return false
+	if int(root_node.call("get_unlocked_level_for_test")) != 5:
+		_fail("record updates must not roll back unlocked progression")
+		return false
+
+	root_node.call("_go_home")
+	root_node.call("_handle_tap", stage_button.get_center())
+	root_node.call("_handle_stage_panel_tap", root_node.call("_stage_card_rect", panel, 5).get_center())
+	if not bool(root_node.get("show_stage_panel")) or int(root_node.call("get_active_level_for_test")) != 1:
+		_fail("locked stage card must not start a level")
+		return false
+	root_node.call("_on_back_pressed")
+	if bool(root_node.get("show_stage_panel")) or String(root_node.get("game_state")) != "title" or bool(root_node.get("show_quit_confirm")):
+		_fail("back should close only the stage sheet and return to title")
+		return false
+
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not source.contains('config.get_value("game", "best_stars"') or not source.contains('config.set_value("game", "best_stars"'):
+		_fail("stage best stars must be loaded and saved")
+		return false
+
+	root_node.set("level_index", original_unlocked)
+	root_node.set("best_times", original_best_times)
+	root_node.set("best_stars", original_best_stars)
+	root_node.call("reset_game", 1, "stage_smoke_cleanup")
+	root_node.call("start_game", 1, "stage_smoke_cleanup")
 	return true
 
 
