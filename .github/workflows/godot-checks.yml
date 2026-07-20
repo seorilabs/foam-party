@@ -1,5 +1,5 @@
 # main 정적 게이트(Godot) — org 재사용 워크플로우 호출.
-# import → compile/quality gate → smoke + core/architecture/docs. 무거운 export/배포 금지.
+# import → compile/quality gate → smoke + core/architecture/workflows/docs. 무거운 export/배포 금지.
 name: Godot Checks
 
 on:
@@ -26,6 +26,7 @@ jobs:
       check_command: |
         npm run test:core
         npm run check:architecture
+        npm run check:workflows
         npm run check:docs
         bash scripts/godot_quality_gate.sh --project godot --smoke-scene res://tests/smoke_scene.gd
         npm --prefix ait/apps-in-toss-web ci
