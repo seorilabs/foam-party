@@ -420,10 +420,10 @@ func _run_smoke() -> void:
 		return
 	root_node.set("is_washing", false)
 
-	# --- compact top HUD layout ---
-	# Stars, customer mood, and mission must share one non-overlapping row. The
-	# smaller sound/help controls stay fully inside the main status card, including
-	# their expanded 44px touch targets.
+	# --- compact top HUD layout + pause/settings entry ---
+	# Stars, customer mood, and mission share one row. Playing HUD exposes exactly
+	# one 44px pause entry beside (not inside) the status card; direct sound/help
+	# actions only exist on the title screen.
 	var status_rect: Rect2 = root_node.call("_get_status_rect")
 	var grade_rect: Rect2 = root_node.call("_get_grade_rect")
 	var customer_rect: Rect2 = root_node.call("_get_customer_rect")
@@ -441,102 +441,116 @@ func _run_smoke() -> void:
 	if mission_rect.end.y - mission_bar_rect.end.y < 6.0:
 		_fail("daily mission progress bar needs visible bottom chip padding")
 		return
-	var sound_rect: Rect2 = root_node.call("_get_sound_rect")
-	var help_rect: Rect2 = root_node.call("_get_help_rect")
-	var sound_hit_rect := sound_rect.grow(10.0)
-	var help_hit_rect := help_rect.grow(10.0)
-	if not status_rect.encloses(sound_hit_rect) or not status_rect.encloses(help_hit_rect):
-		_fail("sound/help touch targets must stay inside the status card")
+	var pause_entry_rect: Rect2 = root_node.call("_get_pause_entry_rect")
+	if pause_entry_rect.size != Vector2(44.0, 44.0):
+		_fail("playing HUD must expose one 44px pause/settings entry")
 		return
-	if sound_hit_rect.intersects(help_hit_rect):
-		_fail("compact sound/help touch targets must not overlap")
+	if status_rect.intersects(pause_entry_rect):
+		_fail("pause/settings entry must not overlap the status card")
 		return
 
-	# --- one physical tap must produce one HUD action ---
+	# A simulated notch inset moves both status and entry together while keeping
+	# them separate and fully below the safe-area boundary.
+	OS.set_environment("FOAM_SAFE_AREA_DESIGN_INSETS", "0,42,0,0")
+	var safe_status_rect: Rect2 = root_node.call("_get_status_rect")
+	var safe_pause_rect: Rect2 = root_node.call("_get_pause_entry_rect")
+	OS.set_environment("FOAM_SAFE_AREA_DESIGN_INSETS", "")
+	if safe_status_rect.position.y < 50.0 or safe_pause_rect.position.y < 50.0:
+		_fail("top HUD must move below the simulated notch inset")
+		return
+	if safe_status_rect.intersects(safe_pause_rect):
+		_fail("safe-area offset must not make pause entry overlap status")
+		return
+
+	var pause_panel: Rect2 = root_node.call("_pause_panel")
+	for pause_index in range(5):
+		if not pause_panel.encloses(root_node.call("_pause_button_rect", pause_index)):
+			_fail("pause/settings sheet must contain all five actions")
+			return
+
+	var previous_locale := TranslationServer.get_locale()
+	TranslationServer.set_locale("ko")
+	if TranslationServer.translate("GUIDE") != "세차 가이드":
+		_fail("pause guide label must use the Korean i18n key")
+		return
+	TranslationServer.set_locale("en")
+	if TranslationServer.translate("GUIDE") != "Wash Guide":
+		_fail("pause guide label must use the English i18n key")
+		return
+	TranslationServer.set_locale(previous_locale)
+
+	# --- one physical tap opens pause; sound/help live inside the sheet ---
 	# Touch-to-mouse emulation used to feed _input twice: sound toggled off then
-	# back on, while help opened then immediately dismissed. Keep project settings
-	# and the code-level emulated-event guard covered together.
+	# back on. Keep the code-level emulated-event guard covered on the sole entry.
 	if Input.is_emulating_mouse_from_touch() or Input.is_emulating_touch_from_mouse():
 		_fail("pointer-type emulation must stay disabled for dual mouse/touch handlers")
+		return
+	root_node.set("sound_enabled", true)
+	root_node.set("show_tutorial", false)
+	root_node.set("show_pause", false)
+	root_node.call("_handle_tap", root_node.call("_get_title_sound_rect").get_center())
+	root_node.call("_handle_tap", root_node.call("_get_title_help_rect").get_center())
+	if not bool(root_node.get("sound_enabled")) or bool(root_node.get("show_tutorial")):
+		_fail("playing HUD must not expose direct sound/help actions")
 		return
 	root_node.call("_update_canvas_transform")
 	var input_canvas_origin: Vector2 = root_node.get("canvas_origin")
 	var input_canvas_scale: float = float(root_node.get("canvas_scale"))
-	var sound_design_point: Vector2 = sound_rect.get_center()
-	var sound_point: Vector2 = input_canvas_origin + sound_design_point * input_canvas_scale
-	root_node.set("sound_enabled", true)
-	var sound_touch := InputEventScreenTouch.new()
-	sound_touch.device = 0
+	var pause_point: Vector2 = input_canvas_origin + pause_entry_rect.get_center() * input_canvas_scale
+	var pause_touch := InputEventScreenTouch.new()
+	pause_touch.device = 0
 	# WKWebView uses opaque, non-zero Touch.identifier values on iOS.
-	sound_touch.index = 279624489
-	sound_touch.position = sound_point
-	sound_touch.pressed = true
-	root_node.call("_input", sound_touch)
-	if bool(root_node.get("sound_enabled")):
-		_fail("one physical sound-button touch should toggle sound once")
+	pause_touch.index = 279624489
+	pause_touch.position = pause_point
+	pause_touch.pressed = true
+	root_node.call("_input", pause_touch)
+	if not bool(root_node.get("show_pause")):
+		_fail("one physical pause-entry touch should open settings")
 		return
-	var duplicate_sound_mouse := InputEventMouseButton.new()
-	duplicate_sound_mouse.device = InputEvent.DEVICE_ID_EMULATION
-	duplicate_sound_mouse.button_index = MOUSE_BUTTON_LEFT
-	duplicate_sound_mouse.position = sound_point
-	duplicate_sound_mouse.pressed = true
-	root_node.call("_input", duplicate_sound_mouse)
-	if bool(root_node.get("sound_enabled")):
-		_fail("emulated mouse duplicate must not toggle sound a second time")
+	var duplicate_pause_mouse := InputEventMouseButton.new()
+	duplicate_pause_mouse.device = InputEvent.DEVICE_ID_EMULATION
+	duplicate_pause_mouse.button_index = MOUSE_BUTTON_LEFT
+	duplicate_pause_mouse.position = pause_point
+	duplicate_pause_mouse.pressed = true
+	root_node.call("_input", duplicate_pause_mouse)
+	if not bool(root_node.get("show_pause")):
+		_fail("emulated mouse duplicate must not close settings")
 		return
 	if bool(root_node.get("is_washing")):
-		_fail("sound-button touch must not start washing")
+		_fail("pause-entry touch must stop washing")
 		return
-	if int(root_node.get("_primary_touch_index")) != sound_touch.index:
+	if int(root_node.get("_primary_touch_index")) != pause_touch.index:
 		_fail("the first active iOS touch identifier must become the primary touch")
 		return
-
-	var help_design_point: Vector2 = help_rect.get_center()
-	var help_point: Vector2 = input_canvas_origin + help_design_point * input_canvas_scale
-	root_node.set("show_tutorial", false)
-	var secondary_help_touch := InputEventScreenTouch.new()
-	secondary_help_touch.device = 0
-	secondary_help_touch.index = 279624490
-	secondary_help_touch.position = help_point
-	secondary_help_touch.pressed = true
-	root_node.call("_input", secondary_help_touch)
-	if bool(root_node.get("show_tutorial")):
-		_fail("a secondary touch must not trigger a HUD action while the primary touch is active")
-		return
-	var sound_release := InputEventScreenTouch.new()
-	sound_release.device = 0
-	sound_release.index = sound_touch.index
-	sound_release.position = sound_point
-	sound_release.pressed = false
-	root_node.call("_input", sound_release)
+	var pause_release := InputEventScreenTouch.new()
+	pause_release.device = 0
+	pause_release.index = pause_touch.index
+	pause_release.position = pause_point
+	pause_release.pressed = false
+	root_node.call("_input", pause_release)
 	if int(root_node.get("_primary_touch_index")) != -1:
 		_fail("releasing the primary touch must clear its opaque identifier")
 		return
-	var help_touch := InputEventScreenTouch.new()
-	help_touch.device = 0
-	help_touch.index = 279624490
-	help_touch.position = help_point
-	help_touch.pressed = true
-	root_node.call("_input", help_touch)
-	if not bool(root_node.get("show_tutorial")):
-		_fail("one physical help-button touch should open the tutorial")
+
+	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 1).get_center())
+	if bool(root_node.get("sound_enabled")) or not bool(root_node.get("show_pause")):
+		_fail("sound toggle must work only inside pause/settings")
 		return
-	var duplicate_help_mouse := InputEventMouseButton.new()
-	duplicate_help_mouse.device = InputEvent.DEVICE_ID_EMULATION
-	duplicate_help_mouse.button_index = MOUSE_BUTTON_LEFT
-	duplicate_help_mouse.position = help_point
-	duplicate_help_mouse.pressed = true
-	root_node.call("_input", duplicate_help_mouse)
+	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 2).get_center())
 	if not bool(root_node.get("show_tutorial")):
-		_fail("emulated mouse duplicate must not dismiss the tutorial")
+		_fail("guide action inside pause/settings should open the tutorial")
 		return
-	var help_release := InputEventScreenTouch.new()
-	help_release.device = 0
-	help_release.index = help_touch.index
-	help_release.position = help_point
-	help_release.pressed = false
-	root_node.call("_input", help_release)
-	root_node.set("show_tutorial", false)
+	if bool(root_node.get("show_pause")):
+		_fail("guide overlay should replace the pause sheet while visible")
+		return
+	root_node.call("_dismiss_tutorial")
+	if bool(root_node.get("show_tutorial")) or not bool(root_node.get("show_pause")):
+		_fail("closing the guide should return to pause/settings")
+		return
+	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 0).get_center())
+	if bool(root_node.get("show_pause")):
+		_fail("resume action should close pause/settings")
+		return
 
 	print("Foam Party smoke passed: patches=%d progress=%.3f best_combo=%d stars=%d" % [patch_count, progress_after, best_combo, stars])
 	get_root().remove_child(root_node)

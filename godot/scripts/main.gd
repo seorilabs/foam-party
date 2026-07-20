@@ -156,6 +156,7 @@ const STAR_REVEAL_POP_DUR := 0.5
 var sound_enabled := true
 var tutorial_seen := false
 var show_tutorial := false
+var _tutorial_returns_to_pause := false
 var persistence_enabled := true
 var last_particle_spawn := 0.0
 var car_color := Color("#ffcf5a")
@@ -786,10 +787,11 @@ func _draw() -> void:
 		_draw_toolbar()
 		_draw_completion_panel()
 		_draw_combo_milestone_flash()
-	# During play sound/help sit inside the status card; on the title screen they
-	# remain in the safe top-left area. Both avoid the AIT framework's fixed
-	# top-right controls (··· / X).
-	if not (game_state == STATE_TITLE and (show_upgrade_panel or show_skin_panel)):
+	# Playing HUD exposes one pause/settings entry only. Sound and guide actions
+	# live inside that sheet; title-screen shortcuts remain available before play.
+	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm:
+		_draw_pause_entry()
+	elif game_state == STATE_TITLE and not (show_upgrade_panel or show_skin_panel):
 		_draw_top_buttons()
 	if show_tutorial:
 		_draw_tutorial()
@@ -1129,9 +1131,7 @@ func _combo_badge_center_y() -> float:
 	return _hud_top_y() + 172.0
 
 
-func _top_button_y() -> float:
-	if game_state == STATE_PLAYING:
-		return _hud_top_y() + 12.0
+func _title_button_y() -> float:
 	return maxf(TOP_BUTTON_Y, _safe_area_design_insets().y + TOP_BUTTON_SAFE_PADDING)
 
 
@@ -1225,8 +1225,14 @@ func _handle_tap(point: Vector2) -> bool:
 			_toggle_sound()
 			queue_redraw()
 		elif _pause_button_rect(2).has_point(point):
-			_go_home()
+			show_pause = false
+			show_tutorial = true
+			_tutorial_returns_to_pause = true
+			_play_ui_select()
+			queue_redraw()
 		elif _pause_button_rect(3).has_point(point):
+			_go_home()
+		elif _pause_button_rect(4).has_point(point):
 			show_pause = false
 			show_quit_confirm = true
 			_play_ui_select()
@@ -1255,9 +1261,9 @@ func _handle_tap(point: Vector2) -> bool:
 			show_skin_panel = true
 			queue_redraw()
 			_play_ui_select()
-		elif _get_sound_rect().has_point(point):
+		elif _get_title_sound_rect().has_point(point):
 			_toggle_sound()
-		elif _get_help_rect().has_point(point):
+		elif _get_title_help_rect().has_point(point):
 			show_tutorial = true
 			_play_ui_select()
 		return true
@@ -1280,16 +1286,12 @@ func _handle_tap(point: Vector2) -> bool:
 		_play_ui_select()
 		return true
 
-	# Grow the hit target beyond the 36px glyph so the top buttons are reliably
-	# tappable on device (small touch targets otherwise miss on iOS).
-	if _get_sound_rect().grow(10.0).has_point(point):
-		_toggle_sound()
-		return true
-
-	if _get_help_rect().grow(10.0).has_point(point):
-		show_tutorial = true
+	if not completed and _get_pause_entry_rect().has_point(point):
+		show_pause = true
 		is_washing = false
+		_stop_tool_loop()
 		_play_ui_select()
+		queue_redraw()
 		return true
 
 	if not completed and _get_bomb_rect().has_point(point):
@@ -1322,6 +1324,9 @@ func _handle_tap(point: Vector2) -> bool:
 
 func _dismiss_tutorial() -> void:
 	show_tutorial = false
+	if _tutorial_returns_to_pause and game_state == STATE_PLAYING and not completed:
+		show_pause = true
+	_tutorial_returns_to_pause = false
 	_play_ui_select()
 	if not tutorial_seen:
 		tutorial_seen = true
@@ -2184,11 +2189,11 @@ func _draw_status() -> void:
 	while coin_font_size > 10 and font.get_string_size(coin_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, coin_font_size).x > coin_text_width:
 		coin_font_size -= 1
 	draw_string(font, Vector2(coin_chip.position.x + 30.0, coin_chip.position.y + 20.0), coin_text, HORIZONTAL_ALIGNMENT_LEFT, coin_text_width, coin_font_size, Color("#6b5200"))
-	var badge := Rect2(248.0, card.position.y + 10.0, 112.0, 28.0)
+	var badge := Rect2(card.end.x - 120.0, card.position.y + 10.0, 104.0, 28.0)
 	draw_style_box(_style("level_badge", Color("#49a7ff"), 14.0), badge)
 	draw_string(font, Vector2(badge.position.x, badge.position.y + 20.0), "%s %02d" % [car_type_labels[car_type], level_index], HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 13, Color.WHITE)
 
-	var bar_rect := Rect2(32.0, card.position.y + 46.0, 254.0, 24.0)
+	var bar_rect := Rect2(32.0, card.position.y + 46.0, 196.0, 24.0)
 	draw_style_box(_style("bar_bg", Color("#d7e8ef"), 12.0), bar_rect)
 	var cp := clampf(clean_progress, 0.0, 1.0)
 	var fill_width: float = bar_rect.size.x * cp
@@ -2197,7 +2202,7 @@ func _draw_status() -> void:
 		var draw_w := maxf(fill_width, 2.0)
 		_bar_fill_style.set_corner_radius_all(mini(6, int(draw_w * 0.5)))
 		draw_style_box(_bar_fill_style, Rect2(bar_rect.position, Vector2(draw_w, bar_rect.size.y)))
-	draw_string(font, Vector2(294.0, bar_rect.position.y + 18.0), "%.0f%%" % (cp * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 66.0, 15, Color("#0d3b55"))
+	draw_string(font, Vector2(236.0, bar_rect.position.y + 18.0), "%.0f%%" % (cp * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 70.0, 15, Color("#0d3b55"))
 
 	if _progress_milestone_time >= 0.0:
 		var age := float(Time.get_ticks_msec()) / 1000.0 - _progress_milestone_time
@@ -2205,7 +2210,7 @@ func _draw_status() -> void:
 			var alpha := 1.0 - age / 1.4
 			var rise := age * 42.0
 			var mc := _progress_milestone_color
-			draw_string(font, Vector2(32.0, bar_rect.position.y - rise), _progress_milestone_text, HORIZONTAL_ALIGNMENT_CENTER, 254.0, 17, Color(mc.r, mc.g, mc.b, alpha))
+			draw_string(font, Vector2(32.0, bar_rect.position.y - rise), _progress_milestone_text, HORIZONTAL_ALIGNMENT_CENTER, bar_rect.size.x, 17, Color(mc.r, mc.g, mc.b, alpha))
 
 
 # The selected-tool hint chip. Drawn as its own pass AFTER the car so the car
@@ -3025,12 +3030,10 @@ func _draw_daily_mission() -> void:
 
 func _draw_top_buttons() -> void:
 	var font: Font = _font()
-	var sound_rect := _get_sound_rect()
-	var help_rect := _get_help_rect()
-	var compact := game_state == STATE_PLAYING
+	var sound_rect := _get_title_sound_rect()
+	var help_rect := _get_title_help_rect()
 	for rect in [sound_rect, help_rect]:
-		var style_key := "hud_icon_button" if compact else "round_button"
-		draw_style_box(_style(style_key, Color(0.03, 0.14, 0.2, 0.68), rect.size.x * 0.5), rect)
+		draw_style_box(_style("round_button", Color(0.03, 0.14, 0.2, 0.68), rect.size.x * 0.5), rect)
 	var icon_color := Color(0.93, 0.99, 1.0)
 	var speaker_center := sound_rect.get_center()
 	var icon_scale := sound_rect.size.x / 30.0
@@ -3049,6 +3052,16 @@ func _draw_top_buttons() -> void:
 		font.get_ascent(help_font_size) - font.get_descent(help_font_size)
 	) * 0.5
 	draw_string(font, Vector2(help_rect.position.x, help_baseline_y), "?", HORIZONTAL_ALIGNMENT_CENTER, help_rect.size.x, help_font_size, icon_color)
+
+
+func _draw_pause_entry() -> void:
+	var rect := _get_pause_entry_rect()
+	draw_style_box(_style("pause_entry_shadow", Color(0.03, 0.14, 0.2, 0.24), 22.0), Rect2(rect.position + Vector2(0.0, 3.0), rect.size))
+	draw_style_box(_style("pause_entry", Color(0.03, 0.14, 0.2, 0.76), 22.0), rect)
+	var center := rect.get_center()
+	var bar_size := Vector2(4.5, 16.0)
+	for offset_x in [-5.0, 5.0]:
+		draw_rect(Rect2(center + Vector2(offset_x, 0.0) - bar_size * 0.5, bar_size), Color(0.93, 0.99, 1.0))
 
 
 func _draw_tutorial() -> void:
@@ -3510,10 +3523,10 @@ func _draw_pause_menu() -> void:
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 46.0), tr("PAUSE_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#123246"))
-	var labels := [tr("RESUME"), tr("SOUND_ON") if sound_enabled else tr("SOUND_OFF"), tr("HOME"), tr("QUIT")]
-	var fills := [Color("#39d98a"), Color("#7fd6e6"), Color("#f8d97a"), Color("#f2a0a0")]
-	var text_cols := [Color("#0d3b2a"), Color("#0d3b55"), Color("#5b4a10"), Color("#5a1616")]
-	for i in range(4):
+	var labels := [tr("RESUME"), tr("SOUND_ON") if sound_enabled else tr("SOUND_OFF"), tr("GUIDE"), tr("HOME"), tr("QUIT")]
+	var fills := [Color("#39d98a"), Color("#7fd6e6"), Color("#a9d7ff"), Color("#f8d97a"), Color("#f2a0a0")]
+	var text_cols := [Color("#0d3b2a"), Color("#0d3b55"), Color("#123246"), Color("#5b4a10"), Color("#5a1616")]
+	for i in range(5):
 		var r := _pause_button_rect(i)
 		draw_style_box(_style("pause_sh_%d" % i, Color(0.0, 0.0, 0.0, 0.18), 14.0), Rect2(r.position + Vector2(0.0, 4.0), r.size))
 		draw_style_box(_style("pause_btn_%d" % i, fills[i], 14.0), r)
@@ -3663,16 +3676,21 @@ func _get_double_rect() -> Rect2:
 	return Rect2(58.0, 352.0, 274.0, 42.0)
 
 
-# Pause menu (centered modal). 4 stacked buttons: resume / sound / home / quit.
+# Pause/settings sheet: resume / sound / guide / home / quit.
 func _pause_panel() -> Rect2:
-	return Rect2(55.0, 250.0, 280.0, 360.0)
+	var panel_height := 416.0
+	var insets := _safe_area_design_insets()
+	var min_y := insets.y + 16.0
+	var max_y := DESIGN_SIZE.y - insets.w - 16.0 - panel_height
+	var centered_y := (DESIGN_SIZE.y - panel_height) * 0.5
+	return Rect2(55.0, clampf(centered_y, min_y, maxf(min_y, max_y)), 280.0, panel_height)
 
 
 func _pause_button_rect(index: int) -> Rect2:
 	var panel := _pause_panel()
-	var button_h := 52.0
-	var gap := 14.0
-	var y0 := panel.position.y + 74.0
+	var button_h := 50.0
+	var gap := 10.0
+	var y0 := panel.position.y + 72.0
 	return Rect2(panel.position.x + 24.0, y0 + float(index) * (button_h + gap), panel.size.x - 48.0, button_h)
 
 
@@ -3705,7 +3723,7 @@ func _get_start_rect() -> Rect2:
 
 
 func _get_status_rect() -> Rect2:
-	return Rect2(14.0, _hud_top_y(), 362.0, 84.0)
+	return Rect2(14.0, _hud_top_y(), 310.0, 84.0)
 
 
 func _get_grade_rect() -> Rect2:
@@ -3733,16 +3751,16 @@ func _get_daily_mission_bar_rect() -> Rect2:
 	)
 
 
-func _get_sound_rect() -> Rect2:
-	if game_state == STATE_PLAYING:
-		return Rect2(156.0, _top_button_y(), 24.0, 24.0)
-	return Rect2(14.0, _top_button_y(), 30.0, 30.0)
+func _get_pause_entry_rect() -> Rect2:
+	return Rect2(332.0, _hud_top_y() + 20.0, 44.0, 44.0)
 
 
-func _get_help_rect() -> Rect2:
-	if game_state == STATE_PLAYING:
-		return Rect2(204.0, _top_button_y(), 24.0, 24.0)
-	return Rect2(50.0, _top_button_y(), 30.0, 30.0)
+func _get_title_sound_rect() -> Rect2:
+	return Rect2(14.0, _title_button_y(), 30.0, 30.0)
+
+
+func _get_title_help_rect() -> Rect2:
+	return Rect2(50.0, _title_button_y(), 30.0, 30.0)
 
 
 func _get_bomb_rect() -> Rect2:
