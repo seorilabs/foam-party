@@ -13,6 +13,7 @@ func _run_core_tests() -> void:
 	var Scoring: GDScript = load("res://core/use_cases/scoring.gd")
 	var Economy: GDScript = load("res://core/use_cases/economy.gd")
 	var Coaching: GDScript = load("res://core/use_cases/coaching.gd")
+	var ComboProtection: GDScript = load("res://core/use_cases/combo_protection.gd")
 	var StalledDirtHighlight: GDScript = load("res://core/use_cases/stalled_dirt_highlight.gd")
 	var DailyMission: GDScript = load("res://core/use_cases/daily_mission.gd")
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
@@ -23,8 +24,10 @@ func _run_core_tests() -> void:
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
 	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
 	var I18n: GDScript = load("res://scripts/services/i18n.gd")
-	if Scoring == null or Economy == null or Coaching == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
+	if Scoring == null or Economy == null or Coaching == null or ComboProtection == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
+		return
+	if not _test_combo_protection_rule(ComboProtection, GameConfig):
 		return
 	if not _test_car_roster_and_saved_level_mapping(GameConfig):
 		return
@@ -396,6 +399,30 @@ func _test_ftue_release_attribution_and_shared_native_path(FtueEvents: GDScript)
 		return false
 	if not native_adapter_source.contains("func log_event(event_name: String, params: Dictionary = {})"):
 		_fail("native FTUE events must keep the shared AnalyticsPort log_event path")
+		return false
+	return true
+
+
+func _test_combo_protection_rule(ComboProtection: GDScript, GameConfig: GDScript) -> bool:
+	if absf(float(GameConfig.COMBO_GRACE) - 1.0) > 0.001:
+		_fail("combo grace should stay at one second")
+		return false
+	if not bool(ComboProtection.protection_after_removal(0, false)):
+		_fail("a newly started combo should charge one protection")
+		return false
+	if bool(ComboProtection.protection_after_removal(3, false)):
+		_fail("an active combo must not recharge spent protection")
+		return false
+	var first_timeout: Dictionary = ComboProtection.timeout_transition(4, true)
+	if int(first_timeout["combo_count"]) != 4 or absf(float(first_timeout["combo_timer"]) - float(GameConfig.COMBO_GRACE)) > 0.001:
+		_fail("first timeout should preserve combo and start the named grace window")
+		return false
+	if bool(first_timeout["protection_available"]) or not bool(first_timeout["grace_active"]) or bool(first_timeout["did_reset"]):
+		_fail("first timeout should consume protection without resetting combo")
+		return false
+	var second_timeout: Dictionary = ComboProtection.timeout_transition(int(first_timeout["combo_count"]), bool(first_timeout["protection_available"]))
+	if int(second_timeout["combo_count"]) != 0 or float(second_timeout["combo_timer"]) != 0.0 or not bool(second_timeout["did_reset"]):
+		_fail("second timeout should reset combo after protection is spent")
 		return false
 	return true
 

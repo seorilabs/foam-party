@@ -8,6 +8,7 @@ const SkinCatalog = preload("res://core/domain/skin_catalog.gd")
 const Scoring = preload("res://core/use_cases/scoring.gd")
 const Economy = preload("res://core/use_cases/economy.gd")
 const Coaching = preload("res://core/use_cases/coaching.gd")
+const ComboProtection = preload("res://core/use_cases/combo_protection.gd")
 const StalledDirtHighlight = preload("res://core/use_cases/stalled_dirt_highlight.gd")
 const DailyMission = preload("res://core/use_cases/daily_mission.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
@@ -35,6 +36,7 @@ const TOOL_SPONGE := "sponge"
 const CAR_TYPES := GameConfig.CAR_TYPES
 const CLEAN_DAMAGE_RATE := GameConfig.CLEAN_DAMAGE_RATE
 const COMBO_WINDOW := GameConfig.COMBO_WINDOW
+const COMBO_GRACE := GameConfig.COMBO_GRACE
 const STAR3_TIME := GameConfig.STAR3_TIME
 const STAR3_COMBO := GameConfig.STAR3_COMBO
 const STAR2_TIME := GameConfig.STAR2_TIME
@@ -166,6 +168,9 @@ var _progress_milestone_text := ""
 var _progress_milestone_color := Color.WHITE
 var combo_count := 0
 var combo_timer := 0.0
+var combo_protection_available := false
+var combo_grace_active := false
+var _combo_grace_flash_time := -10.0
 var _halo_phase := 0.0
 var best_combo := 0
 var _combo_bonus_time := -10.0
@@ -689,13 +694,10 @@ func _process(delta: float) -> void:
 		if combo_timer > 0.0:
 			combo_timer -= delta
 			if combo_timer <= 0.0:
-				combo_timer = 0.0
-				if combo_count >= 2:
-					_spawn_combo_break_burst()
-				combo_count = 0
-				_last_milestone_haptic_combo = -1
+				_resolve_combo_timeout()
 			elif combo_count >= STAR3_COMBO:
-				var urgency := clampf(1.0 - combo_timer / maxf(COMBO_WINDOW, 0.001), 0.0, 1.0)
+				var active_window := COMBO_GRACE if combo_grace_active else COMBO_WINDOW
+				var urgency := clampf(1.0 - combo_timer / maxf(active_window, 0.001), 0.0, 1.0)
 				_halo_phase = fmod(_halo_phase + delta * (9.0 + urgency * 6.0) * TAU, TAU)
 	else:
 		var _wt := _grade_time_to_downgrade()
@@ -877,6 +879,21 @@ func _spawn_combo_break_burst() -> void:
 	audio.play_combo_break()
 
 
+func _resolve_combo_timeout() -> void:
+	var transition: Dictionary = ComboProtection.timeout_transition(combo_count, combo_protection_available)
+	var previous_combo := combo_count
+	combo_count = int(transition["combo_count"])
+	combo_timer = float(transition["combo_timer"])
+	combo_protection_available = bool(transition["protection_available"])
+	combo_grace_active = bool(transition["grace_active"])
+	if combo_grace_active:
+		_combo_grace_flash_time = float(Time.get_ticks_msec()) / 1000.0
+	elif bool(transition["did_reset"]):
+		if previous_combo >= 2:
+			_spawn_combo_break_burst()
+		_last_milestone_haptic_combo = -1
+
+
 func _input(event: InputEvent) -> void:
 	# The project handles real mouse and real touch events separately. Godot can
 	# additionally synthesize the other pointer type with DEVICE_ID_EMULATION;
@@ -1021,6 +1038,9 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_trail_has_last = false
 	combo_count = 0
 	combo_timer = 0.0
+	combo_protection_available = false
+	combo_grace_active = false
+	_combo_grace_flash_time = -10.0
 	best_combo = 0
 	level_time = 0.0
 	# Sync _prev_patience_zone immediately after level_time reset so there is
@@ -1177,6 +1197,14 @@ func get_audio_stream_count_for_test() -> int:
 
 func get_combo_for_test() -> int:
 	return combo_count
+
+
+func is_combo_protection_available_for_test() -> bool:
+	return combo_protection_available
+
+
+func is_combo_grace_active_for_test() -> bool:
+	return combo_grace_active
 
 
 func get_best_combo_for_test() -> int:
@@ -2253,9 +2281,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 			_gold_spot_pop_amount = gold_reward
 			_spawn_gold_spot_burst(burst_center, burst_radius)
 			audio.play_coin_bonus()
-		combo_count += 1
-		combo_timer = COMBO_WINDOW
-		best_combo = max(best_combo, combo_count)
+		_register_combo_removal()
 		if combo_count == STAR3_COMBO and not _star3_combo_unlocked:
 			_star3_combo_unlocked = true
 			audio.play_star3_gate()
@@ -2311,6 +2337,14 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		_play_removal_sound()
 		if OS.has_feature("mobile"):
 			Input.vibrate_handheld(28)
+
+
+func _register_combo_removal() -> void:
+	combo_protection_available = ComboProtection.protection_after_removal(combo_count, combo_protection_available)
+	combo_count += 1
+	combo_timer = COMBO_WINDOW
+	combo_grace_active = false
+	best_combo = max(best_combo, combo_count)
 
 
 func _spawn_removal_burst(center: Vector2, radius: float) -> void:
@@ -4352,6 +4386,7 @@ func _draw_combo_badge() -> void:
 		draw_style_box(_style("combo_halo", Color(1.0, 0.78, 0.22, halo), 24.0), halo_rect)
 	draw_style_box(_style(style_key, bg, 18.0), badge)
 	draw_string(_font(), Vector2(badge.position.x, badge.position.y + badge_size.y * 0.5 + 6.0), tr("COMBO_BADGE") % combo_count, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, int(16.0 * pop), Color("#7a5500") if is_hot else Color("#123246"))
+	_draw_combo_protection_marker(badge, pop, time_now)
 	if _combo_bonus_time >= 0.0:
 		var _age := float(Time.get_ticks_msec()) / 1000.0 - _combo_bonus_time
 		if _age < 1.2:
@@ -4361,7 +4396,8 @@ func _draw_combo_badge() -> void:
 				tr("COIN_GAIN") % _combo_bonus_amount, HORIZONTAL_ALIGNMENT_LEFT,
 				-1, 16, Color(1.0, 0.85, 0.2, _alpha))
 	# Circular timer ring — sweeps clockwise from top as the combo window drains.
-	var fill_frac := clampf(combo_timer / COMBO_WINDOW, 0.0, 1.0)
+	var active_window := COMBO_GRACE if combo_grace_active else COMBO_WINDOW
+	var fill_frac := clampf(combo_timer / maxf(active_window, 0.001), 0.0, 1.0)
 	var is_urgent := fill_frac > 0.0 and fill_frac <= 0.35
 	var ring_alpha := clampf(fill_frac / 0.3, 0.65 if is_urgent else 0.0, 1.0)
 	var ring_r := maxf(badge_size.x, badge_size.y) * 0.5 + 8.0
@@ -4377,6 +4413,21 @@ func _draw_combo_badge() -> void:
 		var ring_points := clampi(int(ring_r * TAU), 32, 128)
 		draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU, ring_points, Color(0.0, 0.0, 0.0, 0.22 * ring_alpha), 5.0, true)
 		draw_arc(ring_center, ring_r, -PI * 0.5, -PI * 0.5 + TAU * fill_frac, ring_points, ring_col, 3.5, true)
+
+
+func _draw_combo_protection_marker(badge: Rect2, pop: float, time_now: float) -> void:
+	var center := Vector2(badge.end.x - 14.0 * pop, badge.get_center().y)
+	var radius := 5.0 * pop
+	if combo_protection_available:
+		draw_circle(center, radius + 2.0 * pop, Color(0.08, 0.24, 0.32, 0.32))
+		draw_circle(center, radius, Color("#65e6d1"))
+		draw_circle(center - Vector2(1.4, 1.4) * pop, 1.6 * pop, Color(1.0, 1.0, 1.0, 0.9))
+		return
+	var flash_age := time_now - _combo_grace_flash_time
+	if combo_grace_active or (flash_age >= 0.0 and flash_age < 0.55):
+		var pulse := 1.0 + 0.22 * sin(time_now * 18.0)
+		var alpha := 1.0 if combo_grace_active else clampf(1.0 - flash_age / 0.55, 0.0, 1.0)
+		draw_arc(center, (radius + 2.0 * pop) * pulse, 0.0, TAU, 24, Color(0.4, 0.93, 1.0, alpha), 2.2 * pop, true)
 
 
 func _draw_gold_spot_reward_pop() -> void:

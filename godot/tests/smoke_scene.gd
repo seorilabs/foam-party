@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -223,14 +223,7 @@ func _run_smoke() -> void:
 		_fail("star rating out of range")
 		return
 
-	root_node.set("combo_count", 3)
-	root_node.set("combo_timer", 0.0001)
-	await process_frame
-	if int(root_node.call("get_combo_for_test")) != 0:
-		_fail("combo did not reset after window expired")
-		return
-	if float(root_node.get("combo_timer")) < 0.0:
-		_fail("combo timer went negative")
+	if not await _test_combo_protection_contract(root_node):
 		return
 
 	root_node.set("level_time", 60.0)
@@ -903,6 +896,48 @@ func _test_car_transition_contract(root_node: Node) -> bool:
 		_fail("car, dirt, and particles must share one transition offset")
 		return false
 	root_node.call("reset_game", 1, "car_transition_smoke_cleanup")
+	return true
+
+
+func _test_combo_protection_contract(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	root_node.set("combo_count", 0)
+	root_node.set("combo_timer", 0.0)
+	root_node.set("combo_protection_available", false)
+	root_node.set("combo_grace_active", false)
+	root_node.call("_register_combo_removal")
+	if int(root_node.call("get_combo_for_test")) != 1 or not bool(root_node.call("is_combo_protection_available_for_test")):
+		_fail("starting a combo should charge one protection")
+		return false
+	root_node.call("_register_combo_removal")
+	root_node.set("combo_timer", 0.0001)
+	await process_frame
+	if int(root_node.call("get_combo_for_test")) != 2 or bool(root_node.call("is_combo_protection_available_for_test")) or not bool(root_node.call("is_combo_grace_active_for_test")):
+		_fail("first combo timeout should consume protection and preserve the streak")
+		return false
+	if float(root_node.get("combo_timer")) <= 0.0 or float(root_node.get("combo_timer")) > 1.0:
+		_fail("first combo timeout should enter the one-second grace window")
+		return false
+	root_node.call("_register_combo_removal")
+	if int(root_node.call("get_combo_for_test")) != 3 or bool(root_node.call("is_combo_protection_available_for_test")) or bool(root_node.call("is_combo_grace_active_for_test")):
+		_fail("removal during grace should continue the combo without recharging protection")
+		return false
+	root_node.set("combo_timer", 0.0001)
+	await process_frame
+	if int(root_node.call("get_combo_for_test")) != 0 or float(root_node.get("combo_timer")) != 0.0:
+		_fail("second combo timeout should reset the streak")
+		return false
+	root_node.call("_register_combo_removal")
+	if int(root_node.call("get_combo_for_test")) != 1 or not bool(root_node.call("is_combo_protection_available_for_test")):
+		_fail("the next newly started combo should recharge protection")
+		return false
+	root_node.call("reset_game", 1, "combo_protection_smoke_cleanup")
+	if int(root_node.call("get_combo_for_test")) != 0 or bool(root_node.call("is_combo_protection_available_for_test")) or bool(root_node.call("is_combo_grace_active_for_test")):
+		_fail("reset_game should clear combo protection and grace state")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("combo protection must stay inside the existing badge without new HUD controls")
+		return false
 	return true
 
 
