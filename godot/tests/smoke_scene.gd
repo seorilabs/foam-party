@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_grade_combo_prompt_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -1343,9 +1343,12 @@ func _test_scaled_star3_combo_gate_contract(root_node: Node) -> bool:
 	root_node.set("level_time", 60.0)
 	root_node.set("best_combo", 4)
 	var expected_prompt := TranslationServer.translate("GRADE_COMBO_FOR3") % 5
+	var actual_prompt := String(root_node.call("_grade_combo_prompt"))
+	if actual_prompt != expected_prompt:
+		_fail("existing grade tracker must display the scaled level 4 combo requirement x5")
+		return false
 	if int(root_node.call("calc_stars_for_test")) != 2 \
-			or String(root_node.call("_grade_slot_state", 2)) != "target" \
-			or String(root_node.call("get_grade_combo_prompt_for_test")) != expected_prompt:
+			or String(root_node.call("_grade_slot_state", 2)) != "target":
 		_fail("level 4 combo four must remain below the scaled third-star gate")
 		return false
 	var patches: Array = root_node.get("dirt_patches")

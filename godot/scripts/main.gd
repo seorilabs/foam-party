@@ -1159,10 +1159,6 @@ func is_star3_combo_unlocked_for_test() -> bool:
 	return _star3_combo_unlocked
 
 
-func get_grade_combo_prompt_for_test() -> String:
-	return _grade_combo_prompt()
-
-
 func get_customer_patience_for_test(elapsed_seconds: float, progress: float) -> float:
 	return CustomerPatience.value(elapsed_seconds, progress)
 
