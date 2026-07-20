@@ -13,10 +13,13 @@
 
 ## Google Play
 
+- [ ] Play Console `Account Details` 한국 법률 추가 정보 완료 및 403 해소
 - [ ] AAB built on x64 Linux release path
 - [ ] Signing confirmed
 - [ ] Internal testing upload ready
 - [ ] Data safety confirmed
+- [ ] 승인된 태그로 `google_play_track=production`, `google_play_release_status=completed` dispatch
+- [ ] Android Publisher API 또는 Play Console에서 production versionName/versionCode/status readback
 
 ## App Store
 

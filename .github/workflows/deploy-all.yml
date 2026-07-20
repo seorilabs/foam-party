@@ -17,6 +17,16 @@ on:
       deploy_google_play:
         type: boolean
         default: true
+      google_play_track:
+        description: "Google Play 배포 트랙"
+        type: choice
+        options: [internal, production]
+        default: internal
+      google_play_release_status:
+        description: "Google Play 릴리스 상태"
+        type: choice
+        options: [draft, completed]
+        default: completed
       memo:
         type: string
         required: false
@@ -39,7 +49,7 @@ jobs:
       tag: ${{ steps.t.outputs.tag }}
       version_name: ${{ steps.t.outputs.version_name }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -75,3 +85,5 @@ jobs:
       release_tag: ${{ needs.resolve.outputs.tag }}
       version_name: ${{ needs.resolve.outputs.version_name }}
       upload: true
+      track: ${{ inputs.google_play_track }}
+      release_status: ${{ inputs.google_play_release_status }}

@@ -8,6 +8,7 @@
 - Current public release: `0.1.0` / versionCode `2`
 - Target release: `1.0.0` / versionCode `1000000`; Play bundle과 internal upload 완료, production draft 생성 상태.
 - Current blocker: 한국 개발자 계정의 Play Console `Account Details` 추가 정보 미입력으로 production commit이 403 거부됨.
+- Release automation: `Deploy All`은 `internal`/`completed`를 기본값으로 유지하며, 승인된 배포에서는 `production`/`completed`를 명시적으로 선택할 수 있다.
 
 ## Apple App Store
 
