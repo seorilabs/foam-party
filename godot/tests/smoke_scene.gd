@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -164,6 +164,8 @@ func _run_smoke() -> void:
 		_fail("level 1 dirt sequence should be deterministic for the fixed seed")
 		return
 	if not _test_dirt_spawn_density_contract(root_node):
+		return
+	if not _test_wheel_dirt_contract(root_node):
 		return
 	if not _test_oil_sheen_contract(root_node):
 		return
@@ -1145,12 +1147,15 @@ func _test_dirt_spawn_density_contract(root_node: Node) -> bool:
 			_fail("level %d car silhouette must retain the 40-slot density cap" % level)
 			return false
 		var centers: Array[Vector2] = root_node.call("get_patch_centers_for_test")
+		var wheel_indices: Array[int] = root_node.call("get_wheel_dirt_indices_for_test")
 		var minimum_distance: float = root_node.call("get_dirt_spawn_min_center_distance_for_test")
 		for first_index in range(centers.size()):
 			if not bool(root_node.call("_point_in_wash_area", centers[first_index])):
 				_fail("level %d spawned dirt outside the washable area" % level)
 				return false
 			for second_index in range(first_index + 1, centers.size()):
+				if first_index in wheel_indices or second_index in wheel_indices:
+					continue
 				if centers[first_index].distance_to(centers[second_index]) < minimum_distance - 0.01:
 					_fail("level %d dirt centers violated the overlap guard" % level)
 					return false
@@ -1161,6 +1166,102 @@ func _test_dirt_spawn_density_contract(root_node: Node) -> bool:
 	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
 		_fail("dirt density must not change top HUD residency")
 		return false
+	return true
+
+
+func _test_wheel_dirt_contract(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	var original_coins := int(root_node.get("coins"))
+	var original_total_stars := int(root_node.get("total_stars"))
+	var original_best_times: Dictionary = root_node.get("best_times").duplicate(true)
+	var original_best_stars: Dictionary = root_node.get("best_stars").duplicate(true)
+	root_node.call("reset_game", 1, "wheel_dirt_smoke")
+	var wheel_specs: Array = root_node.call("get_wheel_specs_for_test")
+	var wheel_indices: Array[int] = root_node.call("get_wheel_dirt_indices_for_test")
+	var patches: Array = root_node.get("dirt_patches")
+	if wheel_specs.size() != 2 or wheel_indices.size() != 2 or wheel_indices[0] == wheel_indices[1]:
+		_fail("each of the two rendered wheels must own one distinct mud patch")
+		return false
+	var total_health := 0.0
+	var non_wheel_mud_count := 0
+	for patch_index in range(patches.size()):
+		var current_patch = patches[patch_index]
+		total_health += float(current_patch.get("max_health"))
+		if String(current_patch.get("kind")) == "mud" and patch_index not in wheel_indices:
+			non_wheel_mud_count += 1
+	if absf(float(root_node.call("get_initial_dirt_total_for_test")) - total_health) > 0.001:
+		_fail("wheel mud max health must be included in initial_dirt_total")
+		return false
+	if int(root_node.call("get_patch_count_by_kind_for_test", "mud")) != non_wheel_mud_count + 2:
+		_fail("mud count must include both dedicated wheel patches")
+		return false
+	var centers: Array[Vector2] = root_node.call("get_patch_centers_for_test")
+	for wheel_index in range(2):
+		var patch_index := wheel_indices[wheel_index]
+		var wheel_patch = patches[patch_index]
+		var wheel: Dictionary = wheel_specs[wheel_index]
+		if String(wheel_patch.get("kind")) != "mud" \
+				or centers[patch_index].distance_to(wheel["center"]) > 0.01 \
+				or float(wheel_patch.get("radius")) <= float(wheel["radius"]) * 0.48 \
+				or bool(wheel_patch.get("is_gold_spot")):
+			_fail("wheel dirt must be centered over and visibly cover each clean hub")
+			return false
+
+	var left_index := wheel_indices[0]
+	var right_index := wheel_indices[1]
+	if not bool(root_node.call("is_tool_misapplied_for_test", "air", left_index)) \
+			or String(root_node.call("simulate_patch_hint_for_test", "air", left_index, 0.6)) != "water" \
+			or not bool(root_node.call("is_tool_misapplied_for_test", "sponge", right_index)):
+		_fail("wheel mud must reuse existing air and dry-sponge coaching")
+		return false
+	if bool(root_node.call("is_tool_misapplied_for_test", "soap", right_index)):
+		_fail("wheel mud must preserve the existing valid soap preparation path")
+		return false
+	var progress_before := float(root_node.call("get_clean_progress_for_test"))
+	root_node.call("apply_tool_to_patch_for_test", "water", left_index, 1.5)
+	root_node.call("apply_tool_to_patch_for_test", "water", right_index, 0.25)
+	root_node.call("apply_tool_to_patch_for_test", "sponge", right_index, 2.0)
+	if float(root_node.call("get_patch_health_for_test", left_index)) > 0.0 \
+			or float(root_node.call("get_patch_health_for_test", right_index)) > 0.0 \
+			or float(root_node.call("get_clean_progress_for_test")) <= progress_before:
+		_fail("water and prepared sponge paths must remove wheel mud and advance cleanliness")
+		return false
+	for remaining_patch in patches:
+		remaining_patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	if not bool(root_node.get("completed")) or float(root_node.call("get_clean_progress_for_test")) < 0.999:
+		_fail("cleaned wheel mud must allow full cleanliness and level completion")
+		return false
+
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var draw_start := main_source.find("func _draw() -> void:")
+	var draw_end := main_source.find("\nfunc ", draw_start + 1)
+	var draw_body := main_source.substr(draw_start, draw_end - draw_start)
+	var car_start := main_source.find("func _draw_car() -> void:")
+	var car_end := main_source.find("\nfunc ", car_start + 1)
+	var car_body := main_source.substr(car_start, car_end - car_start)
+	if draw_body.find("_draw_dirt()") <= draw_body.find("_draw_car()") \
+			or not car_body.contains('Color("#cfd8dc")') \
+			or not main_source.contains('_gameplay_point(wheel["center"])'):
+		_fail("wheel mud must render above the clean hub at gameplay-transformed wheel centers")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("wheel washing must not add persistent UI controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("wheel washing must keep existing HUD residency unchanged")
+		return false
+	root_node.set("coins", original_coins)
+	root_node.set("total_stars", original_total_stars)
+	root_node.set("best_times", original_best_times)
+	root_node.set("best_stars", original_best_stars)
+	root_node.call("reset_game", 1, "wheel_dirt_smoke_cleanup")
 	return true
 
 
