@@ -48,6 +48,13 @@ func _run() -> void:
 		quit(1)
 		return
 	node.set("show_stage_panel", false)
+	node.set("show_skin_panel", true)
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_car_customization.png")):
+		quit(1)
+		return
+	node.set("show_skin_panel", false)
+	node.call("_select_license_plate", "BUBBLE")
 	node.set("level_index", 1)
 	node.set("best_times", {})
 	node.set("best_stars", {})

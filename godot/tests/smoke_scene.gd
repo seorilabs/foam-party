@@ -28,7 +28,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test"]:
+	for method_name in ["get_combo_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -242,6 +242,8 @@ func _run_smoke() -> void:
 	if not _test_clean_shine_progression_contract(root_node):
 		return
 	if not _test_stage_selection_and_retry_contract(root_node):
+		return
+	if not _test_license_plate_customization(root_node):
 		return
 
 	root_node.call("reset_game", 5)
@@ -660,6 +662,31 @@ func _test_ftue_entry_and_tutorial_event_order_and_params(events: Array[Dictiona
 		_fail("tutorial completion params changed: " + str(events[5]))
 		return false
 	print("FTUE analytics smoke passed: " + " -> ".join(expected_names))
+	return true
+
+
+func _test_license_plate_customization(root_node: Node) -> bool:
+	var panel: Rect2 = root_node.call("_skin_panel_rect")
+	var options: Array = root_node.call("get_license_plate_options_for_test")
+	if options.size() != 5 or String(root_node.call("get_license_plate_text_for_test")) != "FOAM":
+		_fail("license plate customization should expose five safe presets and default to FOAM")
+		return false
+	for choice_index in range(options.size()):
+		if not panel.encloses(root_node.call("_license_plate_choice_rect", panel, choice_index)):
+			_fail("license plate choices must stay inside the customization sheet")
+			return false
+	root_node.call("_handle_skin_panel_tap", root_node.call("_license_plate_choice_rect", panel, 2).get_center())
+	if String(root_node.call("get_license_plate_text_for_test")) != "WASH":
+		_fail("selecting a license plate preset should update the rendered value")
+		return false
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_source.contains('config.set_value("customization", "license_plate", license_plate_text)') \
+			or not main_source.contains('config.get_value("customization", "license_plate"'):
+		_fail("license plate selection must be wired to progress save and load")
+		return false
+	if not main_source.contains('tr("PLATE_TITLE")'):
+		_fail("license plate editor label must use its i18n key")
+		return false
 	return true
 
 
