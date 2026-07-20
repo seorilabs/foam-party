@@ -10,6 +10,7 @@ const Economy = preload("res://core/use_cases/economy.gd")
 const Coaching = preload("res://core/use_cases/coaching.gd")
 const DailyMission = preload("res://core/use_cases/daily_mission.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
+const StageSelection = preload("res://core/use_cases/stage_selection.gd")
 const WashRules = preload("res://core/use_cases/wash_rules.gd")
 const DirtProgression = preload("res://core/use_cases/dirt_progression.gd")
 const AnalyticsPort = preload("res://core/ports/analytics_port.gd")
@@ -110,7 +111,10 @@ const TRAIL_MAX_POINTS := 16
 const COMBO_BONUS_AMOUNTS := GameConfig.COMBO_BONUS_AMOUNTS
 var clean_progress := 0.0
 var initial_dirt_total := 1.0
+# Highest unlocked progression stays stable while active_level_index can revisit
+# a deterministic earlier stage from the title sheet.
 var level_index := 1
+var active_level_index := 1
 var completed := false
 var completion_burst_done := false
 var _gleam_time := -1.0
@@ -138,6 +142,7 @@ var _combo_milestone_count := 0
 var _customer_cheer_text := ""
 var _customer_cheer_time := -10.0
 var best_times: Dictionary = {}
+var best_stars: Dictionary = {}
 var is_new_record := false
 var record_pop_time := -10.0
 var _tool_select_time := -10.0
@@ -214,6 +219,8 @@ var upgrade_soap := 0
 var upgrade_sponge := 0
 var show_upgrade_panel := false
 var show_skin_panel := false
+var show_stage_panel := false
+var _stage_page := 0
 var _skin_panel_tab := 0
 var skin_water := "classic"
 var skin_air := "classic"
@@ -317,6 +324,11 @@ func _load_progress() -> void:
 			best_times = {}
 			for key in (stored_best as Dictionary):
 				best_times[int(key)] = float(stored_best[key])
+		var stored_best_stars: Variant = config.get_value("game", "best_stars", {})
+		if stored_best_stars is Dictionary:
+			best_stars = {}
+			for key in (stored_best_stars as Dictionary):
+				best_stars[int(key)] = clampi(int(stored_best_stars[key]), 0, 3)
 		main_claimed_date = String(config.get_value("daily", "claimed_date", ""))
 	var today := _today_string()
 	var daily_config := ConfigFile.new()
@@ -379,6 +391,7 @@ func _save_progress() -> Error:
 	config.set_value("settings", "sound", sound_enabled)
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
 	config.set_value("game", "best_times", best_times)
+	config.set_value("game", "best_stars", best_stars)
 	config.set_value("daily", "claimed_date", daily_mission_date if daily_mission_claimed else "")
 	config.set_value("upgrades", "water", upgrade_water)
 	config.set_value("upgrades", "soap", upgrade_soap)
@@ -425,20 +438,30 @@ func _emit_analytics(ev: Dictionary) -> void:
 	analytics.log_event(ev["name"], ev["params"])
 
 
-func start_game() -> void:
+func start_game(target_level: int = -1, load_reason: String = "title_start") -> void:
+	var resolved_level := level_index if target_level < 1 else target_level
+	if active_level_index != resolved_level:
+		reset_game(resolved_level, load_reason)
 	game_state = STATE_PLAYING
-	_emit_analytics(ContentEvents.game_start(level_index))
+	_emit_analytics(ContentEvents.game_start(active_level_index))
 	_mark_level_started()
 	if not tutorial_seen:
 		_show_tutorial("first_run")
 	queue_redraw()
 
 
+func _advance_to_next_level() -> void:
+	var next_level := active_level_index + 1
+	level_index = maxi(level_index, next_level)
+	reset_game(next_level, "next")
+	_save_progress()
+
+
 func _mark_level_started() -> void:
 	if _level_started:
 		return
 	_level_started = true
-	_emit_analytics(ContentEvents.level_start(level_index, car_type))
+	_emit_analytics(ContentEvents.level_start(active_level_index, car_type))
 
 
 # Register the Godot back handler with the AIT wrapper once the bridge is present
@@ -471,6 +494,8 @@ func _on_back_pressed() -> void:
 		show_upgrade_panel = false
 	elif show_skin_panel:
 		show_skin_panel = false
+	elif show_stage_panel:
+		show_stage_panel = false
 	elif game_state == STATE_PLAYING:
 		show_pause = true
 		_play_ui_select()
@@ -483,6 +508,7 @@ func _on_back_pressed() -> void:
 func _go_home() -> void:
 	show_pause = false
 	show_quit_confirm = false
+	show_stage_panel = false
 	is_washing = false
 	game_state = STATE_TITLE
 	_emit_analytics(FtueEvents.title_screen_view(FtueEvents.ENTRY_PAUSE_HOME))
@@ -794,6 +820,8 @@ func _draw() -> void:
 			_draw_upgrade_panel()
 		if show_skin_panel:
 			_draw_skin_panel()
+		if show_stage_panel:
+			_draw_stage_panel()
 	else:
 		_draw_wash_trail()
 		_draw_tool_cursor()
@@ -811,7 +839,7 @@ func _draw() -> void:
 	# live inside that sheet; title-screen shortcuts remain available before play.
 	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm:
 		_draw_pause_entry()
-	elif game_state == STATE_TITLE and not (show_upgrade_panel or show_skin_panel):
+	elif game_state == STATE_TITLE and not (show_upgrade_panel or show_skin_panel or show_stage_panel):
 		_draw_top_buttons()
 	if show_tutorial:
 		_draw_tutorial()
@@ -823,7 +851,7 @@ func _draw() -> void:
 
 func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_emit_analytics(FtueEvents.level_load_start(new_level, load_reason))
-	level_index = new_level
+	active_level_index = maxi(new_level, 1)
 	_level_started = false
 	completed = false
 	completion_burst_done = false
@@ -874,7 +902,7 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_set_car_palette()
 	_spawn_dirt()
 	_update_clean_progress()
-	_emit_analytics(FtueEvents.level_load_complete(level_index, car_type, load_reason))
+	_emit_analytics(FtueEvents.level_load_complete(active_level_index, car_type, load_reason))
 	if game_state == STATE_PLAYING:
 		_mark_level_started()
 	queue_redraw()
@@ -930,6 +958,22 @@ func get_grade_time_to_downgrade_for_test() -> float:
 
 func get_car_type_for_test() -> String:
 	return car_type
+
+
+func get_active_level_for_test() -> int:
+	return active_level_index
+
+
+func get_unlocked_level_for_test() -> int:
+	return level_index
+
+
+func get_stage_cards_for_test(page: int = 0) -> Array[Dictionary]:
+	return StageSelection.cards(level_index, best_times, best_stars, page)
+
+
+func get_best_stars_for_test(level: int) -> int:
+	return int(best_stars.get(level, 0))
 
 
 func get_coins_for_test() -> int:
@@ -1236,11 +1280,10 @@ func _handle_key(keycode: Key) -> void:
 			selected_tool = TOOL_SPONGE
 			_play_ui_select()
 	elif keycode == KEY_SPACE and completed:
-		reset_game(level_index + 1, "next")
-		_save_progress()
+		_advance_to_next_level()
 		_play_ui_select()
 	elif keycode == KEY_R and completed:
-		reset_game(level_index, "retry")
+		reset_game(active_level_index, "retry")
 		_play_ui_select()
 
 
@@ -1290,6 +1333,9 @@ func _handle_tap(point: Vector2) -> bool:
 		if show_skin_panel:
 			_handle_skin_panel_tap(point)
 			return true
+		if show_stage_panel:
+			_handle_stage_panel_tap(point)
+			return true
 		if _get_start_rect().has_point(point):
 			_emit_analytics(FtueEvents.play_tap(level_index))
 			start_game()
@@ -1300,6 +1346,11 @@ func _handle_tap(point: Vector2) -> bool:
 			_play_ui_select()
 		elif _get_skin_btn_rect().has_point(point):
 			show_skin_panel = true
+			queue_redraw()
+			_play_ui_select()
+		elif _get_stage_btn_rect().has_point(point):
+			_stage_page = 0
+			show_stage_panel = true
 			queue_redraw()
 			_play_ui_select()
 		elif _get_title_sound_rect().has_point(point):
@@ -1316,14 +1367,13 @@ func _handle_tap(point: Vector2) -> bool:
 
 	if completed and _get_retry_rect().has_point(point):
 		_maybe_show_game_over_interstitial()
-		reset_game(level_index, "retry")
+		reset_game(active_level_index, "retry")
 		_play_ui_select()
 		return true
 
 	if completed and _get_next_rect().has_point(point):
 		_maybe_show_game_over_interstitial()
-		reset_game(level_index + 1, "next")
-		_save_progress()
+		_advance_to_next_level()
 		_play_ui_select()
 		return true
 
@@ -1433,7 +1483,7 @@ func apply_foam_bomb(free := false) -> bool:
 	if not free:
 		coins -= BOMB_COST
 	audio.play_bomb()
-	_emit_analytics(ContentEvents.foam_bomb_use(level_index, free, BOMB_COST))
+	_emit_analytics(ContentEvents.foam_bomb_use(active_level_index, free, BOMB_COST))
 	_save_progress()
 	return true
 
@@ -1481,7 +1531,7 @@ func _on_double_coins_reward() -> void:
 	_double_claimed = true
 	var bonus := coin_reward
 	coins += bonus
-	_emit_analytics(ContentEvents.reward_double_coins(level_index, bonus))
+	_emit_analytics(ContentEvents.reward_double_coins(active_level_index, bonus))
 	audio.play_coin_bonus()
 	_save_progress()
 	queue_redraw()
@@ -1509,8 +1559,8 @@ func _calc_level_milestone_bonus(level: int) -> int:
 
 
 func _set_car_palette() -> void:
-	car_type = GameConfig.car_type_for_level(level_index)
-	var hue := fmod(0.10 + float(level_index - 1) * 0.18, 1.0)
+	car_type = GameConfig.car_type_for_level(active_level_index)
+	var hue := fmod(0.10 + float(active_level_index - 1) * 0.18, 1.0)
 	if car_type == "sports":
 		car_color = Color.from_hsv(hue, 0.85, 1.0)
 	elif car_type == "truck":
@@ -1526,7 +1576,7 @@ func _set_car_palette() -> void:
 func _spawn_dirt() -> void:
 	dirt_patches.clear()
 	_hint_patch = null
-	rng.seed = 42690 + int(level_index) * 97
+	rng.seed = 42690 + int(active_level_index) * 97
 
 	var positions := [
 		Vector2(102.0, 462.0), Vector2(154.0, 439.0), Vector2(218.0, 439.0), Vector2(283.0, 462.0),
@@ -1578,10 +1628,10 @@ func _spawn_dirt() -> void:
 			health_base_max = 150.0
 		_:
 			type_pool = DIRT_TYPES.duplicate()
-	type_pool = DirtProgression.filter_pool_for_level(type_pool, level_index)
+	type_pool = DirtProgression.filter_pool_for_level(type_pool, active_level_index)
 
-	var spawn_count: int = min(pool.size(), 18 + level_index * 2)
-	var health_scale := 1.0 + float(level_index - 1) * 0.06
+	var spawn_count: int = min(pool.size(), 18 + active_level_index * 2)
+	var health_scale := 1.0 + float(active_level_index - 1) * 0.06
 	for index in range(spawn_count):
 		var kind: String = type_pool[index % type_pool.size()]
 		var base_position: Vector2 = _gameplay_point(pool[index])
@@ -2149,7 +2199,7 @@ func _update_clean_progress() -> void:
 		is_washing = false
 		earned_stars = _calc_stars()
 		coin_reward = _calc_coin_reward(earned_stars)
-		_level_milestone_bonus = _calc_level_milestone_bonus(level_index)
+		_level_milestone_bonus = _calc_level_milestone_bonus(active_level_index)
 		coin_reward += _level_milestone_bonus
 		coins += coin_reward
 		total_stars += earned_stars
@@ -2158,7 +2208,7 @@ func _update_clean_progress() -> void:
 		_double_offer_shown = ads != null and ads.is_rewarded_ready("level_reward_2x")
 		_register_best_time()
 		_emit_analytics(ContentEvents.level_complete(
-			level_index, earned_stars, int(level_time), best_combo, coin_reward, is_new_record
+			active_level_index, earned_stars, int(level_time), best_combo, coin_reward, is_new_record
 		))
 		_save_progress()
 		_stop_tool_loop()
@@ -2177,37 +2227,38 @@ func _update_clean_progress() -> void:
 # Star time threshold tightens 1.5% per level after the first (floor at 60% of base).
 # This ensures experienced players face a gradually rising skill ceiling.
 func _star_time_threshold(tier: int) -> float:
-	return Scoring.star_time_threshold(tier, level_index)
+	return Scoring.star_time_threshold(tier, active_level_index)
 
 
 func _calc_stars() -> int:
-	return Scoring.calc_stars(level_time, best_combo, level_index)
+	return Scoring.calc_stars(level_time, best_combo, active_level_index)
 
 
 # Live state of one star slot in the HUD grade tracker (0 = first star).
 # earned: counted in the grade right now. target: still reachable but a
 # condition is unmet (3rd star needs the combo gate). locked: no longer reachable.
 func _grade_slot_state(slot_index: int) -> String:
-	return Scoring.grade_slot_state(slot_index, level_time, best_combo, level_index, GRADE_SLOT_EARNED, GRADE_SLOT_TARGET, GRADE_SLOT_LOCKED)
+	return Scoring.grade_slot_state(slot_index, level_time, best_combo, active_level_index, GRADE_SLOT_EARNED, GRADE_SLOT_TARGET, GRADE_SLOT_LOCKED)
 
 
 # Seconds until the next star is lost, or -1 once only the floor star remains.
 func _grade_time_to_downgrade() -> float:
-	return Scoring.grade_time_to_downgrade(level_time, level_index)
+	return Scoring.grade_time_to_downgrade(level_time, active_level_index)
 
 
 # Star slot (0-based) whose threshold is approaching next, or -1 when none.
 func _grade_at_risk_slot() -> int:
-	return Scoring.grade_at_risk_slot(level_time, level_index)
+	return Scoring.grade_at_risk_slot(level_time, active_level_index)
 
 
 func _register_best_time() -> void:
-	var previous_best: float = _best_time_for_level(level_index)
+	var previous_best: float = _best_time_for_level(active_level_index)
 	is_new_record = BestTime.is_new_record(previous_best, level_time)
 	if is_new_record:
-		best_times[level_index] = level_time
+		best_times[active_level_index] = level_time
 		record_pop_time = float(Time.get_ticks_msec()) / 1000.0
 		audio.play_record()
+	best_stars = StageSelection.record_best_stars(best_stars, active_level_index, earned_stars)
 
 
 func _best_time_for_level(level: int) -> float:
@@ -2337,7 +2388,7 @@ func _draw_status() -> void:
 	draw_string(font, Vector2(coin_chip.position.x + 30.0, coin_chip.position.y + 20.0), coin_text, HORIZONTAL_ALIGNMENT_LEFT, coin_text_width, coin_font_size, Color("#6b5200"))
 	var badge := Rect2(card.end.x - 120.0, card.position.y + 10.0, 104.0, 28.0)
 	draw_style_box(_style("level_badge", Color("#49a7ff"), 14.0), badge)
-	draw_string(font, Vector2(badge.position.x, badge.position.y + 20.0), "%s %02d" % [car_type_labels[car_type], level_index], HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 13, Color.WHITE)
+	draw_string(font, Vector2(badge.position.x, badge.position.y + 20.0), "%s %02d" % [car_type_labels[car_type], active_level_index], HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 13, Color.WHITE)
 
 	var bar_rect := Rect2(32.0, card.position.y + 46.0, 196.0, 24.0)
 	draw_style_box(_style("bar_bg", Color("#d7e8ef"), 12.0), bar_rect)
@@ -3256,7 +3307,8 @@ func _draw_title_screen() -> void:
 	draw_style_box(_style("start_button", Color("#39d98a"), 16.0), start_rect)
 	var start_label := tr("START")
 	if level_index > 1:
-		start_label = tr("CONTINUE") % [car_type_labels[car_type], level_index]
+		var progress_car_type: String = GameConfig.car_type_for_level(level_index)
+		start_label = tr("CONTINUE") % [car_type_labels[progress_car_type], level_index]
 	draw_string(font, Vector2(start_rect.position.x, start_rect.position.y + 38.0), start_label, HORIZONTAL_ALIGNMENT_CENTER, start_rect.size.x, 19, Color("#0d3b2a"))
 
 	draw_string(font, Vector2(0.0, 578.0), tr("COIN_STAR") % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
@@ -3268,6 +3320,10 @@ func _draw_title_screen() -> void:
 	draw_style_box(_style("skin_shadow", Color(0.28, 0.12, 0.48, 0.9), 12.0), Rect2(skin_rect.position + Vector2(0.0, 4.0), skin_rect.size))
 	draw_style_box(_style("skin_btn", Color(0.58, 0.28, 0.88, 1.0), 12.0), skin_rect)
 	draw_string(font, Vector2(skin_rect.position.x, skin_rect.position.y + 28.0), tr("BTN_SKIN"), HORIZONTAL_ALIGNMENT_CENTER, skin_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
+	var stage_rect := _get_stage_btn_rect()
+	draw_style_box(_style("stage_shadow", Color(0.09, 0.34, 0.43, 0.9), 12.0), Rect2(stage_rect.position + Vector2(0.0, 4.0), stage_rect.size))
+	draw_style_box(_style("stage_btn", Color(0.18, 0.67, 0.74, 1.0), 12.0), stage_rect)
+	draw_string(font, Vector2(stage_rect.position.x, stage_rect.position.y + 28.0), tr("BTN_STAGE"), HORIZONTAL_ALIGNMENT_CENTER, stage_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
 	var version_y := minf(826.0, DESIGN_SIZE.y - _safe_area_design_insets().w - 12.0)
 	draw_string(font, Vector2(0.0, version_y), "v0.1", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 12, Color(1.0, 1.0, 1.0, 0.5))
 
@@ -3892,9 +3948,9 @@ func _draw_completion_panel() -> void:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), tr("COMPLETE_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), tr("COMPLETE_SUB") % [car_type_labels[car_type], level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), tr("COMPLETE_SUB") % [car_type_labels[car_type], active_level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
 
-	var record_seconds: float = _best_time_for_level(level_index)
+	var record_seconds: float = _best_time_for_level(active_level_index)
 	if is_new_record:
 		var record_pulse := 1.0 + 0.25 * exp(-(time_now - record_pop_time) * 5.0)
 		var record_color := Color("#e0a818").lerp(Color("#fff3cf"), 0.5 + 0.5 * sin(time_now * 6.0))
@@ -3916,7 +3972,7 @@ func _draw_completion_panel() -> void:
 		var milestone_chip := Rect2(panel.position.x + 10.0, panel.position.y - 14.0, 106.0, 30.0)
 		var chip_color := Color("#a855f7").lerp(Color("#ec4899"), 0.5 + 0.5 * sin(time_now2 * 3.0))
 		draw_style_box(_style("milestone_chip", chip_color, 15.0), milestone_chip)
-		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), tr("MILESTONE_CHIP") % [level_index, _level_milestone_bonus], HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x, 13, Color("#fff0ff"))
+		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), tr("MILESTONE_CHIP") % [active_level_index, _level_milestone_bonus], HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x, 13, Color("#fff0ff"))
 
 	# B: level-end "watch ad → double coins" CTA. Active (green + play triangle)
 	# until claimed; after a watched ad it flips to a claimed/disabled state so the
@@ -4197,6 +4253,115 @@ func _draw_upgrade_panel() -> void:
 
 func _get_skin_btn_rect() -> Rect2:
 	return Rect2(95.0, 652.0, 200.0, 44.0)
+
+
+func _get_stage_btn_rect() -> Rect2:
+	return Rect2(95.0, 704.0, 200.0, 44.0)
+
+
+func _stage_panel_rect() -> Rect2:
+	return Rect2(15.0, 78.0, 360.0, 624.0)
+
+
+func _stage_close_rect(panel: Rect2) -> Rect2:
+	return Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
+
+
+func _stage_card_rect(panel: Rect2, card_index: int) -> Rect2:
+	var col := card_index % 2
+	var row := int(card_index / 2)
+	var card_width := (panel.size.x - 36.0) / 2.0
+	return Rect2(
+		panel.position.x + 14.0 + float(col) * (card_width + 8.0),
+		panel.position.y + 82.0 + float(row) * 136.0,
+		card_width,
+		126.0
+	)
+
+
+func _stage_prev_rect(panel: Rect2) -> Rect2:
+	return Rect2(panel.position.x + 22.0, panel.end.y - 54.0, 86.0, 38.0)
+
+
+func _stage_next_rect(panel: Rect2) -> Rect2:
+	return Rect2(panel.end.x - 108.0, panel.end.y - 54.0, 86.0, 38.0)
+
+
+func _handle_stage_panel_tap(point: Vector2) -> void:
+	var panel := _stage_panel_rect()
+	if _stage_close_rect(panel).has_point(point):
+		show_stage_panel = false
+		queue_redraw()
+		_play_ui_select()
+		return
+	var page_count: int = StageSelection.page_count(level_index)
+	if _stage_prev_rect(panel).has_point(point) and _stage_page > 0:
+		_stage_page -= 1
+		queue_redraw()
+		_play_ui_select()
+		return
+	if _stage_next_rect(panel).has_point(point) and _stage_page + 1 < page_count:
+		_stage_page += 1
+		queue_redraw()
+		_play_ui_select()
+		return
+	var cards: Array[Dictionary] = StageSelection.cards(level_index, best_times, best_stars, _stage_page)
+	for card_index in range(cards.size()):
+		var card: Dictionary = cards[card_index]
+		if bool(card["unlocked"]) and _stage_card_rect(panel, card_index).has_point(point):
+			var target_level := int(card["level"])
+			show_stage_panel = false
+			reset_game(target_level, "stage_retry")
+			start_game(target_level, "stage_retry")
+			_play_ui_select()
+			return
+
+
+func _draw_stage_panel() -> void:
+	var font := _font()
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.01, 0.06, 0.12, 0.76))
+	var panel := _stage_panel_rect()
+	draw_style_box(_style("stage_panel_shadow", Color(0.02, 0.12, 0.18, 0.55), 22.0), Rect2(panel.position + Vector2(0.0, 6.0), panel.size))
+	draw_style_box(_style("stage_panel_bg", Color("#eefbff"), 22.0), panel)
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 48.0), tr("STAGE_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 23, Color("#0d3b55"))
+	var close_rect := _stage_close_rect(panel)
+	draw_style_box(_style("stage_close_bg", Color("#d9eef4"), 10.0), close_rect)
+	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 26.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 18, Color("#0d3b55"))
+
+	var cards: Array[Dictionary] = StageSelection.cards(level_index, best_times, best_stars, _stage_page)
+	for card_index in range(cards.size()):
+		var card: Dictionary = cards[card_index]
+		var card_rect := _stage_card_rect(panel, card_index)
+		var unlocked := bool(card["unlocked"])
+		var card_bg := Color("#ffffff") if unlocked else Color("#dbe5e9")
+		var border := Color("#49a7ff") if unlocked else Color("#a9b7bd")
+		draw_style_box(_style("stage_card_%d_%s" % [int(card["level"]), str(unlocked)], card_bg, 14.0, border, 2), card_rect)
+		var stage_level := int(card["level"])
+		draw_string(font, Vector2(card_rect.position.x, card_rect.position.y + 28.0), tr("STAGE_LEVEL") % stage_level, HORIZONTAL_ALIGNMENT_CENTER, card_rect.size.x, 16, Color("#0d3b55") if unlocked else Color("#718087"))
+		if not unlocked:
+			draw_string(font, Vector2(card_rect.position.x, card_rect.position.y + 76.0), tr("STAGE_LOCKED"), HORIZONTAL_ALIGNMENT_CENTER, card_rect.size.x, 18, Color("#718087"))
+			continue
+		var stage_car := GameConfig.car_type_for_level(stage_level)
+		draw_string(font, Vector2(card_rect.position.x, card_rect.position.y + 49.0), car_type_labels[stage_car], HORIZONTAL_ALIGNMENT_CENTER, card_rect.size.x, 12, Color("#3f7184"))
+		var record := float(card["best_time"])
+		var record_label := _format_time(record) if record > 0.0 else "-"
+		draw_string(font, Vector2(card_rect.position.x, card_rect.position.y + 72.0), tr("STAGE_BEST") % record_label, HORIZONTAL_ALIGNMENT_CENTER, card_rect.size.x, 13, Color("#2c6b78"))
+		var stars := int(card["best_stars"])
+		for star_index in range(3):
+			var star_center := Vector2(card_rect.position.x + card_rect.size.x * 0.5 + float(star_index - 1) * 25.0, card_rect.position.y + 99.0)
+			if star_index < stars:
+				_draw_star(star_center, 7.5, Color("#ffce3d"), Color("#d69e00"))
+			else:
+				_draw_star(star_center, 7.0, Color("#d7e1e5"), Color("#a9b7bd"))
+
+	var page_count: int = StageSelection.page_count(level_index)
+	var prev_rect := _stage_prev_rect(panel)
+	var next_rect := _stage_next_rect(panel)
+	draw_style_box(_style("stage_prev_%d" % _stage_page, Color("#7fd6e6") if _stage_page > 0 else Color("#c8d8dd"), 10.0), prev_rect)
+	draw_style_box(_style("stage_next_%d_%d" % [_stage_page, page_count], Color("#7fd6e6") if _stage_page + 1 < page_count else Color("#c8d8dd"), 10.0), next_rect)
+	draw_string(font, Vector2(prev_rect.position.x, prev_rect.position.y + 25.0), tr("STAGE_PREV"), HORIZONTAL_ALIGNMENT_CENTER, prev_rect.size.x, 14, Color("#0d3b55"))
+	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 25.0), tr("STAGE_NEXT"), HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 14, Color("#0d3b55"))
+	draw_string(font, Vector2(panel.position.x, panel.end.y - 28.0), tr("STAGE_PAGE") % [_stage_page + 1, page_count], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#3f7184"))
 
 
 func _active_skin_color(tool_key: String, alpha: float = 1.0) -> Color:
