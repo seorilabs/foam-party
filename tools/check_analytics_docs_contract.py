@@ -5,7 +5,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ANALYTICS_DOC = ROOT / "docs" / "analytics-events.md"
 EXPECTED_FTUE_EVENT_CONTRACT = {
     "title_screen_view": (
         "`entry`(`cold_start` \\| `pause_home`)",
@@ -37,17 +36,16 @@ EXPECTED_FTUE_FUNNEL = [
 
 
 class AnalyticsDocsContractTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.document = ANALYTICS_DOC.read_text(encoding="utf-8")
-        self.ftue_section = self.document.split("## FTUE 퍼널 이벤트", 1)[1].split(
-            "\n## ", 1
-        )[0]
-
     # AC-4: parse the Markdown table and compare the complete event contract,
     # rather than accepting documents that merely mention the event names.
     def test_docs_analytics_events_records_exact_ftue_event_contract(self) -> None:
+        document_path = ROOT / "docs" / "analytics-events.md"
+        document = document_path.read_text(encoding="utf-8")
+        ftue_section = document.split("## FTUE 퍼널 이벤트", 1)[1].split(
+            "\n## ", 1
+        )[0]
         actual_contract: dict[str, tuple[str, str]] = {}
-        for line in self.ftue_section.splitlines():
+        for line in ftue_section.splitlines():
             if not line.startswith("| `"):
                 continue
             columns = [
@@ -62,9 +60,14 @@ class AnalyticsDocsContractTest(unittest.TestCase):
     # AC-4: attribute the funnel to GA4 app_info.version and compare every step
     # in the documented BigQuery analysis order.
     def test_docs_analytics_events_records_exact_versioned_funnel_order(self) -> None:
+        document_path = ROOT / "docs" / "analytics-events.md"
+        document = document_path.read_text(encoding="utf-8")
+        ftue_section = document.split("## FTUE 퍼널 이벤트", 1)[1].split(
+            "\n## ", 1
+        )[0]
         attribution_line = next(
             line
-            for line in self.ftue_section.splitlines()
+            for line in ftue_section.splitlines()
             if "따라서 BigQuery에서는" in line
         )
         backtick_values = re.findall(r"`([^`]+)`", attribution_line)
