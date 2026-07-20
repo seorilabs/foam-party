@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-python3 tools/check_release_workflow_contract.py
-
-workflow_files=(.github/workflows/*.yml)
 if command -v actionlint >/dev/null 2>&1; then
   actionlint_bin="$(command -v actionlint)"
 else
@@ -52,5 +49,5 @@ PY
   actionlint_bin="${workflow_lint_tmp}/actionlint"
 fi
 
-"${actionlint_bin}" "${workflow_files[@]}"
-echo "GitHub Actions workflow syntax check passed."
+export ACTIONLINT_BIN="${actionlint_bin}"
+python3 tools/check_release_workflow_contract.py

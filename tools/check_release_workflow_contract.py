@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
+import os
+import subprocess
+import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY_ALL = ROOT / ".github" / "workflows" / "deploy-all.yml"
 GOOGLE_PLAY_DOC = ROOT / "docs" / "05-markets" / "google-play.md"
-
-
-def fail(message: str) -> None:
-    raise SystemExit(f"Release workflow contract failed: {message}")
 
 
 def indent_of(line: str) -> int:
@@ -30,7 +29,7 @@ def block_for(lines: list[str], path: tuple[str, ...]) -> tuple[int, int, int]:
             None,
         )
         if index is None:
-            fail(f"missing YAML block {'.'.join(path)}")
+            raise AssertionError(f"missing YAML block {'.'.join(path)}")
         child_end = end
         for candidate in range(index + 1, end):
             stripped = lines[candidate].strip()
@@ -49,55 +48,67 @@ def scalar(lines: list[str], path: tuple[str, ...], key: str) -> str:
     for line in lines[start:end]:
         if line.startswith(prefix):
             return line[len(prefix) :].strip().strip('"')
-    fail(f"missing YAML value {'.'.join((*path, key))}")
-    return ""
+    raise AssertionError(f"missing YAML value {'.'.join((*path, key))}")
 
 
-def assert_choice(
-    lines: list[str], input_name: str, expected_default: str, expected_options: str
-) -> None:
-    path = ("on", "workflow_dispatch", "inputs", input_name)
-    if scalar(lines, path, "type") != "choice":
-        fail(f"{input_name} must be a workflow_dispatch choice")
-    if scalar(lines, path, "default") != expected_default:
-        fail(f"{input_name} default must remain {expected_default}")
-    options = scalar(lines, path, "options").replace(" ", "")
-    if options != expected_options:
-        fail(f"{input_name} options must be {expected_options}")
+class ReleaseWorkflowContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workflow_lines = DEPLOY_ALL.read_text(encoding="utf-8").splitlines()
 
+    def test_deploy_all_forwards_google_play_inputs(self) -> None:
+        reusable_call = ("jobs", "google-play", "with")
+        self.assertEqual(
+            scalar(self.workflow_lines, reusable_call, "track"),
+            "${{ inputs.google_play_track }}",
+        )
+        self.assertEqual(
+            scalar(self.workflow_lines, reusable_call, "release_status"),
+            "${{ inputs.google_play_release_status }}",
+        )
 
-def main() -> int:
-    workflow_lines = DEPLOY_ALL.read_text(encoding="utf-8").splitlines()
-    assert_choice(workflow_lines, "google_play_track", "internal", "[internal,production]")
-    assert_choice(
-        workflow_lines,
-        "google_play_release_status",
-        "completed",
-        "[draft,completed]",
-    )
+    def test_deploy_all_exposes_track_and_status_choices(self) -> None:
+        expectations = {
+            "google_play_track": ("internal", "[internal,production]"),
+            "google_play_release_status": ("completed", "[draft,completed]"),
+        }
+        for input_name, (expected_default, expected_options) in expectations.items():
+            with self.subTest(input_name=input_name):
+                path = ("on", "workflow_dispatch", "inputs", input_name)
+                self.assertEqual(scalar(self.workflow_lines, path, "type"), "choice")
+                self.assertEqual(
+                    scalar(self.workflow_lines, path, "default"), expected_default
+                )
+                self.assertEqual(
+                    scalar(self.workflow_lines, path, "options").replace(" ", ""),
+                    expected_options,
+                )
 
-    reusable_call = ("jobs", "google-play", "with")
-    if scalar(workflow_lines, reusable_call, "track") != "${{ inputs.google_play_track }}":
-        fail("google-play job must forward google_play_track")
-    if (
-        scalar(workflow_lines, reusable_call, "release_status")
-        != "${{ inputs.google_play_release_status }}"
-    ):
-        fail("google-play job must forward google_play_release_status")
+    def test_production_documentation_covers_account_gate(self) -> None:
+        release_doc = GOOGLE_PLAY_DOC.read_text(encoding="utf-8")
+        for required_text in (
+            "Play Console `Account Details`",
+            "`google_play_track=production`",
+            "`google_play_release_status=completed`",
+            "403",
+        ):
+            with self.subTest(required_text=required_text):
+                self.assertIn(required_text, release_doc)
 
-    release_doc = GOOGLE_PLAY_DOC.read_text(encoding="utf-8")
-    for required_text in (
-        "Play Console `Account Details`",
-        "`google_play_track=production`",
-        "`google_play_release_status=completed`",
-        "403",
-    ):
-        if required_text not in release_doc:
-            fail(f"Google Play release documentation must include {required_text}")
-
-    print("Deploy All Google Play production contract passed.")
-    return 0
+    def test_actionlint_accepts_all_workflows(self) -> None:
+        actionlint_bin = os.environ.get("ACTIONLINT_BIN")
+        self.assertTrue(actionlint_bin, "ACTIONLINT_BIN must be set by check_workflows.sh")
+        workflow_files = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+        self.assertGreater(len(workflow_files), 0, "workflow inventory must not be empty")
+        result = subprocess.run(
+            [actionlint_bin, *(str(path) for path in workflow_files)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    unittest.main(verbosity=2)
