@@ -115,6 +115,9 @@ var completed := false
 var completion_burst_done := false
 var _gleam_time := -1.0
 const GLEAM_DURATION := 0.72
+# Single tuning hook for low-end/reduced-motion policy (#75). The clean-shine
+# renderer reads this scale only; gameplay progress and completion stay untouched.
+const CLEAN_SHINE_INTENSITY_SCALE := 1.0
 var _progress_milestone_hit := 0
 var _progress_milestone_time := -1.0
 var _progress_milestone_text := ""
@@ -883,6 +886,14 @@ func get_patch_count_for_test() -> int:
 
 func get_clean_progress_for_test() -> float:
 	return clean_progress
+
+
+func get_clean_shine_alpha_for_test(progress: float) -> float:
+	return _clean_shine_alpha(progress)
+
+
+func get_clean_shine_intensity_scale_for_test() -> float:
+	return CLEAN_SHINE_INTENSITY_SCALE
 
 
 func get_selected_tool_label_for_test() -> String:
@@ -2523,6 +2534,7 @@ func _draw_car() -> void:
 
 	var silhouette: PackedVector2Array = shapes["silhouette"]
 	draw_colored_polygon(silhouette, car_color)
+	_draw_clean_shine()
 	_draw_closed_outline(silhouette, outline, 5.0)
 
 	var bumper: PackedVector2Array = shapes["bumper"]
@@ -2560,6 +2572,42 @@ func _draw_car() -> void:
 	draw_rect(plate, Color("#f7fbff"))
 	draw_rect(plate, outline, false, 2.5)
 	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), "FOAM", HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
+
+
+func _clean_shine_alpha(progress: float) -> float:
+	var t := clampf(progress, 0.0, 1.0)
+	var eased := t * t * (3.0 - 2.0 * t)
+	return eased * 0.46 * CLEAN_SHINE_INTENSITY_SCALE
+
+
+func _draw_clean_shine() -> void:
+	# This pass lives inside _draw_car. The later _draw_dirt pass naturally masks
+	# shine wherever grime remains, without introducing a separate UI/canvas node.
+	var alpha := _clean_shine_alpha(clean_progress)
+	if alpha <= 0.001:
+		return
+	var cool_white := Color(0.9, 0.98, 1.0, alpha)
+	var soft_white := Color(1.0, 1.0, 1.0, alpha * 0.34)
+
+	# Two soft reflected-light bands stay inside the common hood footprint shared
+	# by compact, sports, truck, van, and offroad silhouettes.
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(82.0, 510.0),
+		Vector2(98.0, 492.0),
+		Vector2(154.0, 554.0),
+		Vector2(143.0, 569.0),
+	]), Color(1.0, 1.0, 1.0, alpha * 0.16))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(240.0, 482.0),
+		Vector2(252.0, 486.0),
+		Vector2(290.0, 531.0),
+		Vector2(278.0, 541.0),
+	]), Color(0.85, 0.96, 1.0, alpha * 0.13))
+
+	# The curved shoulder reflection becomes the clearest read near completion.
+	draw_arc(Vector2(195.0, 535.0), 108.0, PI + 0.55, TAU - 0.55, 24, cool_white, 3.0 + clean_progress * 3.0)
+	draw_line(Vector2(100.0, 505.0), Vector2(121.0, 486.0), soft_white, 4.0 + clean_progress * 2.0)
+	draw_line(Vector2(269.0, 486.0), Vector2(291.0, 509.0), soft_white, 3.5 + clean_progress * 2.0)
 
 
 func _draw_compact_details(outline: Color) -> void:

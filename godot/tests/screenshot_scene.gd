@@ -52,6 +52,19 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return
+	_set_clean_progress(node, 0.0)
+	if not await _capture(out_dir.path_join("shot_clean_shine_0.png")):
+		quit(1)
+		return
+	_set_clean_progress(node, 0.5)
+	if not await _capture(out_dir.path_join("shot_clean_shine_50.png")):
+		quit(1)
+		return
+	_set_clean_progress(node, 0.98)
+	if not await _capture(out_dir.path_join("shot_clean_shine_98.png")):
+		quit(1)
+		return
+	node.call("reset_game", 1, "clean_shine_screenshot_cleanup")
 	node.call("_on_back_pressed")
 	await _settle(5)
 	if not await _capture(out_dir.path_join("shot_pause.png")):
@@ -146,6 +159,15 @@ func _run() -> void:
 func _settle(frames: int) -> void:
 	for index in range(frames):
 		await process_frame
+
+
+func _set_clean_progress(node: Node, progress: float) -> void:
+	var remaining := 1.0 - clampf(progress, 0.0, 1.0)
+	for raw_patch in node.get("dirt_patches"):
+		raw_patch.set("health", float(raw_patch.get("max_health")) * remaining)
+	node.call("_update_clean_progress")
+	node.set("_progress_milestone_hit", 3)
+	node.set("_progress_milestone_time", -1.0)
 
 
 func _capture(path: String) -> bool:

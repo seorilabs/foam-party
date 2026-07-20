@@ -233,6 +233,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_water_impact_presentation_contract(root_node):
 		return
+	if not _test_clean_shine_progression_contract(root_node):
+		return
 
 	root_node.call("reset_game", 5)
 	root_node.set("level_time", 90.0)
@@ -758,6 +760,75 @@ func _particle_style_count(particles: Array, style: String) -> int:
 		if String(raw_particle.get("style")) == style:
 			count += 1
 	return count
+
+
+func _test_clean_shine_progression_contract(root_node: Node) -> bool:
+	root_node.call("reset_game", 1, "clean_shine_smoke")
+	var sample_progress := [0.0, 0.25, 0.5, 0.75, 1.0]
+	var previous_alpha := -1.0
+	for progress in sample_progress:
+		var alpha: float = root_node.call("get_clean_shine_alpha_for_test", progress)
+		if alpha <= previous_alpha:
+			_fail("clean shine alpha should increase continuously with progress")
+			return false
+		previous_alpha = alpha
+	if float(root_node.call("get_clean_shine_alpha_for_test", 0.0)) > 0.001:
+		_fail("zero progress should keep the car matte")
+		return false
+	if float(root_node.call("get_clean_shine_alpha_for_test", 1.0)) < 0.4:
+		_fail("near-complete progress should produce a clear shine")
+		return false
+	if float(root_node.call("get_clean_shine_intensity_scale_for_test")) <= 0.0:
+		_fail("clean shine needs a single positive intensity scale hook")
+		return false
+
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	root_node.set("clean_progress", 0.5)
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("clean shine must not add persistent HUD controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("clean shine must not change top HUD residency")
+		return false
+
+	# Source-order contract: shine is part of the car pass, while all dirt is
+	# painted later and therefore masks the reflection over remaining patches.
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var draw_start := source.find("func _draw() -> void:")
+	var draw_end := source.find("\nfunc ", draw_start + 1)
+	var draw_body := source.substr(draw_start, draw_end - draw_start)
+	if draw_body.find("_draw_car()") < 0 or draw_body.find("_draw_dirt()") <= draw_body.find("_draw_car()"):
+		_fail("dirt must render after the car shine so grime masks reflection")
+		return false
+	var car_start := source.find("func _draw_car() -> void:")
+	var car_end := source.find("\nfunc ", car_start + 1)
+	var car_body := source.substr(car_start, car_end - car_start)
+	if car_body.find("_draw_clean_shine()") < 0:
+		_fail("clean shine must stay inside the car render pass")
+		return false
+
+	var near_complete_alpha: float = root_node.call("get_clean_shine_alpha_for_test", 0.98)
+	for raw_patch in root_node.get("dirt_patches"):
+		raw_patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	if not bool(root_node.get("completed")) or float(root_node.get("_gleam_time")) < 0.0:
+		_fail("completion should start the existing gleam sweep")
+		return false
+	if float(root_node.call("get_clean_shine_alpha_for_test", root_node.get("clean_progress"))) < near_complete_alpha:
+		_fail("static clean shine should remain continuous into completion gleam")
+		return false
+
+	root_node.call("reset_game", 1, "clean_shine_smoke_cleanup")
+	if float(root_node.call("get_clean_progress_for_test")) > 0.001 or float(root_node.call("get_clean_shine_alpha_for_test", root_node.call("get_clean_progress_for_test"))) > 0.001:
+		_fail("level reset should return clean shine to matte")
+		return false
+	return true
 
 
 func _test_level_load_event_order_and_params(events: Array[Dictionary]) -> bool:
