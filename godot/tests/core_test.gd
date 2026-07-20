@@ -74,11 +74,17 @@ func _run_core_tests() -> void:
 		return
 
 	# --- Economy: coin rewards, upgrade costs, purchase judgement ---
+	if int(Economy.calc_coin_reward(1, 0)) != 24:
+		_fail("1-star clear without combo should pay 24 coins")
+		return
 	if int(Economy.calc_coin_reward(1, 10)) != 44:
 		_fail("1-star clear with max combo bonus should pay 44 coins")
 		return
 	if int(Economy.calc_coin_reward(3, 5)) != 50:
 		_fail("3-star clear should pay 50 coins")
+		return
+	if int(Economy.calc_coin_reward(3, 10)) != 60 or int(Economy.calc_coin_reward(3, 99)) != 60:
+		_fail("3-star reward should cap at 60 coins after combo 10")
 		return
 	if int(Economy.calc_level_milestone_bonus(5)) != 75:
 		_fail("level 5 milestone bonus should be 75")
