@@ -17,10 +17,11 @@ func _run_core_tests() -> void:
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
 	var StageSelection: GDScript = load("res://core/use_cases/stage_selection.gd")
 	var DirtSpawnPlan: GDScript = load("res://core/use_cases/dirt_spawn_plan.gd")
+	var LicensePlate: GDScript = load("res://core/use_cases/license_plate.gd")
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
 	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
 	var I18n: GDScript = load("res://scripts/services/i18n.gd")
-	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or DirtPatch == null or GameConfig == null or I18n == null:
+	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
 		return
 	if not _test_car_roster_and_saved_level_mapping(GameConfig):
@@ -28,6 +29,8 @@ func _run_core_tests() -> void:
 	if not _test_new_car_localized_labels(I18n):
 		return
 	if not _test_dirt_spawn_plan(DirtSpawnPlan):
+		return
+	if not _test_license_plate_rules(LicensePlate):
 		return
 
 	# --- Scoring: star boundaries (matches smoke_scene 3/2/1-star cases) ---
@@ -537,6 +540,25 @@ func _test_car_roster_and_saved_level_mapping(GameConfig: GDScript) -> bool:
 	if String(GameConfig.car_type_for_level(0)) != "compact":
 		_fail("invalid saved levels must clamp to the first car type")
 		return false
+	return true
+
+
+func _test_license_plate_rules(LicensePlate: GDScript) -> bool:
+	var options: Array[String] = LicensePlate.options()
+	if options.size() < 4 or options[0] != LicensePlate.DEFAULT_TEXT:
+		_fail("license plate presets must include the default and multiple choices")
+		return false
+	for option in options:
+		if not bool(LicensePlate.is_safe_text(option)) or option.length() > int(LicensePlate.MAX_LENGTH):
+			_fail("license plate preset escaped the character or length whitelist: " + option)
+			return false
+	if String(LicensePlate.safe_selection(" soap ")) != "SOAP":
+		_fail("license plate selection should normalize an allowed preset")
+		return false
+	for unsafe in ["TOO-LONG", "DROP TABLE", "CUSTOM", "욕설"]:
+		if String(LicensePlate.safe_selection(unsafe)) != LicensePlate.DEFAULT_TEXT:
+			_fail("unsafe or uncurated plate text must fall back to the default: " + unsafe)
+			return false
 	return true
 
 

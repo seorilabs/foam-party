@@ -13,6 +13,7 @@ const BestTime = preload("res://core/use_cases/best_time.gd")
 const StageSelection = preload("res://core/use_cases/stage_selection.gd")
 const DirtSpawnPlan = preload("res://core/use_cases/dirt_spawn_plan.gd")
 const WashRules = preload("res://core/use_cases/wash_rules.gd")
+const LicensePlate = preload("res://core/use_cases/license_plate.gd")
 const AnalyticsPort = preload("res://core/ports/analytics_port.gd")
 const ContentEvents = preload("res://core/analytics/content_events.gd")
 const FtueEvents = preload("res://core/analytics/ftue_events.gd")
@@ -247,6 +248,7 @@ var skin_water := "classic"
 var skin_air := "classic"
 var skin_soap := "classic"
 var skin_sponge := "classic"
+var license_plate_text := LicensePlate.DEFAULT_TEXT
 var owned_skins: Dictionary = {"classic": true}
 var _nozzle_skins: Dictionary = SkinCatalog.catalog()
 var _main_save_dirty := false
@@ -336,6 +338,7 @@ func _load_progress() -> void:
 		skin_air = String(config.get_value("skins", "air", "classic"))
 		skin_soap = String(config.get_value("skins", "soap", "classic"))
 		skin_sponge = String(config.get_value("skins", "sponge", "classic"))
+		license_plate_text = LicensePlate.safe_selection(String(config.get_value("customization", "license_plate", LicensePlate.DEFAULT_TEXT)))
 		var raw_owned: Variant = config.get_value("skins", "owned", {})
 		owned_skins = {"classic": true}
 		if raw_owned is Dictionary:
@@ -423,6 +426,7 @@ func _save_progress() -> Error:
 	config.set_value("skins", "soap", skin_soap)
 	config.set_value("skins", "sponge", skin_sponge)
 	config.set_value("skins", "owned", owned_skins)
+	config.set_value("customization", "license_plate", license_plate_text)
 	return config.save(SAVE_PATH)
 
 
@@ -1032,6 +1036,14 @@ func get_grade_time_to_downgrade_for_test() -> float:
 
 func get_car_type_for_test() -> String:
 	return car_type
+
+
+func get_license_plate_text_for_test() -> String:
+	return license_plate_text
+
+
+func get_license_plate_options_for_test() -> Array[String]:
+	return LicensePlate.options()
 
 
 func get_active_level_for_test() -> int:
@@ -2796,7 +2808,7 @@ func _draw_car() -> void:
 	var plate := Rect2(159.0, 582.0, 72.0, 22.0)
 	draw_rect(plate, Color("#f7fbff"))
 	draw_rect(plate, outline, false, 2.5)
-	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), "FOAM", HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
+	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), license_plate_text, HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
 	_draw_body_foam(silhouette)
 
 
@@ -4644,6 +4656,10 @@ func _skin_tab_rect(panel: Rect2, tab_idx: int) -> Rect2:
 	return Rect2(panel.position.x + 10.0 + tab_idx * tab_w, panel.position.y + 74.0, tab_w, 34.0)
 
 
+func _skin_panel_rect() -> Rect2:
+	return Rect2(15.0, 88.0, 360.0, 480.0)
+
+
 func _skin_card_rect(panel: Rect2, card_idx: int) -> Rect2:
 	var col: int = card_idx % 2
 	var row: int = int(card_idx / 2)
@@ -4658,8 +4674,15 @@ func _skin_buy_rect(card: Rect2) -> Rect2:
 	return Rect2(card.position.x + 8.0, card.position.y + card.size.y - 38.0, card.size.x - 16.0, 30.0)
 
 
+func _license_plate_choice_rect(panel: Rect2, choice_index: int) -> Rect2:
+	var options := LicensePlate.options()
+	var gap := 6.0
+	var width := (panel.size.x - 28.0 - gap * float(options.size() - 1)) / float(options.size())
+	return Rect2(panel.position.x + 14.0 + float(choice_index) * (width + gap), panel.position.y + 400.0, width, 42.0)
+
+
 func _handle_skin_panel_tap(point: Vector2) -> void:
-	var panel := Rect2(15.0, 88.0, 360.0, 362.0)
+	var panel := _skin_panel_rect()
 	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
 	if close_rect.has_point(point):
 		show_skin_panel = false
@@ -4679,6 +4702,25 @@ func _handle_skin_panel_tap(point: Vector2) -> void:
 		if _skin_buy_rect(_skin_card_rect(panel, ci)).has_point(point):
 			_try_buy_or_select_skin(tool_key, ci)
 			return
+	var plate_options := LicensePlate.options()
+	for choice_index in range(plate_options.size()):
+		if _license_plate_choice_rect(panel, choice_index).has_point(point):
+			_select_license_plate(String(plate_options[choice_index]))
+			return
+
+
+func _select_license_plate(raw_value: String) -> void:
+	var next_value := LicensePlate.safe_selection(raw_value)
+	if next_value == license_plate_text:
+		return
+	var previous_value := license_plate_text
+	license_plate_text = next_value
+	if _save_progress() != OK:
+		license_plate_text = previous_value
+		queue_redraw()
+		return
+	_play_ui_select()
+	queue_redraw()
 
 
 func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
@@ -4756,7 +4798,7 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 func _draw_skin_panel() -> void:
 	var font: Font = _font()
 	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.05, 0.18, 0.72))
-	var panel := Rect2(15.0, 88.0, 360.0, 362.0)
+	var panel := _skin_panel_rect()
 	draw_style_box(_style("skin_panel_shadow", Color(0.08, 0.02, 0.22, 0.5), 22.0), Rect2(panel.position + Vector2(0.0, 6.0), panel.size))
 	draw_style_box(_style("skin_panel_bg", Color("#f5f0ff"), 22.0), panel)
 
@@ -4821,3 +4863,14 @@ func _draw_skin_panel() -> void:
 			var btn_c := Color("#a855f7") if affordable else Color("#c8a8f0")
 			draw_style_box(_style("skin_buy_%d_%d_%s" % [ci, int(affordable), sid], btn_c, 8.0), buy_rect)
 			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), tr("COST_COIN") % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 11, Color(1.0, 1.0, 1.0) if affordable else Color("#6a4a8a"))
+
+	draw_string(font, Vector2(panel.position.x + 14.0, panel.position.y + 386.0), tr("PLATE_TITLE"), HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 28.0, 15, Color("#2a0d50"))
+	var plate_options := LicensePlate.options()
+	for choice_index in range(plate_options.size()):
+		var option := String(plate_options[choice_index])
+		var choice_rect := _license_plate_choice_rect(panel, choice_index)
+		var selected := option == license_plate_text
+		var fill := Color("#39d98a") if selected else Color("#e8d8f8")
+		var border := Color("#16875a") if selected else Color("#c8a8f0")
+		draw_style_box(_style("plate_choice_%s_%s" % [option, str(selected)], fill, 9.0, border, 2), choice_rect)
+		draw_string(font, Vector2(choice_rect.position.x, choice_rect.position.y + 27.0), option, HORIZONTAL_ALIGNMENT_CENTER, choice_rect.size.x, 12, Color("#0d3b2a") if selected else Color("#4a2a7a"))

@@ -129,7 +129,8 @@ const STRINGS := {
 	"UPG_DESC_SOAP": ["얼룩 분리 속도 향상", "Faster stain loosening"],
 	"UPG_DESC_SPONGE": ["닦는 속도 향상", "Faster scrubbing"],
 	# skin panel
-	"SKIN_TITLE": ["노즐 스킨", "Nozzle Skins"],
+	"SKIN_TITLE": ["차량 꾸미기", "Car Customization"],
+	"PLATE_TITLE": ["번호판 문구", "License Plate"],
 	"SKIN_SELECTED": ["선택됨", "Selected"],
 	"SKIN_SELECT": ["선택", "Select"],
 	"SKIN_CLASSIC": ["클래식", "Classic"],
