@@ -239,6 +239,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_water_impact_presentation_contract(root_node):
 		return
+	if not _test_particle_budget_contract(root_node):
+		return
 	if not _test_body_foam_coverage_contract(root_node):
 		return
 	if not _test_clean_shine_progression_contract(root_node):
@@ -985,6 +987,62 @@ func _particle_style_count(particles: Array, style: String) -> int:
 	return count
 
 
+func _test_particle_budget_contract(root_node: Node) -> bool:
+	var required_methods := [
+		"get_particle_count_for_test",
+		"get_particle_cap_for_test",
+		"get_water_effect_particle_cap_for_test",
+		"get_foam_effect_particle_cap_for_test",
+	]
+	for method_name in required_methods:
+		if not root_node.has_method(method_name):
+			_fail("particle budget helper API missing: " + method_name)
+			return false
+
+	var particles: Array = root_node.get("particles")
+	var particle_cap: int = root_node.call("get_particle_cap_for_test")
+	var style_cap_sum: int = int(root_node.call("get_water_effect_particle_cap_for_test")) + int(root_node.call("get_foam_effect_particle_cap_for_test"))
+	if particle_cap <= style_cap_sum:
+		_fail("global particle cap should leave headroom above water and foam caps")
+		return false
+
+	particles.clear()
+	for index in range(100):
+		root_node.call("_spawn_air_particles", Vector2(195.0, 520.0))
+	if int(root_node.call("get_particle_count_for_test")) != particle_cap:
+		_fail("continuous tool input should stop at the global particle cap")
+		return false
+	var oldest_particle: Variant = particles[0]
+	root_node.call("_spawn_air_particles", Vector2(195.0, 520.0))
+	if particles.size() != particle_cap or particles.has(oldest_particle):
+		_fail("global particle overflow should evict the oldest particle")
+		return false
+
+	particles.clear()
+	for index in range(100):
+		var point := Vector2(120.0 + float(index % 4) * 50.0, 480.0)
+		root_node.call("_spawn_water_particles", point)
+		root_node.call("_spawn_soap_particles", point)
+		root_node.call("_spawn_air_particles", point)
+	if particles.size() != particle_cap:
+		_fail("mixed effect stress should remain exactly at the global particle cap")
+		return false
+	if int(root_node.call("get_water_effect_particle_count_for_test")) > int(root_node.call("get_water_effect_particle_cap_for_test")):
+		_fail("global particle budget must preserve the water effect cap")
+		return false
+	if int(root_node.call("get_foam_effect_particle_count_for_test")) > int(root_node.call("get_foam_effect_particle_cap_for_test")):
+		_fail("global particle budget must preserve the foam effect cap")
+		return false
+
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if source.count("particles.append(") != 2:
+		_fail("all transient particles must enter through the bounded append helpers")
+		return false
+
+	particles.clear()
+	return true
+
+
 func _test_body_foam_coverage_contract(root_node: Node) -> bool:
 	var required_methods := [
 		"get_body_foam_coverage_for_test",
@@ -1046,6 +1104,9 @@ func _test_body_foam_coverage_contract(root_node: Node) -> bool:
 	var foam_particle_cap: int = root_node.call("get_foam_effect_particle_cap_for_test")
 	if foam_particle_count <= 0 or foam_particle_count > foam_particle_cap:
 		_fail("foam effects must stay inside their particle cap")
+		return false
+	if int(root_node.call("get_particle_count_for_test")) > int(root_node.call("get_particle_cap_for_test")):
+		_fail("foam bomb must stay inside the global particle cap")
 		return false
 	root_node.set("coins", 0)
 	if bool(root_node.call("apply_foam_bomb")) or int(root_node.call("get_foam_bomb_burst_count_for_test")) != burst_before + 1:
