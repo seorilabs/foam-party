@@ -1379,17 +1379,21 @@ func _handle_tap(point: Vector2) -> bool:
 			_play_ui_select()
 			queue_redraw()
 		elif _pause_button_rect(1).has_point(point):
+			show_pause = false
+			reset_game(active_level_index, "pause_restart")
+			_play_ui_select()
+		elif _pause_button_rect(2).has_point(point):
 			_toggle_sound()
 			queue_redraw()
-		elif _pause_button_rect(2).has_point(point):
+		elif _pause_button_rect(3).has_point(point):
 			show_pause = false
 			_tutorial_returns_to_pause = true
 			_show_tutorial("pause_guide")
 			_play_ui_select()
 			queue_redraw()
-		elif _pause_button_rect(3).has_point(point):
-			_go_home()
 		elif _pause_button_rect(4).has_point(point):
+			_go_home()
+		elif _pause_button_rect(5).has_point(point):
 			show_pause = false
 			show_quit_confirm = true
 			_play_ui_select()
@@ -4130,7 +4134,7 @@ func _pause_title_text() -> String:
 
 
 func _pause_action_labels() -> Array[String]:
-	return [tr("RESUME"), tr("SOUND_ON") if sound_enabled else tr("SOUND_OFF"), tr("GUIDE"), tr("HOME"), tr("QUIT")]
+	return [tr("RESUME"), tr("PAUSE_RESTART"), tr("SOUND_ON") if sound_enabled else tr("SOUND_OFF"), tr("GUIDE"), tr("HOME"), tr("QUIT")]
 
 
 func _draw_pause_menu() -> void:
@@ -4143,9 +4147,9 @@ func _draw_pause_menu() -> void:
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 46.0), _pause_title_text(), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#123246"))
 	var labels := _pause_action_labels()
-	var fills := [Color("#39d98a"), Color("#7fd6e6"), Color("#a9d7ff"), Color("#f8d97a"), Color("#f2a0a0")]
-	var text_cols := [Color("#0d3b2a"), Color("#0d3b55"), Color("#123246"), Color("#5b4a10"), Color("#5a1616")]
-	for i in range(5):
+	var fills := [Color("#39d98a"), Color("#7fd6e6"), Color("#a9d7ff"), Color("#a9d7ff"), Color("#f8d97a"), Color("#f2a0a0")]
+	var text_cols := [Color("#0d3b2a"), Color("#0d3b55"), Color("#123246"), Color("#123246"), Color("#5b4a10"), Color("#5a1616")]
+	for i in range(labels.size()):
 		var r := _pause_button_rect(i)
 		draw_style_box(_style("pause_sh_%d" % i, Color(0.0, 0.0, 0.0, 0.18), 14.0), Rect2(r.position + Vector2(0.0, 4.0), r.size))
 		draw_style_box(_style("pause_btn_%d" % i, fills[i], 14.0), r)
@@ -4295,9 +4299,9 @@ func _get_double_rect() -> Rect2:
 	return Rect2(58.0, 352.0, 274.0, 42.0)
 
 
-# Pause/settings sheet: resume / sound / guide / home / quit.
+# Pause/settings sheet: resume / restart / sound / guide / home / quit.
 func _pause_panel() -> Rect2:
-	var panel_height := 416.0
+	var panel_height := 476.0
 	var insets := _safe_area_design_insets()
 	var min_y := insets.y + 16.0
 	var max_y := DESIGN_SIZE.y - insets.w - 16.0 - panel_height

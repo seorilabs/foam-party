@@ -500,9 +500,9 @@ func _run_smoke() -> void:
 		return
 
 	var pause_panel: Rect2 = root_node.call("_pause_panel")
-	for pause_index in range(5):
+	for pause_index in range(6):
 		if not pause_panel.encloses(root_node.call("_pause_button_rect", pause_index)):
-			_fail("pause/settings sheet must contain all five actions")
+			_fail("pause/settings sheet must contain all six actions")
 			return
 
 	# Keep the implementation contract explicit: these visible strings must stay
@@ -514,17 +514,20 @@ func _run_smoke() -> void:
 	if not main_script_source.contains('tr("GUIDE")'):
 		_fail("pause/settings guide action must be sourced from the GUIDE i18n key")
 		return
+	if not main_script_source.contains('tr("PAUSE_RESTART")'):
+		_fail("pause restart action must be sourced from the PAUSE_RESTART i18n key")
+		return
 
 	var previous_locale := TranslationServer.get_locale()
 	TranslationServer.set_locale("ko")
 	var pause_labels_ko: Array = root_node.call("_pause_action_labels")
-	if root_node.call("_pause_title_text") != "일시정지 · 설정" or String(pause_labels_ko[2]) != "세차 가이드":
-		_fail("pause title and guide action must use Korean i18n keys")
+	if root_node.call("_pause_title_text") != "일시정지 · 설정" or String(pause_labels_ko[1]) != "이 차 다시 세차" or String(pause_labels_ko[3]) != "세차 가이드":
+		_fail("pause title, restart, and guide actions must use Korean i18n keys")
 		return
 	TranslationServer.set_locale("en")
 	var pause_labels_en: Array = root_node.call("_pause_action_labels")
-	if root_node.call("_pause_title_text") != "Paused · Settings" or String(pause_labels_en[2]) != "Wash Guide":
-		_fail("pause title and guide action must use English i18n keys")
+	if root_node.call("_pause_title_text") != "Paused · Settings" or String(pause_labels_en[1]) != "Restart Car" or String(pause_labels_en[3]) != "Wash Guide":
+		_fail("pause title, restart, and guide actions must use English i18n keys")
 		return
 	TranslationServer.set_locale(previous_locale)
 
@@ -581,11 +584,32 @@ func _run_smoke() -> void:
 		_fail("releasing the primary touch must clear its opaque identifier")
 		return
 
+	var restart_level: int = int(root_node.get("active_level_index"))
+	root_node.set("level_time", 12.5)
+	root_node.set("combo_count", 4)
+	root_node.set("best_combo", 6)
+	root_node.set("clean_progress", 0.75)
+	root_node.set("coins", 137)
 	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 1).get_center())
+	if bool(root_node.get("show_pause")) or int(root_node.get("active_level_index")) != restart_level:
+		_fail("pause restart must close the sheet and keep the current level")
+		return
+	if float(root_node.call("get_level_time_for_test")) != 0.0 or int(root_node.call("get_combo_for_test")) != 0 or int(root_node.call("get_best_combo_for_test")) != 0:
+		_fail("pause restart must reset timer and combo state")
+		return
+	if float(root_node.call("get_clean_progress_for_test")) != 0.0:
+		_fail("pause restart must reset wash progress")
+		return
+	if int(root_node.call("get_coins_for_test")) != 137:
+		_fail("pause restart must not grant or spend coins")
+		return
+
+	root_node.set("show_pause", true)
+	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 2).get_center())
 	if bool(root_node.get("sound_enabled")) or not bool(root_node.get("show_pause")):
 		_fail("sound toggle must work only inside pause/settings")
 		return
-	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 2).get_center())
+	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 3).get_center())
 	if not bool(root_node.get("show_tutorial")):
 		_fail("guide action inside pause/settings should open the tutorial")
 		return
