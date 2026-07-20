@@ -19,6 +19,11 @@ const STATE_RUNOFF := "runoff"
 const STATE_FLYING := "flying"
 const STATE_REMOVED := "removed"
 
+# Keep a tiny accessibility floor for active tools that Coaching marks as
+# misapplied. The lowest direct coefficient on a valid preparation step is
+# 0.05, so 0.002 caps wrong-tool DPS at 4% of that slowest valid action.
+const MISAPPLIED_DAMAGE_COEFFICIENT := 0.002
+
 
 static func patch_center(patch: DirtPatch) -> Vector2:
 	return patch.position + patch.drift
@@ -69,6 +74,8 @@ static func apply_air(patch: DirtPatch, delta: float, source_point: Vector2, pro
 
 
 static func apply_water(patch: DirtPatch, delta: float, proximity: float, mult: float) -> void:
+	var was_misapplied := Coaching.tool_misapplied(Coaching.TOOL_WATER, patch)
+	var health_before := patch.health
 	var wr := GameConfig.CLEAN_DAMAGE_RATE * mult
 	patch.wetness = min(1.0, patch.wetness + delta * proximity * 1.85)
 	patch.runoff = min(1.0, patch.runoff + delta * proximity * 0.8)
@@ -116,8 +123,13 @@ static func apply_water(patch: DirtPatch, delta: float, proximity: float, mult: 
 		patch.state = STATE_WET
 		patch.health -= 0.45 * proximity * delta * wr
 
+	if was_misapplied:
+		_apply_misapplied_damage(patch, health_before, delta, proximity, mult)
+
 
 static func apply_soap(patch: DirtPatch, delta: float, proximity: float, mult: float) -> void:
+	var was_misapplied := Coaching.tool_misapplied(Coaching.TOOL_SOAP, patch)
+	var health_before := patch.health
 	var sr := GameConfig.CLEAN_DAMAGE_RATE * mult
 	if patch.kind == "oil" or patch.kind == "bug":
 		patch.soap = min(1.0, patch.soap + delta * proximity * 1.65)
@@ -142,8 +154,13 @@ static func apply_soap(patch: DirtPatch, delta: float, proximity: float, mult: f
 	else:
 		patch.soap = min(0.45, patch.soap + delta * proximity * 0.25)
 
+	if was_misapplied:
+		_apply_misapplied_damage(patch, health_before, delta, proximity, mult)
+
 
 static func apply_sponge(patch: DirtPatch, delta: float, source_point: Vector2, proximity: float, mult: float) -> void:
+	var was_misapplied := Coaching.tool_misapplied(Coaching.TOOL_SPONGE, patch)
+	var health_before := patch.health
 	var spr := GameConfig.CLEAN_DAMAGE_RATE * mult
 	var push := push_direction(patch, source_point)
 	patch.drift += push * delta * proximity * 3.0
@@ -183,3 +200,10 @@ static func apply_sponge(patch: DirtPatch, delta: float, source_point: Vector2, 
 			patch.soap = max(0.0, patch.soap - delta * proximity * 0.18)
 		else:
 			patch.health -= 0.08 * proximity * delta * spr
+
+	if was_misapplied:
+		_apply_misapplied_damage(patch, health_before, delta, proximity, mult)
+
+
+static func _apply_misapplied_damage(patch: DirtPatch, health_before: float, delta: float, proximity: float, mult: float) -> void:
+	patch.health = health_before - MISAPPLIED_DAMAGE_COEFFICIENT * proximity * delta * GameConfig.CLEAN_DAMAGE_RATE * mult
