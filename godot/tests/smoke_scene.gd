@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -168,6 +168,10 @@ func _run_smoke() -> void:
 	if not _test_wheel_dirt_contract(root_node):
 		return
 	if not _test_customer_patience_contract(root_node):
+		return
+	if not _test_scaled_star3_combo_gate_contract(root_node):
+		return
+	if not await _test_scaled_grade_tracker_prompt_contract(root_node):
 		return
 	if not _test_oil_sheen_contract(root_node):
 		return
@@ -1321,6 +1325,103 @@ func _test_customer_patience_contract(root_node: Node) -> bool:
 	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
 		_fail("progress-aware patience must keep the existing HUD residency unchanged")
 		return false
+	return true
+
+
+func _test_scaled_star3_combo_gate_contract(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	var expected_requirements := {1: 4, 3: 4, 4: 5, 7: 6, 19: 10, 40: 10}
+	for level in expected_requirements:
+		if int(root_node.call("get_star3_combo_requirement_for_test", level)) != int(expected_requirements[level]):
+			_fail("live third-star combo requirement must scale deterministically and cap at ten")
+			return false
+	root_node.call("reset_game", 4, "scaled_combo_gate_smoke")
+	root_node.set("level_time", 60.0)
+	root_node.set("best_combo", 4)
+	var expected_prompt := TranslationServer.translate("GRADE_COMBO_FOR3") % 5
+	var actual_prompt := String(root_node.call("_grade_combo_prompt"))
+	if actual_prompt != expected_prompt:
+		_fail("existing grade tracker must display the scaled level 4 combo requirement x5")
+		return false
+	if int(root_node.call("calc_stars_for_test")) != 2 \
+			or String(root_node.call("_grade_slot_state", 2)) != "target":
+		_fail("level 4 combo four must remain below the scaled third-star gate")
+		return false
+	var patches: Array = root_node.get("dirt_patches")
+	for patch_index in range(4):
+		root_node.call("_mark_patch_removed", patches[patch_index])
+	if bool(root_node.call("is_star3_combo_unlocked_for_test")):
+		_fail("third-star gate sound and haptic must not unlock below the scaled threshold")
+		return false
+	root_node.call("_mark_patch_removed", patches[4])
+	if not bool(root_node.call("is_star3_combo_unlocked_for_test")) \
+			or int(root_node.call("get_combo_for_test")) != 5 \
+			or int(root_node.call("calc_stars_for_test")) != 3 \
+			or String(root_node.call("_grade_slot_state", 2)) != "earned":
+		_fail("level 4 combo five must unlock feedback and the third-star gate together")
+		return false
+
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if main_source.contains("STAR3_COMBO") \
+			or not main_source.contains("text = _grade_combo_prompt()") \
+			or not main_source.contains('text = tr("GRADE_COMBO_URGENT") % [combo_requirement, secs]'):
+		_fail("grade tracker text and combo visuals must use the scaled requirement without a fixed threshold")
+		return false
+	var gate_guard := main_source.find("if combo_count == _star3_combo_requirement() and not _star3_combo_unlocked:")
+	var gate_sound := main_source.find("audio.play_star3_gate()", gate_guard)
+	var gate_haptic := main_source.find("Input.vibrate_handheld(50)", gate_sound)
+	var next_branch := main_source.find("if COMBO_BONUS_AMOUNTS.has(combo_count):", gate_guard)
+	if gate_guard < 0 or gate_sound < gate_guard or gate_haptic < gate_sound or next_branch < gate_haptic:
+		_fail("scaled combo gate must guard its existing sound and haptic feedback")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("scaled combo gate must not add persistent UI controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("scaled combo gate must keep the existing grade tracker residency unchanged")
+		return false
+	root_node.call("reset_game", 1, "scaled_combo_gate_smoke_cleanup")
+	return true
+
+
+func _test_scaled_grade_tracker_prompt_contract(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	var expected_prompts := {1: 4, 4: 5, 7: 6, 19: 10}
+	for level in expected_prompts:
+		var combo_requirement := int(expected_prompts[level])
+		root_node.call("reset_game", int(level), "scaled_grade_tracker_prompt_smoke")
+		root_node.set("level_time", 20.0)
+		root_node.set("best_combo", combo_requirement - 1)
+		if String(root_node.call("_grade_slot_state", 2)) != "target":
+			_fail("scaled grade tracker prompt requires the third star to remain a reachable target at level %d" % level)
+			return false
+		var expected_prompt := TranslationServer.translate("GRADE_COMBO_FOR3") % combo_requirement
+		root_node.queue_redraw()
+		await process_frame
+		await process_frame
+		var rendered_prompt := String(root_node.call("get_last_grade_tracker_text_for_test"))
+		if rendered_prompt != expected_prompt:
+			_fail("existing grade tracker draw execution must render scaled level %d combo requirement x%d (got '%s', want '%s')" % [level, combo_requirement, rendered_prompt, expected_prompt])
+			return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("scaled grade tracker prompt must not add persistent UI controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("scaled grade tracker prompt must keep existing HUD residency unchanged")
+		return false
+	root_node.call("reset_game", 1, "scaled_grade_tracker_prompt_smoke_cleanup")
 	return true
 
 

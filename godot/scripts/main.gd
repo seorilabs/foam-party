@@ -43,7 +43,6 @@ const CLEAN_DAMAGE_RATE := GameConfig.CLEAN_DAMAGE_RATE
 const COMBO_WINDOW := GameConfig.COMBO_WINDOW
 const COMBO_GRACE := GameConfig.COMBO_GRACE
 const STAR3_TIME := GameConfig.STAR3_TIME
-const STAR3_COMBO := GameConfig.STAR3_COMBO
 const STAR_WARN_SECONDS := GameConfig.STAR_WARN_SECONDS
 const GRADE_SLOT_EARNED := "earned"
 const GRADE_SLOT_TARGET := "target"
@@ -194,6 +193,7 @@ var _combo_milestone_count := 0
 var _customer_cheer_text := ""
 var _customer_cheer_time := -10.0
 var _customer_completion_time := -10.0
+var _last_grade_tracker_text := ""
 var best_times: Dictionary = {}
 var best_stars: Dictionary = {}
 var is_new_record := false
@@ -724,7 +724,7 @@ func _process(delta: float) -> void:
 			combo_timer -= delta
 			if combo_timer <= 0.0:
 				_resolve_combo_timeout()
-			elif combo_count >= STAR3_COMBO:
+			elif combo_count >= _star3_combo_requirement():
 				var active_window := COMBO_GRACE if combo_grace_active else COMBO_WINDOW
 				var urgency := clampf(1.0 - combo_timer / maxf(active_window, 0.001), 0.0, 1.0)
 				_halo_phase = fmod(_halo_phase + delta * (9.0 + urgency * 6.0) * TAU, TAU)
@@ -1152,6 +1152,14 @@ func get_clean_progress_for_test() -> float:
 	return clean_progress
 
 
+func get_star3_combo_requirement_for_test(level: int) -> int:
+	return Scoring.star3_combo_requirement(level)
+
+
+func is_star3_combo_unlocked_for_test() -> bool:
+	return _star3_combo_unlocked
+
+
 func get_customer_patience_for_test(elapsed_seconds: float, progress: float) -> float:
 	return CustomerPatience.value(elapsed_seconds, progress)
 
@@ -1274,6 +1282,10 @@ func calc_stars_for_test() -> int:
 
 func get_grade_slot_state_for_test(slot_index: int) -> String:
 	return _grade_slot_state(slot_index)
+
+
+func get_last_grade_tracker_text_for_test() -> String:
+	return _last_grade_tracker_text
 
 
 func get_grade_time_to_downgrade_for_test() -> float:
@@ -2404,7 +2416,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 			_spawn_gold_spot_burst(burst_center, burst_radius)
 			audio.play_coin_bonus()
 		_register_combo_removal()
-		if combo_count == STAR3_COMBO and not _star3_combo_unlocked:
+		if combo_count == _star3_combo_requirement() and not _star3_combo_unlocked:
 			_star3_combo_unlocked = true
 			audio.play_star3_gate()
 			if OS.has_feature("mobile"):
@@ -2418,7 +2430,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		combo_pop_time = float(Time.get_ticks_msec()) / 1000.0
 		_trigger_combo_milestone_flash(combo_count)
 		var _cheer := ""
-		if combo_count == STAR3_COMBO:
+		if combo_count == _star3_combo_requirement():
 			_cheer = tr("CHEER_NICE")
 		elif combo_count == 6:
 			_cheer = tr("CHEER_KEEP")
@@ -2463,8 +2475,9 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 	# bigger than the last: more particles, faster spread, and a colour shift
 	# from clean white/blue toward a celebratory gold once the combo runs hot.
 	var combo: int = max(combo_count, 1)
+	var combo_requirement := _star3_combo_requirement()
 	var intensity: float = clampf(float(combo - 1) / 8.0, 0.0, 1.0)
-	var hot: bool = combo >= STAR3_COMBO
+	var hot: bool = combo >= combo_requirement
 	var cool_tint := Color(1.0, 1.0, 1.0, 0.95)
 	var hot_tint := Color(1.0, 0.84, 0.36, 0.98)
 	var sparkle_tint := cool_tint.lerp(hot_tint, intensity)
@@ -2489,7 +2502,7 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 
 	# Hot combos throw celebratory gold confetti so a streak reads as a payoff.
 	if hot:
-		var confetti_count: int = min(combo - STAR3_COMBO + 2, 7)
+		var confetti_count: int = min(combo - combo_requirement + 2, 7)
 		for index in range(confetti_count):
 			var angle := rng.randf_range(-PI, 0.0)
 			var speed := rng.randf_range(120.0, 230.0)
@@ -2879,6 +2892,14 @@ func _star_time_threshold(tier: int) -> float:
 
 func _calc_stars() -> int:
 	return Scoring.calc_stars(level_time, best_combo, active_level_index)
+
+
+func _star3_combo_requirement() -> int:
+	return Scoring.star3_combo_requirement(active_level_index)
+
+
+func _grade_combo_prompt() -> String:
+	return tr("GRADE_COMBO_FOR3") % _star3_combo_requirement()
 
 
 # Live state of one star slot in the HUD grade tracker (0 = first star).
@@ -4359,6 +4380,7 @@ func _draw_grade_tracker() -> void:
 
 	var time_left := _grade_time_to_downgrade()
 	var at_risk := _grade_at_risk_slot()
+	var combo_requirement := _star3_combo_requirement()
 	var warning: bool = time_left >= 0.0 and time_left <= STAR_WARN_SECONDS
 
 	var star_y := rect.position.y + 20.0
@@ -4390,16 +4412,17 @@ func _draw_grade_tracker() -> void:
 		if _grade_slot_state(at_risk) == GRADE_SLOT_TARGET:
 			# Star is reachable but not yet earned: keep nudging the combo gate
 			# so the player races the clock and the combo.
-			text = tr("GRADE_COMBO_URGENT") % [STAR3_COMBO, secs]
+			text = tr("GRADE_COMBO_URGENT") % [combo_requirement, secs]
 		else:
 			text = tr("GRADE_KEEP_STAR") % [at_risk + 1, secs]
 		col = Color(1.0, 0.74, 0.36)
 		col.a = blink
 	elif _grade_slot_state(2) == GRADE_SLOT_TARGET:
-		text = tr("GRADE_COMBO_FOR3") % STAR3_COMBO
+		text = _grade_combo_prompt()
 		col = Color(1.0, 0.88, 0.55)
 	else:
 		text = tr("GRADE_TIME") % _format_time(level_time)
+	_last_grade_tracker_text = text
 	var text_font_size := 11
 	while text_font_size > 8 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, text_font_size).x > rect.size.x - 8.0:
 		text_font_size -= 1
@@ -4552,7 +4575,7 @@ func _draw_combo_badge() -> void:
 	var badge_size := Vector2(118.0, 36.0) * pop
 	var badge_center_y := _combo_badge_center_y()
 	var badge := Rect2(Vector2(195.0, badge_center_y) - badge_size * 0.5, badge_size)
-	var is_hot := combo_count >= STAR3_COMBO
+	var is_hot := combo_count >= _star3_combo_requirement()
 	var style_key := "combo_hot" if is_hot else "combo_cool"
 	var bg := Color("#ffce3d") if is_hot else Color(0.97, 0.99, 1.0, 0.95)
 	# Hot streaks gain a soft pulsing halo so momentum is unmistakable.

@@ -110,7 +110,14 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_patience_nearly_clean_late.png")):
 		quit(1)
 		return
-	node.call("reset_game", 1, "patience_screenshot_cleanup")
+	node.call("reset_game", 4, "scaled_combo_gate_screenshot")
+	node.set("level_time", 30.0)
+	node.set("best_combo", 4)
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_scaled_combo_gate_level4.png")):
+		quit(1)
+		return
+	node.call("reset_game", 1, "balance_screenshot_cleanup")
 	await _settle(3)
 	if not await _capture(out_dir.path_join("shot_wheel_dirt.png")):
 		quit(1)

@@ -7,6 +7,9 @@ extends RefCounted
 
 const STAR3_TIME := 75.0
 const STAR3_COMBO := 4
+# Third-star combo gate grows by one every three levels and stops at ten.
+const STAR3_COMBO_LEVEL_STEP := 3
+const STAR3_COMBO_MAX := 10
 const STAR2_TIME := 140.0
 # Washing progress offsets this fraction of elapsed-time pressure at 100%
 # cleanliness. The customer still reaches zero patience after a longer idle.
