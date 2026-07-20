@@ -214,14 +214,26 @@ func _run_core_tests() -> void:
 		_fail("daily mission for 2026-07-06 changed: " + str(mission))
 		return
 	var seen_style_missions: Dictionary = {}
+	var style_mission_dates: Dictionary = {}
 	for month in range(1, 13):
 		for day in range(1, 29):
-			var rotated: Dictionary = DailyMission.mission_for("2026-%02d-%02d" % [month, day])
+			var candidate_date := "2026-%02d-%02d" % [month, day]
+			var rotated: Dictionary = DailyMission.mission_for(candidate_date)
 			if String(rotated["type"]) in ["combo", "fast", "perfect3"]:
 				seen_style_missions[String(rotated["type"])] = true
+				if not style_mission_dates.has(String(rotated["type"])):
+					style_mission_dates[String(rotated["type"])] = candidate_date
 	if seen_style_missions.size() != 3:
 		_fail("date-hash rotation must include combo, fast, and perfect3 missions")
 		return
+	# AC-5: each new type must resolve identically when its own date is queried again.
+	for mission_type in ["combo", "fast", "perfect3"]:
+		var representative_date := String(style_mission_dates[mission_type])
+		var first_pick: Dictionary = DailyMission.mission_for(representative_date)
+		var repeated_pick: Dictionary = DailyMission.mission_for(representative_date)
+		if first_pick != repeated_pick or String(first_pick["type"]) != mission_type:
+			_fail("same date must deterministically repeat new mission type %s" % mission_type)
+			return
 	var expected_style_missions := {
 		"combo": {"target": 1, "requirement": 8, "label": "한 판에서 콤보 x8 달성"},
 		"fast": {"target": 1, "requirement": 75, "label": "75초 이내 세차 완료"},
