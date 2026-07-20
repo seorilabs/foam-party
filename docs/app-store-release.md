@@ -47,15 +47,23 @@ export FOAM_PARTY_IOS_SIGNING_IDENTITY="Apple Distribution: Seori Labs (HCDUXX4Z
 export FOAM_PARTY_IOS_TARGETED_DEVICE_FAMILY="1"
 ```
 
-Godot iOS export는 `build/ios/foam-party.xcodeproj`를 만들고, 스크립트가 `build/ios/foam-party.xcarchive`와 `.ipa` export를 이어서 만든다.
+AdMob app/unit ID도 같은 빌드에서 주입한다. 미설정 값은 Google 공식 테스트 ID로 남으므로 production 제출 전에 모두 지정해야 한다.
+
+```bash
+export ADMOB_IOS_APP_ID="ca-app-pub-...~..."
+export ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID="ca-app-pub-.../..."
+export ADMOB_IOS_FOAM_BOMB_REWARDED_AD_UNIT_ID="ca-app-pub-.../..."
+export ADMOB_IOS_LEVEL_REWARD_REWARDED_AD_UNIT_ID="ca-app-pub-.../..."
+```
+
+Godot iOS export는 `build/ios/foam-party.xcodeproj`와 AdMob용 local `Package.swift`를 만든다. 스크립트는 headless export에서 누락될 수 있는 Swift Package project reference를 idempotent하게 보정한 뒤 `build/ios/foam-party.xcarchive`와 `.ipa` export를 이어서 만든다.
 
 ## 현재 제한
 
-- App Store Connect app shell, App Privacy, age rating, review contact, content rights, TestFlight upload는 아직 완료 상태가 아니다.
-- Worldwide availability는 EU 배포를 포함하므로 App Store Connect에서 DSA trader status와 표시 연락처 요구사항을 확인해야 한다.
-- 로컬에 있는 provisioning profile은 `AppStore Happy Farm Profile`이며 `com.seorilabs.happyfarm`용이라 폼 파티에 사용할 수 없다.
-- `app-store/assets/icon-1024.png`는 현재 600x600 원본에서 생성한 임시 고해상도 아이콘이다. 최종 제출 전 1024 원본 제작을 권장한다.
-- 스크린샷은 아직 실제 iOS/Simulator 화면에서 App Store용 `en-US` 세트로 캡처하지 않았다.
+- 1.0.0 제출 당시 답변과 달리 현재 소스는 AdMob/Firebase Analytics를 포함한다. 다음 버전의 App Privacy, age rating, review notes를 다시 확정해야 한다.
+- iOS는 ATT를 활성화하지 않고 광고 요청에 `npa=1`을 기본 적용한다. Worldwide의 EEA/UK 배포 전 AdMob privacy message와 UMP 동의 흐름을 구성한다.
+- production AdMob app/unit ID와 실제 iPhone 광고 load/impression/dismiss/earned 및 GA4 이벤트를 확인한다.
+- `app-store/assets/icon-1024.png`는 600x600 원본에서 생성했으므로 최종 고해상도 원본 교체를 권장한다.
 
 ## 확인 명령
 
@@ -69,6 +77,8 @@ tools/check_app_store_readiness.py --json
 
 ## 검증 기록
 
+- 2026-07-21: Poing AdMob v4.3.1 iOS xcframework를 Godot 4.6.3 preset에 번들하고 project-only export를 확인했다. 생성된 plist에 Google 테스트 app ID와 SKAdNetworkItems가 포함되고 ATT usage description은 없다.
+- 2026-07-21: headless export 후 local Swift Package reference를 보정해 GoogleMobileAds 13.3.0, UMP 3.1.0, Poing xcframework가 링크된 unsigned Release iphoneos build를 완료했다.
 - 2026-06-12: App Store 준비 시작. iOS preset, repo-local config, release docs, readiness checker, build script 추가.
 - 2026-06-12: `tools/build_ios_app_store.sh --project-only` 성공. `build/ios/foam-party.xcodeproj` 생성 확인.
 - 2026-06-12: `tools/build_ios_app_store.sh --unsigned-build` 성공. Xcode 26.5 / iPhoneOS SDK 26.5에서 `CODE_SIGNING_ALLOWED=NO`, `TARGETED_DEVICE_FAMILY=1` Release compile 확인.

@@ -45,7 +45,7 @@ FTUE 이벤트의 이름과 파라미터 원본은 `packages/product-core/src/an
 
 앱 버전은 별도 커스텀 `release_version`을 중복 전송하지 않고 GA4 export의 `app_info.version`과 `app_info.id`로 귀속한다. 따라서 BigQuery에서는 최신 계측 버전만 필터해 `first_open → title_screen_view → level_load_complete → play_tap → level_start → tutorial_complete` 전환율을 비교한다.
 
-## 광고 이벤트 (신규)
+## 광고 이벤트
 
 광고는 Clean Architecture `AdPort`(core/ports/ad_port.gd) + `AdService`(scripts/services/ad_service.gd) 시맨틱으로 통일한다. 두 층위로 로깅한다.
 
@@ -55,11 +55,21 @@ FTUE 이벤트의 이름과 파라미터 원본은 `packages/product-core/src/an
 
 | 이벤트 | 파라미터 | 시점 |
 |---|---|---|
-| `ad_rewarded_request` | `placement`(`foam_bomb_free`) | 리워드 광고 표시 요청 |
-| `ad_rewarded_granted` | `placement` | 보상 지급(광고 시청 완료) → 무료 거품폭탄 |
-| `ad_interstitial_request` | `placement`(`game_over`) | 전면 광고 표시 요청 |
+| `ad_rewarded_request` | `placement`, `provider` | 로드된 리워드 광고 표시 요청 |
+| `ad_rewarded_granted` | `placement`, `provider` | SDK earned callback 확인 후 보상 지급 |
+| `ad_interstitial_request` | `placement`, `provider` | 로드된 전면 광고 표시 요청 |
 
-### 2) SDK 라이프사이클 (웹 런타임 → `window.__foamPartyFirebase`)
+### 2) SDK 라이프사이클
+
+네이티브 `AdService`는 아래 이벤트를 Firebase Analytics로 기록한다. 공통 파라미터는 `placement`, `provider=admob`이다.
+
+- `ad_{rewarded|interstitial}_loaded`
+- `ad_{rewarded|interstitial}_load_failed`
+- `ad_{rewarded|interstitial}_impression`
+- `ad_{rewarded|interstitial}_dismissed`
+- `ad_{rewarded|interstitial}_show_failed`
+
+웹에서는 `tossFullScreenAdRuntime.ts`가 AIT 통합광고 이벤트를 직접 기록한다. 이름은 `ait_{rewarded|interstitial}_{event}`다.
 
 `tossFullScreenAdRuntime.ts`가 AIT 통합광고 이벤트를 직접 기록. 이름은 `ait_{rewarded|interstitial}_{event}`.
 
@@ -77,11 +87,13 @@ FTUE 이벤트의 이름과 파라미터 원본은 `packages/product-core/src/an
 
 | placement | 포맷 | 트리거 | 광고 그룹/유닛 |
 |---|---|---|---|
-| `foam_bomb_free` | 리워드 | 코인 부족 시 거품폭탄 칩 탭 → 광고 시청 → 무료 거품폭탄 | AdMob `ca-app-pub-2444587584524186/5440739953` / AIT `VITE_TOSS_REWARDED_AD_GROUP_ID` |
-| `game_over` | 전면 | 레벨 전환(next/retry) 시 `INTERSTITIAL_EVERY`(=3)회마다 1회 | AIT `VITE_TOSS_INTERSTITIAL_AD_GROUP_ID` |
+| `foam_bomb_free` | 리워드 | 코인 부족 시 거품폭탄 칩 탭 → 광고 시청 → 무료 거품폭탄 | 네이티브 `native_ads.json` / AIT `VITE_TOSS_REWARDED_AD_GROUP_ID` |
+| `level_reward_2x` | 리워드 | 결과 화면 보상 2배 | 네이티브 `native_ads.json` / AIT `VITE_TOSS_REWARDED_AD_GROUP_ID` |
+| `game_over` | 전면 | 레벨 전환(next/retry) 시 `INTERSTITIAL_EVERY`(=3)회마다 1회 | 네이티브 `native_ads.json` / AIT `VITE_TOSS_INTERSTITIAL_AD_GROUP_ID` |
 
 ## 안전/비활성 규칙
 
-- 광고 그룹 ID(env) 미설정 또는 SDK 미지원 → `is_rewarded_ready`/`show_*`가 no-op. 거품폭탄 칩은 코인 전용 모드로 표시.
-- 네이티브 AdMob 플러그인 미탑재(현재) → 네이티브 경로 no-op (Phase 2에서 연결).
+- Android/iOS는 Poing AdMob v4.3.1과 Godot 4.6.3용 바이너리를 repo에 고정한다. desktop/headless/Web에는 네이티브 singleton이 없어 기존 no-op 경로를 유지한다.
+- `godot/config/native_ads.json` 기본값은 Google 공식 테스트 app/unit ID다. `tools/configure_native_ads.py`가 빌드 환경변수로 실제 ID를 주입한다. 실제 ID가 모두 확정되기 전 production 배포 금지.
+- iOS는 ATT prompt 없이 `npa=1`을 요청별 기본값으로 보낸다. 이는 UMP 동의 수집을 대체하지 않으므로 EEA/UK 배포 전 AdMob privacy message와 UMP 흐름을 별도 확정한다.
 - 광고 이벤트는 fire-and-forget: 게임 상태/반환값에 영향 없음.

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "mode": "google-test-defaults",
+  "platforms": {
+    "Android": {
+      "appId": "ca-app-pub-3940256099942544~3347511713",
+      "nonPersonalizedAds": false,
+      "units": {
+        "interstitial": {
+          "game_over": "ca-app-pub-3940256099942544/1033173712"
+        },
+        "rewarded": {
+          "foam_bomb_free": "ca-app-pub-3940256099942544/5224354917",
+          "level_reward_2x": "ca-app-pub-3940256099942544/5224354917"
+        }
+      }
+    },
+    "iOS": {
+      "appId": "ca-app-pub-3940256099942544~1458002511",
+      "nonPersonalizedAds": true,
+      "units": {
+        "interstitial": {
+          "game_over": "ca-app-pub-3940256099942544/4411468910"
+        },
+        "rewarded": {
+          "foam_bomb_free": "ca-app-pub-3940256099942544/1712485313",
+          "level_reward_2x": "ca-app-pub-3940256099942544/1712485313"
+        }
+      }
+    }
+  }
+}

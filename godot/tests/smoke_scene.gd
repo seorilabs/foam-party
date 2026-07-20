@@ -1,5 +1,8 @@
 extends SceneTree
 
+const AdService := preload("res://scripts/services/ad_service.gd")
+const NativeAds := preload("res://scripts/services/native_ad_config.gd")
+
 
 class AnalyticsRecorder:
 	extends Node
@@ -10,8 +13,69 @@ class AnalyticsRecorder:
 		events.append({"name": event_name, "params": params.duplicate(true)})
 
 
+class RewardRecorder:
+	extends RefCounted
+
+	var grants := 0
+
+	func grant() -> void:
+		grants += 1
+
+
 func _initialize() -> void:
 	_run_smoke.call_deferred()
+
+
+func _test_native_ad_contract() -> bool:
+	if NativeAds.unit_id("interstitial", "game_over", "Android") != "ca-app-pub-3940256099942544/1033173712":
+		_fail("Android native interstitial test ID missing")
+		return false
+	if NativeAds.unit_id("rewarded", "foam_bomb_free", "iOS") != "ca-app-pub-3940256099942544/1712485313":
+		_fail("iOS native rewarded test ID missing")
+		return false
+	if not NativeAds.uses_non_personalized_ads("iOS"):
+		_fail("iOS native ads must default to NPA")
+		return false
+
+	var service := AdService.new()
+	var analytics_recorder := AnalyticsRecorder.new()
+	var dismissed_recorder := RewardRecorder.new()
+	get_root().add_child(service)
+	service.configure(analytics_recorder)
+	service.set("_pending_reward", Callable(dismissed_recorder, "grant"))
+	service.set("_rewarded_in_flight", true)
+	service.set("_native_reward_placement", "foam_bomb_free")
+	if bool(service.show_rewarded("foam_bomb_free", Callable(dismissed_recorder, "grant"))):
+		_fail("rewarded in-flight guard must reject a second show")
+		return false
+	service.call("_finish_native_rewarded", "foam_bomb_free")
+	if dismissed_recorder.grants != 0:
+		_fail("dismissed native rewarded ad must not grant a reward")
+		return false
+
+	var earned_recorder := RewardRecorder.new()
+	service.set("_pending_reward", Callable(earned_recorder, "grant"))
+	service.set("_rewarded_in_flight", true)
+	service.set("_native_reward_placement", "foam_bomb_free")
+	service.call("_on_native_reward_earned", null)
+	service.call("_on_native_reward_earned", null)
+	if earned_recorder.grants != 1:
+		_fail("native earned callback must grant exactly once")
+		return false
+	var granted_events := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "ad_rewarded_granted"
+	)
+	if granted_events.size() != 1:
+		_fail("native reward analytics must log exactly once")
+		return false
+	var params: Dictionary = granted_events[0].get("params", {})
+	if params.get("provider") != "admob" or params.get("placement") != "foam_bomb_free":
+		_fail("native reward analytics params mismatch")
+		return false
+	service.call("_finish_native_rewarded", "foam_bomb_free")
+	service.queue_free()
+	return true
 
 
 func _run_smoke() -> void:
@@ -313,6 +377,8 @@ func _run_smoke() -> void:
 		return
 	if int(root_node.call("get_coins_for_test")) != 10:
 		_fail("failed foam bomb must not change coins")
+		return
+	if not _test_native_ad_contract():
 		return
 
 	# --- contextual "use this tool" hint ---

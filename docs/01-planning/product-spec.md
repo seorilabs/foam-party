@@ -10,7 +10,7 @@
 - Main scene: `res://scenes/main.tscn`
 - One-line pitch: 도구를 바꿔 쓰며 더러워진 카툰 차량을 빠르게 세차하는 캐주얼 게임.
 - Target audience: 짧은 세션으로 즉시 이해 가능한 모바일 캐주얼 게임 이용자.
-- Monetization: 현재 MVP는 유료화 없음. 후속 후보는 보상형 광고 기반 부스터.
+- Monetization: 선택형 보상 광고와 3회 레벨 전환마다 전면 광고. IAP는 없음.
 
 ## 핵심 루프
 
@@ -24,7 +24,7 @@
 
 - Must-have: title flow, tutorial, cleaning tools, dirt state transitions, combo, star rating, coins, foam bomb, local save, Godot smoke test.
 - Should-have: App Store iOS export path, App Store metadata source, screenshot capture helper.
-- Out of scope: Firebase, account, cloud save, ads SDK, IAP, Google Play release automation, AppsInToss wrapper.
+- Out of scope: account, cloud save, IAP. Firebase Analytics, 네이티브/AIT 광고 adapter, Google Play/App Store/AIT delivery 경로는 후속 구현으로 들어왔다.
 
 ## 현재 구현 상태
 

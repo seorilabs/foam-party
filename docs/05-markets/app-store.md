@@ -24,9 +24,10 @@
 
 ## Privacy / Review
 
-- Current binary privacy candidate: 데이터 수집 없음 후보.
-- Tracking / ATT: 아니오 후보.
-- Age rating: 4+ 후보.
+- Current source privacy candidate: AdMob 및 Firebase Analytics 데이터 수집 항목 재작성 필요.
+- Tracking / ATT: 아니오 후보. ATT 비활성, AdMob 요청은 `npa=1` 기본값.
+- Consent: EEA/UK용 AdMob privacy message와 UMP 흐름 확정 필요.
+- Age rating: 광고 포함 기준으로 다음 버전 재확정 필요.
 - Export compliance: `ITSAppUsesNonExemptEncryption=false` 후보.
 - DSA trader status: 확정 필요.
 

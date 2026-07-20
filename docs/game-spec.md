@@ -89,16 +89,17 @@
 4. ~~차량 다양화~~ → 5종 로테이션 구현됨(시티카/스포츠카/트럭/밴/오프로더, 차종별 절차적 형상과 오염 프로필).
 5. 데일리 미션: "오늘 낙엽 30개 날리기" 같은 짧은 목표로 재방문 동기를 만듭니다.
 
-## 광고 전략 (안)
+## 광고 전략
 
 - 보상형(rewarded)을 기본 축으로 합니다: "거품 폭탄(전체 오물 비누칠)", "고압수 부스트" 같은 부스터를 광고 시청으로 제공해 플레이어가 광고를 선택하게 만듭니다.
 - 전면(interstitial)은 차량 N대(예: 3대) 완료 후 결과 화면 전환 시점에만 노출합니다. 첫 차량 완료 직후와 세차 도중에는 노출하지 않습니다.
 - 배너는 드래그 조작 영역과 겹쳐 오조작을 유발하므로 기본적으로 쓰지 않습니다. 쓴다면 완료 패널이 떠 있는 동안으로 한정합니다.
-- 광고 SDK는 gameplay script에 직접 섞지 않고 adapter 뒤에 두고, 노출 빈도는 Remote Config로 제어할 수 있게 설계합니다.
+- 광고 SDK는 gameplay script에 직접 섞지 않고 `AdPort`/`AdService` 뒤에 둡니다. AIT는 Toss Ads, Android/iOS는 AdMob을 사용하며 네이티브 singleton이 없는 빌드는 no-op입니다.
+- 전면 노출 빈도는 현재 `INTERSTITIAL_EVERY=3` 로컬 규칙이고, Remote Config 전환은 후속 범위입니다.
 
 ## 다음 작업 후보
 
 - 게임 요소 도입 후보 1~2번(콤보, 손님 만족도)부터 프로토타입.
 - 모바일 터치 햅틱과 더 풍부한 사운드 베리에이션 추가.
-- 게임플레이 범위가 안정된 뒤 Analytics, Remote Config, cloud progress용 Firebase adapter 추가.
-- 광고 adapter 스켈레톤(보상형 우선) 추가.
+- Remote Config와 cloud progress용 Firebase adapter 추가.
+- 실제 AdMob app/unit ID, iOS UMP 동의 흐름, 네이티브 실기기 광고 QA를 완료.
