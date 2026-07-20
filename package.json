@@ -8,10 +8,11 @@
   },
   "scripts": {
     "build:godot:web": "bash scripts/ensure_godot.sh --with-export-templates && bash scripts/export_godot_web.sh",
-    "test": "npm run test:core && npm run check:architecture && npm run check:workflows && npm run check:native-ads && npm run test:godot && npm run check:docs",
+    "test": "npm run test:core && npm run check:architecture && npm run check:stalled-dirt-overlay && npm run check:workflows && npm run check:native-ads && npm run test:godot && npm run check:docs",
     "test:core": "bash scripts/test_core.sh && CORE_TEST_SCENE=res://tests/dirt_progression_test.gd bash scripts/test_core.sh",
     "test:godot": "bash scripts/godot_quality_gate.sh --project godot --smoke-scene res://tests/smoke_scene.gd",
     "check:architecture": "bash scripts/check_architecture.sh",
+    "check:stalled-dirt-overlay": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tools/test_stalled_dirt_overlay.py",
     "check:workflows": "bash scripts/check_workflows.sh",
     "check:native-ads": "python3 tools/check_native_admob_bundle.py",
     "check:docs": "bash scripts/check_docs.sh",
