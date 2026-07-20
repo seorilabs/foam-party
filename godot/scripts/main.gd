@@ -284,7 +284,7 @@ var skin_soap := "classic"
 var skin_sponge := "classic"
 var selected_car_paint := ""
 var license_plate_text := LicensePlate.DEFAULT_TEXT
-var owned_skins: Dictionary = {"classic": true}
+var owned_skins: Dictionary = Economy.default_skin_ownership(SkinCatalog.catalog())
 var owned_car_paints: Dictionary = {CarPaintCatalog.AUTO_ID: true}
 var _nozzle_skins: Dictionary = SkinCatalog.catalog()
 var _car_paints: Dictionary = CarPaintCatalog.catalog()
@@ -376,17 +376,9 @@ func _load_progress() -> void:
 		upgrade_water = clampi(int(config.get_value("upgrades", "water", 0)), 0, UPGRADE_MAX_LEVEL)
 		upgrade_soap = clampi(int(config.get_value("upgrades", "soap", 0)), 0, UPGRADE_MAX_LEVEL)
 		upgrade_sponge = clampi(int(config.get_value("upgrades", "sponge", 0)), 0, UPGRADE_MAX_LEVEL)
-		skin_water = String(config.get_value("skins", "water", "classic"))
-		skin_air = String(config.get_value("skins", "air", "classic"))
-		skin_soap = String(config.get_value("skins", "soap", "classic"))
-		skin_sponge = String(config.get_value("skins", "sponge", "classic"))
+		_load_nozzle_skin_customization(config)
 		_load_car_paint_customization(config)
 		license_plate_text = LicensePlate.safe_selection(String(config.get_value("customization", "license_plate", LicensePlate.DEFAULT_TEXT)))
-		var raw_owned: Variant = config.get_value("skins", "owned", {})
-		owned_skins = {"classic": true}
-		if raw_owned is Dictionary:
-			for k in (raw_owned as Dictionary):
-				owned_skins[String(k)] = true
 		var stored_best: Variant = config.get_value("game", "best_times", {})
 		if stored_best is Dictionary:
 			best_times = {}
@@ -468,6 +460,37 @@ func _load_car_paint_customization(config: ConfigFile) -> void:
 		selected_car_paint = ""
 
 
+func _load_nozzle_skin_customization(config: ConfigFile) -> void:
+	skin_water = String(config.get_value("skins", "water", "classic"))
+	skin_air = String(config.get_value("skins", "air", "classic"))
+	skin_soap = String(config.get_value("skins", "soap", "classic"))
+	skin_sponge = String(config.get_value("skins", "sponge", "classic"))
+	var raw_owned: Variant = config.get_value("skins", "owned", {})
+	var owned_dictionary: Dictionary = raw_owned if raw_owned is Dictionary else {}
+	owned_skins = Economy.normalize_skin_ownership(_nozzle_skins, owned_dictionary, {
+		TOOL_WATER: skin_water,
+		TOOL_AIR: skin_air,
+		TOOL_SOAP: skin_soap,
+		TOOL_SPONGE: skin_sponge,
+	})
+	if not _is_nozzle_skin_owned(TOOL_WATER, skin_water):
+		skin_water = "classic"
+	if not _is_nozzle_skin_owned(TOOL_AIR, skin_air):
+		skin_air = "classic"
+	if not _is_nozzle_skin_owned(TOOL_SOAP, skin_soap):
+		skin_soap = "classic"
+	if not _is_nozzle_skin_owned(TOOL_SPONGE, skin_sponge):
+		skin_sponge = "classic"
+
+
+func _store_nozzle_skin_customization(config: ConfigFile) -> void:
+	config.set_value("skins", "water", skin_water)
+	config.set_value("skins", "air", skin_air)
+	config.set_value("skins", "soap", skin_soap)
+	config.set_value("skins", "sponge", skin_sponge)
+	config.set_value("skins", "owned", owned_skins)
+
+
 func _store_car_paint_customization(config: ConfigFile) -> void:
 	config.set_value("customization", "car_paint", selected_car_paint)
 	config.set_value("customization", "owned_car_paints", owned_car_paints)
@@ -489,11 +512,7 @@ func _save_progress() -> Error:
 	config.set_value("upgrades", "water", upgrade_water)
 	config.set_value("upgrades", "soap", upgrade_soap)
 	config.set_value("upgrades", "sponge", upgrade_sponge)
-	config.set_value("skins", "water", skin_water)
-	config.set_value("skins", "air", skin_air)
-	config.set_value("skins", "soap", skin_soap)
-	config.set_value("skins", "sponge", skin_sponge)
-	config.set_value("skins", "owned", owned_skins)
+	_store_nozzle_skin_customization(config)
 	_store_car_paint_customization(config)
 	config.set_value("customization", "license_plate", license_plate_text)
 	return config.save(SAVE_PATH)
@@ -5449,6 +5468,10 @@ func _active_skin_color(tool_key: String, alpha: float = 1.0) -> Color:
 	return Color(0.5, 0.5, 0.5, alpha)
 
 
+func _is_nozzle_skin_owned(tool_key: String, skin_id: String) -> bool:
+	return Economy.is_skin_owned(owned_skins, tool_key, skin_id)
+
+
 func _skin_tab_rect(panel: Rect2, tab_idx: int) -> Rect2:
 	var tab_w: float = (panel.size.x - 20.0) / float(SKIN_PANEL_TAB_KEYS.size())
 	return Rect2(panel.position.x + 10.0 + tab_idx * tab_w, panel.position.y + 74.0, tab_w, 34.0)
@@ -5568,7 +5591,8 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 
 	# action == "buy"
 	coins -= cost
-	owned_skins[sid] = true
+	var ownership_key := Economy.skin_ownership_key(tool_key, sid)
+	owned_skins[ownership_key] = true
 	if tool_key == TOOL_WATER:
 		skin_water = sid
 	elif tool_key == TOOL_AIR:
@@ -5579,7 +5603,7 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 		skin_sponge = sid
 	if _save_progress() != OK:
 		coins += cost
-		owned_skins.erase(sid)
+		owned_skins.erase(ownership_key)
 		if tool_key == TOOL_WATER:
 			skin_water = prev_sid
 		elif tool_key == TOOL_AIR:
@@ -5596,7 +5620,7 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 
 
 func _try_buy_or_select_car_paint(paint_idx: int) -> void:
-	var intent := Economy.resolve_skin_purchase(_car_paints, CAR_PAINT_TOOL, paint_idx, owned_car_paints, coins)
+	var intent := Economy.resolve_flat_item_purchase(_car_paints, CAR_PAINT_TOOL, paint_idx, owned_car_paints, coins)
 	var action: String = intent["action"]
 	if action == "deny":
 		return
@@ -5688,7 +5712,7 @@ func _draw_skin_panel() -> void:
 		var sid: String = skin["id"]
 		var cost: int = skin["cost"]
 		var col: Color = skin["color"]
-		var is_owned: bool = owned_items.get(sid, false)
+		var is_owned: bool = owned_items.get(sid, false) if tool_key == CAR_PAINT_TOOL else _is_nozzle_skin_owned(tool_key, sid)
 		var is_selected: bool = sid == active_sid
 		var card: Rect2 = _skin_card_rect(panel, ci)
 

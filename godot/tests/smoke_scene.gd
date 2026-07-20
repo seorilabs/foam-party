@@ -322,6 +322,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_stage_selection_and_retry_contract(root_node):
 		return
+	if not _test_tool_scoped_skin_ownership(root_node):
+		return
 	if not _test_license_plate_customization(root_node):
 		return
 	if not _test_car_paint_customization(root_node):
@@ -1044,6 +1046,115 @@ func _test_ftue_entry_and_tutorial_event_order_and_params(events: Array[Dictiona
 	return true
 
 
+func _test_tool_scoped_skin_ownership(root_node: Node) -> bool:
+	# AC-1 through AC-4: each tool owns and pays for gold independently while
+	# every tool keeps its free classic skin.
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	var original_coins := int(root_node.get("coins"))
+	var original_owned: Dictionary = root_node.get("owned_skins").duplicate(true)
+	var original_skins := {
+		"water": root_node.get("skin_water"),
+		"air": root_node.get("skin_air"),
+		"soap": root_node.get("skin_soap"),
+		"sponge": root_node.get("skin_sponge"),
+	}
+	var original_tab := int(root_node.get("_skin_panel_tab"))
+	var tools := ["water", "air", "soap", "sponge"]
+	var clean_config := ConfigFile.new()
+	root_node.call("_load_nozzle_skin_customization", clean_config)
+	for tool in tools:
+		if not bool(root_node.call("_is_nozzle_skin_owned", tool, "classic")) \
+				or bool(root_node.call("_is_nozzle_skin_owned", tool, "gold")):
+			_fail("classic must be free and gold must start locked for %s" % tool)
+			return false
+
+	root_node.set("coins", 600)
+	for tool_index in range(tools.size()):
+		var tool := String(tools[tool_index])
+		root_node.call("_try_buy_or_select_skin", tool, 3)
+		if int(root_node.get("coins")) != 600 - (tool_index + 1) * 150 \
+				or not bool(root_node.call("_is_nozzle_skin_owned", tool, "gold")):
+			_fail("each tool gold purchase must charge exactly 150 coins for %s" % tool)
+			return false
+		for other_index in range(tool_index + 1, tools.size()):
+			if bool(root_node.call("_is_nozzle_skin_owned", String(tools[other_index]), "gold")):
+				_fail("purchased gold must not unlock a later tool")
+				return false
+	if int(root_node.get("coins")) != 0:
+		_fail("owning gold for all four tools must cost 600 coins total")
+		return false
+
+	# AC-5: scoped ownership and selections round-trip through the same config
+	# helpers used by user:// progress persistence.
+	var scoped_save := ConfigFile.new()
+	root_node.call("_store_nozzle_skin_customization", scoped_save)
+	var stored_owned: Dictionary = scoped_save.get_value("skins", "owned", {})
+	if stored_owned.has("classic") or stored_owned.has("gold") \
+			or not stored_owned.has("water:gold") or not stored_owned.has("air:gold") \
+			or not stored_owned.has("soap:gold") or not stored_owned.has("sponge:gold"):
+		_fail("new saves must persist only tool-scoped nozzle ownership keys")
+		return false
+	root_node.call("_load_nozzle_skin_customization", clean_config)
+	root_node.call("_load_nozzle_skin_customization", scoped_save)
+	for tool in tools:
+		if not bool(root_node.call("_is_nozzle_skin_owned", tool, "gold")) \
+				or String(root_node.get("skin_" + tool)) != "gold":
+			_fail("tool-scoped gold ownership must survive save and load for %s" % tool)
+			return false
+
+	# Legacy flat ids: unique skins retain their only tool; shared paid gold is
+	# granted only to tools that had it selected. Classic remains free everywhere.
+	var legacy_save := ConfigFile.new()
+	legacy_save.set_value("skins", "water", "gold")
+	legacy_save.set_value("skins", "air", "classic")
+	legacy_save.set_value("skins", "soap", "pink")
+	legacy_save.set_value("skins", "sponge", "classic")
+	legacy_save.set_value("skins", "owned", {"classic": true, "gold": true, "pink": true})
+	root_node.call("_load_nozzle_skin_customization", legacy_save)
+	if not bool(root_node.call("_is_nozzle_skin_owned", "water", "gold")) \
+			or bool(root_node.call("_is_nozzle_skin_owned", "air", "gold")) \
+			or bool(root_node.call("_is_nozzle_skin_owned", "sponge", "gold")) \
+			or not bool(root_node.call("_is_nozzle_skin_owned", "soap", "pink")):
+		_fail("legacy flat ownership must migrate shared and unique ids safely")
+		return false
+	for tool in tools:
+		if not bool(root_node.call("_is_nozzle_skin_owned", tool, "classic")):
+			_fail("legacy migration must retain free classic for every tool")
+			return false
+
+	# AC-6 and AC-7: the existing panel reads the scoped helper and no resident UI
+	# or HUD geometry changes are introduced.
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_source.contains("else _is_nozzle_skin_owned(tool_key, sid)"):
+		_fail("skin panel must render tool-scoped ownership state")
+		return false
+	if not main_source.contains("_load_nozzle_skin_customization(config)") \
+			or not main_source.contains("_store_nozzle_skin_customization(config)"):
+		_fail("progress persistence must use tool-scoped nozzle save helpers")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("tool-scoped skin ownership must not add persistent UI controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("tool-scoped skin ownership must keep the HUD residency unchanged")
+		return false
+
+	root_node.set("coins", original_coins)
+	root_node.set("owned_skins", original_owned)
+	root_node.set("skin_water", original_skins["water"])
+	root_node.set("skin_air", original_skins["air"])
+	root_node.set("skin_soap", original_skins["soap"])
+	root_node.set("skin_sponge", original_skins["sponge"])
+	root_node.set("_skin_panel_tab", original_tab)
+	return true
+
+
 func _test_license_plate_customization(root_node: Node) -> bool:
 	var panel: Rect2 = root_node.call("_skin_panel_rect")
 	var options: Array = root_node.call("get_license_plate_options_for_test")
@@ -1090,7 +1201,7 @@ func _test_car_paint_customization(root_node: Node) -> bool:
 		_fail("car customization tab must expose auto plus three fixed paint cards")
 		return false
 	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
-	if not main_source.contains("Economy.resolve_skin_purchase(_car_paints, CAR_PAINT_TOOL"):
+	if not main_source.contains("Economy.resolve_flat_item_purchase(_car_paints, CAR_PAINT_TOOL"):
 		_fail("car paint purchase and selection must call the shared economy resolver")
 		return false
 	var draw_start := main_source.find("func _draw() -> void:")

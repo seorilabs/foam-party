@@ -68,6 +68,23 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_car_customization.png")):
 		quit(1)
 		return
+	node.set("owned_skins", {
+		"water:classic": true,
+		"air:classic": true,
+		"soap:classic": true,
+		"sponge:classic": true,
+		"water:gold": true,
+	})
+	node.set("skin_water", "gold")
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_skin_water_gold_owned.png")):
+		quit(1)
+		return
+	node.set("_skin_panel_tab", 1)
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_skin_air_gold_locked.png")):
+		quit(1)
+		return
 	node.set("_skin_panel_tab", 4)
 	node.set("coins", 500)
 	await _settle(3)
