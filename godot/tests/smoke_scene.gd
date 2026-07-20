@@ -231,6 +231,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_new_car_types_reuse_existing_ui_residency(root_node):
 		return
+	if not _test_water_impact_presentation_contract(root_node):
+		return
 
 	root_node.call("reset_game", 5)
 	root_node.set("level_time", 90.0)
@@ -682,6 +684,80 @@ func _test_new_car_types_reuse_existing_ui_residency(root_node: Node) -> bool:
 			return false
 	root_node.call("reset_game", 1, "car_ui_residency_smoke_cleanup")
 	return true
+
+
+func _test_water_impact_presentation_contract(root_node: Node) -> bool:
+	root_node.call("reset_game", 1, "water_impact_smoke")
+	var particles: Array = root_node.get("particles")
+	var impact_point := Vector2(195.0, 520.0)
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	root_node.set("level_time", 60.0)
+	root_node.set("best_combo", 5)
+	var baseline_coins: int = root_node.call("get_coins_for_test")
+	var baseline_stars: int = root_node.call("calc_stars_for_test")
+
+	particles.clear()
+	root_node.call("_spawn_water_particles", impact_point)
+	if _particle_style_count(particles, "spray_fan") < 1:
+		_fail("water impact should spawn a spray fan")
+		return false
+	if _particle_style_count(particles, "splash") < 2:
+		_fail("water impact should spawn an immediate splash burst")
+		return false
+	if _particle_style_count(particles, "mist") < 1:
+		_fail("water impact should spawn a mist cloud")
+		return false
+
+	for index in range(100):
+		root_node.call("_spawn_water_particles", impact_point)
+	var water_count: int = root_node.call("get_water_effect_particle_count_for_test")
+	var water_cap: int = root_node.call("get_water_effect_particle_cap_for_test")
+	if water_count != water_cap:
+		_fail("water impact particles should stay at the explicit cap")
+		return false
+
+	particles.clear()
+	root_node.set("combo_count", 1)
+	root_node.call("_spawn_water_removal_splash", impact_point, 18.0)
+	var low_combo_splashes := _particle_style_count(particles, "splash")
+	var low_combo_mist := _particle_style_count(particles, "mist")
+	particles.clear()
+	root_node.set("combo_count", 9)
+	root_node.call("_spawn_water_removal_splash", impact_point, 18.0)
+	if _particle_style_count(particles, "splash") <= low_combo_splashes:
+		_fail("water removal splash should scale with combo")
+		return false
+	if _particle_style_count(particles, "mist") <= low_combo_mist:
+		_fail("water removal mist should scale with combo")
+		return false
+
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("water impact presentation must not add persistent HUD controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("water impact presentation must not change top HUD residency")
+		return false
+	if int(root_node.call("get_coins_for_test")) != baseline_coins or int(root_node.call("calc_stars_for_test")) != baseline_stars:
+		_fail("water impact presentation must not change economy or star rules")
+		return false
+
+	particles.clear()
+	root_node.set("combo_count", 0)
+	return true
+
+
+func _particle_style_count(particles: Array, style: String) -> int:
+	var count := 0
+	for raw_particle in particles:
+		if String(raw_particle.get("style")) == style:
+			count += 1
+	return count
 
 
 func _test_level_load_event_order_and_params(events: Array[Dictionary]) -> bool:

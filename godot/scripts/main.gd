@@ -77,12 +77,16 @@ const STATE_REMOVED := "removed"
 const STYLE_DROPLET := "droplet"
 const STYLE_RING := "ring"
 const STYLE_MIST := "mist"
+const STYLE_SPRAY_FAN := "spray_fan"
+const STYLE_SPLASH := "splash"
 const STYLE_STREAK := "streak"
 const STYLE_SWIRL := "swirl"
 const STYLE_BUBBLE := "bubble"
 const STYLE_FOAM := "foam"
 const STYLE_SPARKLE := "sparkle"
 const STYLE_CONFETTI := "confetti"
+const WATER_EFFECT_STYLES := [STYLE_DROPLET, STYLE_MIST, STYLE_SPRAY_FAN, STYLE_SPLASH]
+const WATER_EFFECT_PARTICLE_CAP := 72
 const DAILY_MISSION_POOL := GameConfig.DAILY_MISSION_POOL
 const DAILY_MISSION_REWARD := GameConfig.DAILY_MISSION_REWARD
 
@@ -923,6 +927,14 @@ func get_coins_for_test() -> int:
 
 func get_wash_trail_count_for_test() -> int:
 	return wash_trail.size()
+
+
+func get_water_effect_particle_count_for_test() -> int:
+	return _water_effect_particle_count()
+
+
+func get_water_effect_particle_cap_for_test() -> int:
+	return WATER_EFFECT_PARTICLE_CAP
 
 
 func calc_coin_reward_for_test() -> int:
@@ -1827,6 +1839,8 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 			else:
 				_daily_progress_dirty = true
 	_spawn_removal_burst(burst_center, burst_radius)
+	if selected_tool == TOOL_WATER:
+		_spawn_water_removal_splash(burst_center, burst_radius)
 	if not completed:
 		_play_removal_sound()
 		if OS.has_feature("mobile"):
@@ -1882,6 +1896,34 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(60.0, 130.0)
 		particles.append(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.35, 0.55), rng.randf_range(3.5, 6.0), pop_color, STYLE_SPARKLE))
+
+
+func _spawn_water_removal_splash(center: Vector2, radius: float) -> void:
+	# A water-caused removal gets its own impact splash. Particle count and spread
+	# scale with the active combo, while the water-only cap prevents accumulation.
+	var intensity := clampf(float(max(combo_count, 1) - 1) / 8.0, 0.0, 1.0)
+	var splash_count := 5 + int(round(8.0 * intensity))
+	var mist_count := 1 + int(round(2.0 * intensity))
+	var batch: Array[WashParticle] = []
+	var fan_direction := Vector2(-0.18, -1.0).normalized()
+	batch.append(WashParticle.new(
+		center,
+		fan_direction * 18.0,
+		0.38 + intensity * 0.14,
+		maxf(12.0, radius * (0.72 + intensity * 0.22)),
+		Color(0.7, 0.92, 1.0, 0.82),
+		STYLE_SPRAY_FAN
+	))
+	for index in range(splash_count):
+		var angle := rng.randf_range(-PI + 0.12, -0.12)
+		var speed := rng.randf_range(125.0, 220.0) * (1.0 + intensity * 0.42)
+		var tint := Color(0.54, 0.86, 1.0, 0.9).lerp(Color(0.88, 0.97, 1.0, 0.98), intensity)
+		batch.append(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.34, 0.62), rng.randf_range(3.0, 5.5) + intensity * 1.5, tint, STYLE_SPLASH))
+	for index in range(mist_count):
+		var mist_offset := Vector2(rng.randf_range(-radius * 0.8, radius * 0.8), rng.randf_range(-radius * 0.45, 2.0))
+		var mist_velocity := Vector2(rng.randf_range(-24.0, 24.0), rng.randf_range(-34.0, -14.0))
+		batch.append(WashParticle.new(center + mist_offset, mist_velocity, rng.randf_range(0.48, 0.76) + intensity * 0.12, rng.randf_range(9.0, 15.0) + intensity * 3.0, Color(0.9, 0.98, 1.0, 0.3), STYLE_MIST))
+	_append_water_effect_batch(batch)
 
 
 func _is_patch_outside_wash_area(patch: DirtPatch) -> bool:
@@ -1976,15 +2018,55 @@ func _spawn_tool_particles(point: Vector2, delta: float) -> void:
 
 
 func _spawn_water_particles(point: Vector2) -> void:
-	for index in range(5):
+	var batch: Array[WashParticle] = []
+	var fan_direction := Vector2(-0.22, -1.0).rotated(rng.randf_range(-0.12, 0.12)).normalized()
+	batch.append(WashParticle.new(point, fan_direction * 14.0, 0.34, 10.0, Color(0.68, 0.91, 1.0, 0.76), STYLE_SPRAY_FAN))
+	for index in range(3):
 		var angle := rng.randf_range(-PI, 0.0)
 		var speed := rng.randf_range(60.0, 170.0)
 		var velocity := Vector2.from_angle(angle) * speed
 		var jitter := Vector2(rng.randf_range(-8.0, 8.0), rng.randf_range(-6.0, 6.0))
-		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.3, 0.6), rng.randf_range(2.0, 4.5), Color("#89d8ff"), STYLE_DROPLET))
-	particles.append(WashParticle.new(point, Vector2.ZERO, 0.28, 6.0, Color(1.0, 1.0, 1.0, 0.5), STYLE_RING))
-	if rng.randf() < 0.5:
-		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-12.0, 12.0), -6.0), Vector2(0.0, -16.0), rng.randf_range(0.4, 0.7), rng.randf_range(8.0, 14.0), Color(1.0, 1.0, 1.0, 0.22), STYLE_MIST))
+		batch.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.3, 0.6), rng.randf_range(2.0, 4.5), Color("#89d8ff"), STYLE_DROPLET))
+	for index in range(2):
+		var splash_angle := rng.randf_range(-PI + 0.2, -0.2)
+		var splash_speed := rng.randf_range(125.0, 210.0)
+		batch.append(WashParticle.new(point, Vector2.from_angle(splash_angle) * splash_speed, rng.randf_range(0.28, 0.48), rng.randf_range(3.0, 5.0), Color(0.72, 0.93, 1.0, 0.9), STYLE_SPLASH))
+	batch.append(WashParticle.new(
+		point + Vector2(rng.randf_range(-12.0, 12.0), -6.0),
+		Vector2(rng.randf_range(-12.0, 12.0), rng.randf_range(-24.0, -12.0)),
+		rng.randf_range(0.48, 0.72),
+		rng.randf_range(9.0, 15.0),
+		Color(0.92, 0.98, 1.0, 0.28),
+		STYLE_MIST
+	))
+	_append_water_effect_batch(batch)
+
+
+func _append_water_effect_batch(batch: Array[WashParticle]) -> void:
+	# Reserve room by dropping the oldest water-impact visuals only. Other tool,
+	# combo, and completion particles keep their own independent lifetimes.
+	var overflow := _water_effect_particle_count() + batch.size() - WATER_EFFECT_PARTICLE_CAP
+	while overflow > 0:
+		var removed_one := false
+		for index in range(particles.size()):
+			var candidate := particles[index] as WashParticle
+			if candidate.style in WATER_EFFECT_STYLES:
+				particles.remove_at(index)
+				overflow -= 1
+				removed_one = true
+				break
+		if not removed_one:
+			break
+	for particle in batch:
+		particles.append(particle)
+
+
+func _water_effect_particle_count() -> int:
+	var count := 0
+	for raw_particle in particles:
+		if (raw_particle as WashParticle).style in WATER_EFFECT_STYLES:
+			count += 1
+	return count
 
 
 func _spawn_air_particles(point: Vector2) -> void:
@@ -2019,10 +2101,16 @@ func _update_particles(delta: float) -> void:
 		var particle := particles[index] as WashParticle
 		particle.ttl -= delta
 		particle.position += particle.velocity * delta
-		if particle.style == STYLE_DROPLET:
+		if particle.style == STYLE_DROPLET or particle.style == STYLE_SPLASH:
 			particle.velocity.y += 320.0 * delta
-		elif particle.style == STYLE_RING or particle.style == STYLE_MIST:
-			particle.radius += delta * (60.0 if particle.style == STYLE_RING else 24.0)
+		elif particle.style == STYLE_RING:
+			particle.radius += delta * 60.0
+		elif particle.style == STYLE_MIST:
+			particle.radius += delta * 30.0
+			particle.velocity *= 0.94
+		elif particle.style == STYLE_SPRAY_FAN:
+			particle.radius += delta * 48.0
+			particle.velocity *= 0.86
 		elif particle.style == STYLE_BUBBLE:
 			particle.velocity *= 0.97
 			particle.position.x += sin(particle.ttl * 7.0) * 14.0 * delta
@@ -2867,10 +2955,38 @@ func _draw_particles() -> void:
 			var direction := particle.velocity.normalized()
 			draw_line(particle.position, particle.position - direction * particle.radius * 3.0, color, max(2.0, particle.radius * 0.8))
 			draw_circle(particle.position, particle.radius * 0.6, color)
+		elif particle.style == STYLE_SPLASH:
+			var direction := particle.velocity.normalized()
+			if direction.length() < 0.1:
+				direction = Vector2.UP
+			var bright := color.lightened(0.22)
+			bright.a = color.a
+			draw_line(particle.position, particle.position - direction * particle.radius * 4.2, color, max(2.2, particle.radius * 1.05))
+			draw_circle(particle.position, particle.radius * 0.8, bright)
 		elif particle.style == STYLE_RING:
 			draw_arc(particle.position, particle.radius, 0.0, TAU, 22, color, 2.5)
 		elif particle.style == STYLE_MIST:
-			draw_circle(particle.position, particle.radius, color)
+			draw_circle(particle.position, particle.radius, Color(color.r, color.g, color.b, color.a * 0.55))
+			draw_circle(particle.position + Vector2(-particle.radius * 0.55, particle.radius * 0.12), particle.radius * 0.7, Color(color.r, color.g, color.b, color.a * 0.42))
+			draw_circle(particle.position + Vector2(particle.radius * 0.5, -particle.radius * 0.08), particle.radius * 0.62, Color(color.r, color.g, color.b, color.a * 0.36))
+		elif particle.style == STYLE_SPRAY_FAN:
+			var direction := particle.velocity.normalized()
+			if direction.length() < 0.1:
+				direction = Vector2.UP
+			var tangent := Vector2(-direction.y, direction.x)
+			var reach := particle.radius * 2.35
+			var half_width := particle.radius * 1.05
+			var fan_fill := Color(color.r, color.g, color.b, color.a * 0.24)
+			var fan_points := PackedVector2Array([
+				particle.position,
+				particle.position + direction * reach + tangent * half_width,
+				particle.position + direction * reach - tangent * half_width,
+			])
+			draw_colored_polygon(fan_points, fan_fill)
+			draw_arc(particle.position, reach, direction.angle() - 0.42, direction.angle() + 0.42, 12, color, 2.4)
+			for ray_offset in [-0.3, 0.0, 0.3]:
+				var ray_direction := direction.rotated(ray_offset)
+				draw_line(particle.position, particle.position + ray_direction * reach, Color(color.r, color.g, color.b, color.a * 0.72), 1.8)
 		elif particle.style == STYLE_STREAK:
 			var direction := particle.velocity.normalized()
 			if direction.length() < 0.1:
