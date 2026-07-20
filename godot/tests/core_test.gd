@@ -16,15 +16,18 @@ func _run_core_tests() -> void:
 	var DailyMission: GDScript = load("res://core/use_cases/daily_mission.gd")
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
 	var StageSelection: GDScript = load("res://core/use_cases/stage_selection.gd")
+	var DirtSpawnPlan: GDScript = load("res://core/use_cases/dirt_spawn_plan.gd")
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
 	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
 	var I18n: GDScript = load("res://scripts/services/i18n.gd")
-	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or StageSelection == null or DirtPatch == null or GameConfig == null or I18n == null:
+	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
 		return
 	if not _test_car_roster_and_saved_level_mapping(GameConfig):
 		return
 	if not _test_new_car_localized_labels(I18n):
+		return
+	if not _test_dirt_spawn_plan(DirtSpawnPlan):
 		return
 
 	# --- Scoring: star boundaries (matches smoke_scene 3/2/1-star cases) ---
@@ -372,6 +375,53 @@ func _test_ftue_release_attribution_and_shared_native_path(FtueEvents: GDScript)
 		return false
 	if not native_adapter_source.contains("func log_event(event_name: String, params: Dictionary = {})"):
 		_fail("native FTUE events must keep the shared AnalyticsPort log_event path")
+		return false
+	return true
+
+
+func _test_dirt_spawn_plan(DirtSpawnPlan: GDScript) -> bool:
+	var snapshots := {1: 20, 3: 24, 10: 38, 30: 40}
+	for level in snapshots:
+		var actual: int = DirtSpawnPlan.spawn_count(level)
+		if actual != snapshots[level]:
+			_fail("dirt count snapshot changed at level %d: %d" % [level, actual])
+			return false
+	var previous: int = DirtSpawnPlan.spawn_count(2)
+	for level in range(3, 11):
+		var current: int = DirtSpawnPlan.spawn_count(level)
+		if current <= previous:
+			_fail("dirt count must grow strictly through level 10")
+			return false
+		previous = current
+	if DirtSpawnPlan.spawn_count(10, 30) != 30:
+		_fail("spawn count must respect the validated silhouette slot budget")
+		return false
+	if absf(float(DirtSpawnPlan.radius_scale_for_count(24)) - 1.0) > 0.001 or absf(float(DirtSpawnPlan.radius_scale_for_count(40)) - 0.72) > 0.001:
+		_fail("dense spawn radius scaling snapshots changed")
+		return false
+	var previous_radius_scale := 1.0
+	for patch_count in range(24, 41):
+		var radius_scale: float = DirtSpawnPlan.radius_scale_for_count(patch_count)
+		if radius_scale > previous_radius_scale + 0.001:
+			_fail("dense spawn radius scale must not grow with patch count")
+			return false
+		previous_radius_scale = radius_scale
+	var candidates: Array[Vector2] = DirtSpawnPlan.normalized_candidates()
+	if candidates.size() != DirtSpawnPlan.CANDIDATE_COLUMNS * DirtSpawnPlan.CANDIDATE_ROWS or candidates.size() < DirtSpawnPlan.MAX_PATCH_COUNT:
+		_fail("normalized spawn candidates must exceed the density cap")
+		return false
+	for candidate in candidates:
+		if candidate.x <= 0.0 or candidate.x >= 1.0 or candidate.y <= 0.0 or candidate.y >= 1.0:
+			_fail("normalized dirt candidate escaped the unit bounds")
+			return false
+	if DirtSpawnPlan.type_pool_for_level("sports", 2) != ["oil", "dust", "oil", "dust", "leaf", "dust", "mud"]:
+		_fail("sports dirt weights or level gate changed")
+		return false
+	if DirtSpawnPlan.type_pool_for_level("offroad", 4).count("mud") != 3:
+		_fail("offroad dirt profile should preserve its mud weight")
+		return false
+	if DirtSpawnPlan.BASE_PATCH_COUNT <= 0 or DirtSpawnPlan.PATCHES_PER_LEVEL <= 0 or DirtSpawnPlan.MAX_PATCH_COUNT < 38 or DirtSpawnPlan.MIN_CENTER_DISTANCE <= 0.0 or DirtSpawnPlan.DENSE_RADIUS_MIN_SCALE <= 0.0:
+		_fail("dirt density tuning constants must remain named and positive")
 		return false
 	return true
 

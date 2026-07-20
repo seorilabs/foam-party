@@ -11,8 +11,8 @@ const Coaching = preload("res://core/use_cases/coaching.gd")
 const DailyMission = preload("res://core/use_cases/daily_mission.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
 const StageSelection = preload("res://core/use_cases/stage_selection.gd")
+const DirtSpawnPlan = preload("res://core/use_cases/dirt_spawn_plan.gd")
 const WashRules = preload("res://core/use_cases/wash_rules.gd")
-const DirtProgression = preload("res://core/use_cases/dirt_progression.gd")
 const AnalyticsPort = preload("res://core/ports/analytics_port.gd")
 const ContentEvents = preload("res://core/analytics/content_events.gd")
 const FtueEvents = preload("res://core/analytics/ftue_events.gd")
@@ -29,7 +29,6 @@ const TOOL_AIR := "air"
 const TOOL_WATER := "water"
 const TOOL_SOAP := "soap"
 const TOOL_SPONGE := "sponge"
-const DIRT_TYPES := GameConfig.DIRT_TYPES
 const CAR_TYPES := GameConfig.CAR_TYPES
 const CLEAN_DAMAGE_RATE := GameConfig.CLEAN_DAMAGE_RATE
 const COMBO_WINDOW := GameConfig.COMBO_WINDOW
@@ -939,6 +938,21 @@ func get_patch_count_for_test() -> int:
 	return dirt_patches.size()
 
 
+func get_patch_centers_for_test() -> Array[Vector2]:
+	var centers: Array[Vector2] = []
+	for raw_patch in dirt_patches:
+		centers.append(_patch_center(raw_patch as DirtPatch))
+	return centers
+
+
+func get_dirt_spawn_pool_size_for_test() -> int:
+	return _dirt_spawn_positions().size()
+
+
+func get_dirt_spawn_min_center_distance_for_test() -> float:
+	return _gameplay_length(DirtSpawnPlan.MIN_CENTER_DISTANCE)
+
+
 func get_clean_progress_for_test() -> float:
 	return clean_progress
 
@@ -1672,65 +1686,48 @@ func _spawn_dirt() -> void:
 	_hint_patch = null
 	rng.seed = 42690 + int(active_level_index) * 97
 
-	var positions := [
-		Vector2(102.0, 462.0), Vector2(154.0, 439.0), Vector2(218.0, 439.0), Vector2(283.0, 462.0),
-		Vector2(89.0, 526.0), Vector2(137.0, 505.0), Vector2(198.0, 498.0), Vector2(256.0, 506.0), Vector2(314.0, 529.0),
-		Vector2(80.0, 580.0), Vector2(126.0, 598.0), Vector2(179.0, 584.0), Vector2(226.0, 596.0), Vector2(280.0, 584.0), Vector2(330.0, 596.0),
-		Vector2(116.0, 645.0), Vector2(168.0, 662.0), Vector2(221.0, 650.0), Vector2(276.0, 664.0),
-		Vector2(138.0, 382.0), Vector2(199.0, 369.0), Vector2(251.0, 385.0),
-		Vector2(102.0, 620.0), Vector2(303.0, 620.0)
-	]
-
-	var pool: Array = positions.duplicate()
+	var pool: Array[Vector2] = _dirt_spawn_positions()
 	for index in range(pool.size() - 1, 0, -1):
 		var swap_index := rng.randi_range(0, index)
 		var swap_value: Vector2 = pool[index]
 		pool[index] = pool[swap_index]
 		pool[swap_index] = swap_value
 
-	# Per-car dirt patterns: sports cars skew toward oil and dust,
-	# trucks skew toward mud and bugs, and city cars stay balanced.
-	var type_pool: Array
+	# Per-car weighted dirt catalogs and their level gates live in pure core.
+	var type_pool: Array[String] = DirtSpawnPlan.type_pool_for_level(car_type, active_level_index)
 	var radius_min := 13.0
 	var radius_max := 24.0
 	var health_base_min := 70.0
 	var health_base_max := 120.0
 	match car_type:
 		"sports":
-			type_pool = ["oil", "dust", "oil", "dust", "road_grime", "leaf", "dust", "bug", "mud"]
 			radius_min = 11.0
 			radius_max = 20.0
 			health_base_min = 80.0
 			health_base_max = 135.0
 		"truck":
-			type_pool = ["mud", "mud", "bug", "leaf", "mud", "poop", "dust", "road_grime", "leaf"]
 			radius_min = 15.0
 			radius_max = 28.0
 			health_base_min = 85.0
 			health_base_max = 145.0
 		"van":
-			type_pool = ["dust", "road_grime", "leaf", "dust", "mud", "road_grime", "oil", "leaf", "bug"]
 			radius_min = 13.0
 			radius_max = 24.0
 			health_base_min = 78.0
 			health_base_max = 130.0
 		"offroad":
-			type_pool = ["mud", "road_grime", "mud", "bug", "leaf", "road_grime", "poop", "mud", "dust"]
 			radius_min = 16.0
 			radius_max = 29.0
 			health_base_min = 90.0
 			health_base_max = 150.0
-		_:
-			type_pool = DIRT_TYPES.duplicate()
-	type_pool = DirtProgression.filter_pool_for_level(type_pool, active_level_index)
 
-	var spawn_count: int = min(pool.size(), 18 + active_level_index * 2)
+	var spawn_count: int = DirtSpawnPlan.spawn_count(active_level_index, pool.size())
+	var density_radius_scale: float = DirtSpawnPlan.radius_scale_for_count(spawn_count)
 	var health_scale := 1.0 + float(active_level_index - 1) * 0.06
 	for index in range(spawn_count):
 		var kind: String = type_pool[index % type_pool.size()]
 		var base_position: Vector2 = _gameplay_point(pool[index])
-		var jitter := Vector2(rng.randf_range(-10.0, 10.0), rng.randf_range(-8.0, 8.0)) * GAMEPLAY_SCALE
-		var radius := _gameplay_length(rng.randf_range(radius_min, radius_max))
+		var radius := _gameplay_length(rng.randf_range(radius_min, radius_max) * density_radius_scale)
 		var health := rng.randf_range(health_base_min, health_base_max) * health_scale
 		if kind == "oil" or kind == "bug":
 			health += 25.0 * health_scale
@@ -1738,13 +1735,41 @@ func _spawn_dirt() -> void:
 			health += 15.0 * health_scale
 		elif kind == "road_grime":
 			health += 20.0 * health_scale
-		var patch := DirtPatch.new(kind, base_position + jitter, radius, health, rng.randf_range(0.0, 10.0))
+		var patch := DirtPatch.new(kind, base_position, radius, health, rng.randf_range(0.0, 10.0))
 		dirt_patches.append(patch)
 
 	initial_dirt_total = 0.0
 	for patch in dirt_patches:
 		initial_dirt_total += (patch as DirtPatch).max_health
 	initial_dirt_total = max(1.0, initial_dirt_total)
+
+
+func _dirt_spawn_positions() -> Array[Vector2]:
+	var shapes: Dictionary = car_shapes[car_type]
+	var silhouette: PackedVector2Array = shapes["silhouette"]
+	var bounds := _polygon_bounds(silhouette)
+	var positions: Array[Vector2] = []
+	for uv in DirtSpawnPlan.normalized_candidates():
+		var candidate := bounds.position + Vector2(bounds.size.x * uv.x, bounds.size.y * uv.y)
+		if not _spawn_candidate_fits_silhouette(candidate, silhouette):
+			continue
+		var separated := true
+		for accepted in positions:
+			if candidate.distance_to(accepted) < DirtSpawnPlan.MIN_CENTER_DISTANCE:
+				separated = false
+				break
+		if separated:
+			positions.append(candidate)
+	return positions
+
+
+func _spawn_candidate_fits_silhouette(candidate: Vector2, silhouette: PackedVector2Array) -> bool:
+	if not Geometry2D.is_point_in_polygon(candidate, silhouette):
+		return false
+	for direction in [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]:
+		if not Geometry2D.is_point_in_polygon(candidate + direction * DirtSpawnPlan.SILHOUETTE_EDGE_MARGIN, silhouette):
+			return false
+	return true
 
 
 func _apply_tool_at(point: Vector2, delta: float) -> void:
