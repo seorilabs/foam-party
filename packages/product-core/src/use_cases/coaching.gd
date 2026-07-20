@@ -5,6 +5,7 @@ extends RefCounted
 # geometry helpers. No engine or rendering dependency.
 
 const DirtPatch = preload("res://core/domain/dirt_patch.gd")
+const GameConfig = preload("res://core/domain/game_config.gd")
 
 const TOOL_AIR := "air"
 const TOOL_WATER := "water"
@@ -22,7 +23,8 @@ static func tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 			if tool_id == TOOL_AIR:
 				return true
 			if tool_id == TOOL_SPONGE:
-				return patch.wetness < 0.2 and patch.soap < 0.15
+				var sponge_profile: Dictionary = GameConfig.SPONGE_WASH_PROFILES[patch.kind]
+				return patch.wetness < float(sponge_profile["wetness_threshold"]) and patch.soap < float(sponge_profile["soap_threshold"])
 			return false
 		"dust":
 			return tool_id == TOOL_SOAP
@@ -31,14 +33,16 @@ static func tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 		"oil", "bug":
 			if tool_id == TOOL_AIR:
 				return true
-			var soaped: bool = patch.soap > 0.25 or patch.looseness > 0.35
+			var sponge_profile: Dictionary = GameConfig.SPONGE_WASH_PROFILES[patch.kind]
+			var soaped: bool = patch.soap > float(sponge_profile["soap_threshold"]) or patch.looseness > float(sponge_profile["looseness_threshold"])
 			if not soaped:
 				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
 			return false
 		"poop":
 			if tool_id == TOOL_AIR:
 				return true
-			var poop_activated: bool = patch.soap > 0.25 or patch.state in [STATE_LOOSENED, STATE_RUNOFF]
+			var water_profile: Dictionary = GameConfig.WATER_WASH_PROFILES[patch.kind]
+			var poop_activated: bool = patch.soap > float(water_profile["prepared_soap_threshold"]) or patch.state in [STATE_LOOSENED, STATE_RUNOFF]
 			if not poop_activated:
 				return tool_id == TOOL_WATER or tool_id == TOOL_SPONGE
 			return false
@@ -47,7 +51,8 @@ static func tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 				return true
 			# Contact washing starts only after the road film has been rinsed or
 			# soaped; dry scrubbing would drag grit across the paint.
-			var road_grime_softened: bool = patch.wetness > 0.2 or patch.soap > 0.15 or patch.looseness > 0.35
+			var sponge_profile: Dictionary = GameConfig.SPONGE_WASH_PROFILES[patch.kind]
+			var road_grime_softened: bool = patch.wetness > float(sponge_profile["wetness_threshold"]) or patch.soap > float(sponge_profile["soap_threshold"]) or patch.looseness > float(sponge_profile["looseness_threshold"])
 			if not road_grime_softened:
 				return tool_id == TOOL_SPONGE
 			return false
@@ -60,15 +65,18 @@ static func recommended_tool(patch: DirtPatch) -> String:
 		"leaf":
 			return TOOL_AIR
 		"oil", "bug":
-			if patch.soap > 0.25 or patch.looseness > 0.35:
+			var sponge_profile: Dictionary = GameConfig.SPONGE_WASH_PROFILES[patch.kind]
+			if patch.soap > float(sponge_profile["soap_threshold"]) or patch.looseness > float(sponge_profile["looseness_threshold"]):
 				return TOOL_SPONGE
 			return TOOL_SOAP
 		"poop":
-			if patch.soap > 0.25 or patch.state in [STATE_LOOSENED, STATE_RUNOFF]:
+			var water_profile: Dictionary = GameConfig.WATER_WASH_PROFILES[patch.kind]
+			if patch.soap > float(water_profile["prepared_soap_threshold"]) or patch.state in [STATE_LOOSENED, STATE_RUNOFF]:
 				return TOOL_WATER
 			return TOOL_SOAP
 		"road_grime":
-			if patch.wetness > 0.2 or patch.soap > 0.15 or patch.looseness > 0.35:
+			var sponge_profile: Dictionary = GameConfig.SPONGE_WASH_PROFILES[patch.kind]
+			if patch.wetness > float(sponge_profile["wetness_threshold"]) or patch.soap > float(sponge_profile["soap_threshold"]) or patch.looseness > float(sponge_profile["looseness_threshold"]):
 				return TOOL_SPONGE
 			return TOOL_WATER
 	return TOOL_WATER

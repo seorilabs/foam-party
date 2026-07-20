@@ -19,12 +19,6 @@ const STATE_RUNOFF := "runoff"
 const STATE_FLYING := "flying"
 const STATE_REMOVED := "removed"
 
-# Keep a tiny accessibility floor for active tools that Coaching marks as
-# misapplied. The lowest direct coefficient on a valid preparation step is
-# 0.05, so 0.002 caps wrong-tool DPS at 4% of that slowest valid action.
-const MISAPPLIED_DAMAGE_COEFFICIENT := 0.002
-
-
 static func patch_center(patch: DirtPatch) -> Vector2:
 	return patch.position + patch.drift
 
@@ -40,88 +34,89 @@ static func is_patch_removed(patch: DirtPatch) -> bool:
 	return patch.state == STATE_REMOVED or patch.health <= 0.0
 
 
+static func _tuning_profile(table: Dictionary, dirt_kind: String) -> Dictionary:
+	if table.has(dirt_kind):
+		return table[dirt_kind] as Dictionary
+	return table.get("_default", {}) as Dictionary
+
+
 static func runoff_cleanup_rate(patch: DirtPatch) -> float:
-	if patch.kind == "mud" or patch.kind == "dust":
-		return 0.42 + patch.wetness * 0.25
-	if patch.kind == "oil" or patch.kind == "bug":
-		return patch.soap * 0.18 + patch.looseness * 0.32
-	if patch.kind == "poop":
-		return patch.soap * 0.22 + patch.looseness * 0.28
-	if patch.kind == "road_grime":
-		return patch.soap * 0.10 + patch.looseness * 0.14
-	return 0.08
+	var profile := _tuning_profile(GameConfig.RUNOFF_CLEANUP_PROFILES, patch.kind)
+	return float(profile.get("base", 0.0)) \
+		+ patch.wetness * float(profile.get("wetness", 0.0)) \
+		+ patch.soap * float(profile.get("soap", 0.0)) \
+		+ patch.looseness * float(profile.get("looseness", 0.0))
 
 
 # `lift_y` is the magnitude of the upward lift impulse for light dirt, drawn by
 # the caller (rng.randf_range(10.0, 42.0)) so this stays deterministic/pure.
 static func apply_air(patch: DirtPatch, delta: float, source_point: Vector2, proximity: float, lift_y: float) -> void:
 	var push := push_direction(patch, source_point)
+	var profile := _tuning_profile(GameConfig.AIR_WASH_PROFILES, patch.kind)
 	if Coaching.is_light_dirt(patch.kind):
 		patch.state = STATE_FLYING
 		var lift := Vector2(0.0, -lift_y)
-		var target_velocity := push * (235.0 + patch.radius * 3.5) + lift
-		patch.velocity = patch.velocity.lerp(target_velocity, clamp(delta * 9.0, 0.0, 1.0))
+		var target_velocity := push * (float(GameConfig.AIR_MOTION_PROFILE["base_speed"]) + patch.radius * float(GameConfig.AIR_MOTION_PROFILE["radius_speed"])) + lift
+		patch.velocity = patch.velocity.lerp(target_velocity, clamp(delta * float(GameConfig.AIR_MOTION_PROFILE["velocity_response"]), 0.0, 1.0))
 		patch.drift += patch.velocity * delta
-		patch.looseness = min(1.0, patch.looseness + delta * proximity * 2.2)
-		var rate := 2.85
-		if patch.kind == "dust":
-			rate = 2.15
-		patch.health -= rate * proximity * delta * GameConfig.CLEAN_DAMAGE_RATE
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
+		patch.health -= float(profile["damage"]) * proximity * delta * GameConfig.CLEAN_DAMAGE_RATE
 	else:
-		patch.drift += push * delta * proximity * 7.0
-		patch.drift = patch.drift.limit_length(5.5)
-		patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.08)
+		patch.drift += push * delta * proximity * float(GameConfig.AIR_MOTION_PROFILE["heavy_drift"])
+		patch.drift = patch.drift.limit_length(float(GameConfig.AIR_MOTION_PROFILE["heavy_drift_limit"]))
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
 
 
 static func apply_water(patch: DirtPatch, delta: float, proximity: float, mult: float) -> void:
 	var was_misapplied := Coaching.tool_misapplied(Coaching.TOOL_WATER, patch)
 	var health_before := patch.health
 	var wr := GameConfig.CLEAN_DAMAGE_RATE * mult
-	patch.wetness = min(1.0, patch.wetness + delta * proximity * 1.85)
-	patch.runoff = min(1.0, patch.runoff + delta * proximity * 0.8)
+	var profile := _tuning_profile(GameConfig.WATER_WASH_PROFILES, patch.kind)
+	patch.wetness = min(1.0, patch.wetness + delta * proximity * GameConfig.WATER_WETNESS_RATE)
+	patch.runoff = min(1.0, patch.runoff + delta * proximity * GameConfig.WATER_RUNOFF_RATE)
 
 	if patch.kind == "mud":
-		patch.state = STATE_RUNOFF if patch.wetness > 0.3 else STATE_WET
-		patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.1)
-		patch.health -= 2.25 * proximity * delta * wr
+		patch.state = STATE_RUNOFF if patch.wetness > float(profile["runoff_wetness"]) else STATE_WET
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
+		patch.health -= float(profile["damage"]) * proximity * delta * wr
 	elif patch.kind == "dust":
 		patch.state = STATE_RUNOFF
-		patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.0)
-		patch.health -= 1.85 * proximity * delta * wr
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
+		patch.health -= float(profile["damage"]) * proximity * delta * wr
 	elif patch.kind == "leaf":
 		patch.state = STATE_WET
-		patch.velocity += Vector2(12.0, 36.0) * delta * proximity
-		patch.health -= 0.25 * proximity * delta * wr
+		patch.velocity += GameConfig.WATER_LEAF_PUSH_VELOCITY * delta * proximity
+		patch.health -= float(profile["damage"]) * proximity * delta * wr
 	elif patch.kind == "oil" or patch.kind == "bug":
-		var rinse_power: float = patch.soap * (0.75 + patch.looseness)
-		if rinse_power > 0.25:
+		var rinse_power: float = patch.soap * (float(profile["rinse_base"]) + patch.looseness * float(profile["rinse_looseness"]))
+		if rinse_power > float(profile["rinse_power_threshold"]):
 			patch.state = STATE_RUNOFF
-			patch.health -= rinse_power * 1.75 * proximity * delta * wr
-			patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.55)
-			patch.soap = max(0.0, patch.soap - delta * proximity * 0.45)
+			patch.health -= rinse_power * float(profile["prepared_damage"]) * proximity * delta * wr
+			patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["prepared_looseness"]))
+			patch.soap = max(0.0, patch.soap - delta * proximity * float(profile["prepared_soap_decay"]))
 		else:
 			patch.state = STATE_WET
-			patch.health -= 0.08 * proximity * delta * wr
-			patch.soap = max(0.0, patch.soap - delta * proximity * 0.12)
+			patch.health -= float(profile["dry_damage"]) * proximity * delta * wr
+			patch.soap = max(0.0, patch.soap - delta * proximity * float(profile["dry_soap_decay"]))
 	elif patch.kind == "poop":
-		if patch.soap > 0.25 or patch.state in [STATE_LOOSENED, STATE_RUNOFF]:
-			var rinse_power: float = max(patch.soap, 0.3) * (0.9 + patch.looseness * 0.5)
+		if patch.soap > float(profile["prepared_soap_threshold"]) or patch.state in [STATE_LOOSENED, STATE_RUNOFF]:
+			var rinse_power: float = max(patch.soap, float(profile["rinse_soap_floor"])) * (float(profile["rinse_base"]) + patch.looseness * float(profile["rinse_looseness"]))
 			patch.state = STATE_RUNOFF
-			patch.health -= rinse_power * 2.2 * proximity * delta * wr
-			patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.45)
-			patch.soap = max(0.0, patch.soap - delta * proximity * 0.55)
+			patch.health -= rinse_power * float(profile["prepared_damage"]) * proximity * delta * wr
+			patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["prepared_looseness"]))
+			patch.soap = max(0.0, patch.soap - delta * proximity * float(profile["prepared_soap_decay"]))
 		else:
 			patch.state = STATE_WET
-			patch.health -= 0.04 * proximity * delta * wr
+			patch.health -= float(profile["dry_damage"]) * proximity * delta * wr
 	elif patch.kind == "road_grime":
 		# A rinse wets and loosens the abrasive surface dust, but the bonded road
 		# film still needs a contact wash with the sponge.
 		patch.state = STATE_WET
-		patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.75)
-		patch.health -= 0.28 * proximity * delta * wr
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
+		patch.health -= float(profile["damage"]) * proximity * delta * wr
 	else:
 		patch.state = STATE_WET
-		patch.health -= 0.45 * proximity * delta * wr
+		patch.health -= float(profile["damage"]) * proximity * delta * wr
 
 	if was_misapplied:
 		_apply_misapplied_damage(patch, health_before, delta, proximity, mult)
@@ -131,28 +126,29 @@ static func apply_soap(patch: DirtPatch, delta: float, proximity: float, mult: f
 	var was_misapplied := Coaching.tool_misapplied(Coaching.TOOL_SOAP, patch)
 	var health_before := patch.health
 	var sr := GameConfig.CLEAN_DAMAGE_RATE * mult
+	var profile := _tuning_profile(GameConfig.SOAP_WASH_PROFILES, patch.kind)
 	if patch.kind == "oil" or patch.kind == "bug":
-		patch.soap = min(1.0, patch.soap + delta * proximity * 1.65)
-		patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.95)
-		patch.state = STATE_LOOSENED if patch.looseness > 0.65 else STATE_SOAPED
-		patch.health -= 0.05 * proximity * delta * sr
+		patch.soap = min(1.0, patch.soap + delta * proximity * float(profile["soap_build"]))
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
+		patch.state = STATE_LOOSENED if patch.looseness > float(profile["loosened_threshold"]) else STATE_SOAPED
+		patch.health -= float(profile["damage"]) * proximity * delta * sr
 	elif patch.kind == "mud":
-		patch.soap = min(1.0, patch.soap + delta * proximity * 0.85)
-		patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.42)
+		patch.soap = min(1.0, patch.soap + delta * proximity * float(profile["soap_build"]))
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
 		patch.state = STATE_SOAPED
-		patch.health -= 0.12 * proximity * delta * sr
+		patch.health -= float(profile["damage"]) * proximity * delta * sr
 	elif patch.kind == "poop":
-		patch.soap = min(1.0, patch.soap + delta * proximity * 2.0)
-		patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.2)
-		patch.state = STATE_LOOSENED if patch.looseness > 0.5 else STATE_SOAPED
-		patch.health -= 0.06 * proximity * delta * sr
+		patch.soap = min(1.0, patch.soap + delta * proximity * float(profile["soap_build"]))
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
+		patch.state = STATE_LOOSENED if patch.looseness > float(profile["loosened_threshold"]) else STATE_SOAPED
+		patch.health -= float(profile["damage"]) * proximity * delta * sr
 	elif patch.kind == "road_grime":
-		patch.soap = min(1.0, patch.soap + delta * proximity * 1.25)
-		patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.8)
-		patch.state = STATE_LOOSENED if patch.looseness > 0.45 else STATE_SOAPED
-		patch.health -= 0.06 * proximity * delta * sr
+		patch.soap = min(1.0, patch.soap + delta * proximity * float(profile["soap_build"]))
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
+		patch.state = STATE_LOOSENED if patch.looseness > float(profile["loosened_threshold"]) else STATE_SOAPED
+		patch.health -= float(profile["damage"]) * proximity * delta * sr
 	else:
-		patch.soap = min(0.45, patch.soap + delta * proximity * 0.25)
+		patch.soap = min(float(profile["soap_cap"]), patch.soap + delta * proximity * float(profile["soap_build"]))
 
 	if was_misapplied:
 		_apply_misapplied_damage(patch, health_before, delta, proximity, mult)
@@ -163,47 +159,48 @@ static func apply_sponge(patch: DirtPatch, delta: float, source_point: Vector2, 
 	var health_before := patch.health
 	var spr := GameConfig.CLEAN_DAMAGE_RATE * mult
 	var push := push_direction(patch, source_point)
-	patch.drift += push * delta * proximity * 3.0
-	patch.drift = patch.drift.limit_length(7.0)
+	var profile := _tuning_profile(GameConfig.SPONGE_WASH_PROFILES, patch.kind)
+	patch.drift += push * delta * proximity * float(GameConfig.SPONGE_MOTION_PROFILE["drift"])
+	patch.drift = patch.drift.limit_length(float(GameConfig.SPONGE_MOTION_PROFILE["drift_limit"]))
 
 	if patch.kind == "oil" or patch.kind == "bug":
-		if patch.soap > 0.25 or patch.looseness > 0.35:
+		if patch.soap > float(profile["soap_threshold"]) or patch.looseness > float(profile["looseness_threshold"]):
 			patch.state = STATE_LOOSENED
-			patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.2)
-			patch.health -= (1.15 + patch.soap) * proximity * delta * spr
-			patch.soap = max(0.0, patch.soap - delta * proximity * 0.22)
+			patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["prepared_looseness"]))
+			patch.health -= (float(profile["prepared_base"]) + patch.soap * float(profile["soap_bonus"])) * proximity * delta * spr
+			patch.soap = max(0.0, patch.soap - delta * proximity * float(profile["soap_decay"]))
 		else:
-			patch.health -= 0.12 * proximity * delta * spr
+			patch.health -= float(profile["dry_damage"]) * proximity * delta * spr
 	elif patch.kind == "mud":
-		if patch.wetness > 0.2 or patch.soap > 0.15:
+		if patch.wetness > float(profile["wetness_threshold"]) or patch.soap > float(profile["soap_threshold"]):
 			patch.state = STATE_LOOSENED
-			patch.health -= 1.15 * proximity * delta * spr
+			patch.health -= float(profile["prepared_damage"]) * proximity * delta * spr
 		else:
-			patch.health -= 0.35 * proximity * delta * spr
+			patch.health -= float(profile["dry_damage"]) * proximity * delta * spr
 	elif patch.kind == "dust":
-		patch.health -= 0.45 * proximity * delta * spr
+		patch.health -= float(profile["damage"]) * proximity * delta * spr
 	elif patch.kind == "leaf":
-		patch.health -= 0.2 * proximity * delta * spr
+		patch.health -= float(profile["damage"]) * proximity * delta * spr
 	elif patch.kind == "road_grime":
-		if patch.wetness > 0.2 or patch.soap > 0.15 or patch.looseness > 0.35:
+		if patch.wetness > float(profile["wetness_threshold"]) or patch.soap > float(profile["soap_threshold"]) or patch.looseness > float(profile["looseness_threshold"]):
 			patch.state = STATE_LOOSENED
-			patch.looseness = min(1.0, patch.looseness + delta * proximity * 1.25)
-			patch.health -= (1.2 + patch.soap * 0.55 + patch.wetness * 0.25) * proximity * delta * spr
-			patch.soap = max(0.0, patch.soap - delta * proximity * 0.18)
+			patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["prepared_looseness"]))
+			patch.health -= (float(profile["prepared_base"]) + patch.soap * float(profile["soap_bonus"]) + patch.wetness * float(profile["wetness_bonus"])) * proximity * delta * spr
+			patch.soap = max(0.0, patch.soap - delta * proximity * float(profile["soap_decay"]))
 		else:
-			patch.health -= 0.12 * proximity * delta * spr
+			patch.health -= float(profile["dry_damage"]) * proximity * delta * spr
 	elif patch.kind == "poop":
-		if patch.soap > 0.25 or patch.looseness > 0.35:
+		if patch.soap > float(profile["soap_threshold"]) or patch.looseness > float(profile["looseness_threshold"]):
 			patch.state = STATE_LOOSENED
-			patch.looseness = min(1.0, patch.looseness + delta * proximity * 0.8)
-			patch.health -= (0.8 + patch.soap * 0.6) * proximity * delta * spr
-			patch.soap = max(0.0, patch.soap - delta * proximity * 0.18)
+			patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["prepared_looseness"]))
+			patch.health -= (float(profile["prepared_base"]) + patch.soap * float(profile["soap_bonus"])) * proximity * delta * spr
+			patch.soap = max(0.0, patch.soap - delta * proximity * float(profile["soap_decay"]))
 		else:
-			patch.health -= 0.08 * proximity * delta * spr
+			patch.health -= float(profile["dry_damage"]) * proximity * delta * spr
 
 	if was_misapplied:
 		_apply_misapplied_damage(patch, health_before, delta, proximity, mult)
 
 
 static func _apply_misapplied_damage(patch: DirtPatch, health_before: float, delta: float, proximity: float, mult: float) -> void:
-	patch.health = health_before - MISAPPLIED_DAMAGE_COEFFICIENT * proximity * delta * GameConfig.CLEAN_DAMAGE_RATE * mult
+	patch.health = health_before - GameConfig.MISAPPLIED_DAMAGE_COEFFICIENT * proximity * delta * GameConfig.CLEAN_DAMAGE_RATE * mult
