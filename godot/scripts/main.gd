@@ -200,6 +200,7 @@ var _star_reveal_times: Array[float] = [-10.0, -10.0, -10.0]
 const STAR_REVEAL_DELAYS: Array[float] = [0.3, 0.75, 1.25]
 const STAR_REVEAL_POP_DUR := 0.5
 var sound_enabled := true
+var language_preference := ""
 var tutorial_seen := false
 var show_tutorial := false
 var _tutorial_returns_to_pause := false
@@ -341,6 +342,7 @@ func _load_progress() -> void:
 		coins = max(0, int(config.get_value("game", "coins", 0)))
 		total_stars = max(0, int(config.get_value("game", "total_stars", 0)))
 		sound_enabled = bool(config.get_value("settings", "sound", true))
+		_load_language_preference(config)
 		tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
 		upgrade_water = clampi(int(config.get_value("upgrades", "water", 0)), 0, UPGRADE_MAX_LEVEL)
 		upgrade_soap = clampi(int(config.get_value("upgrades", "soap", 0)), 0, UPGRADE_MAX_LEVEL)
@@ -366,6 +368,7 @@ func _load_progress() -> void:
 			for key in (stored_best_stars as Dictionary):
 				best_stars[int(key)] = clampi(int(stored_best_stars[key]), 0, 3)
 		main_claimed_date = String(config.get_value("daily", "claimed_date", ""))
+	_apply_language_preference()
 	var today := _today_string()
 	var daily_config := ConfigFile.new()
 	if daily_config.load(DAILY_SAVE_PATH) != OK:
@@ -425,6 +428,7 @@ func _save_progress() -> Error:
 	config.set_value("game", "coins", coins)
 	config.set_value("game", "total_stars", total_stars)
 	config.set_value("settings", "sound", sound_enabled)
+	_store_language_preference(config)
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
 	config.set_value("game", "best_times", best_times)
 	config.set_value("game", "best_stars", best_stars)
@@ -467,6 +471,24 @@ func _flush_daily_if_dirty() -> void:
 
 func _apply_sound_setting() -> void:
 	audio.apply_sound_setting(sound_enabled)
+
+
+func _apply_language_preference() -> void:
+	I18n.select_locale(language_preference)
+	_rebuild_i18n_labels()
+
+
+func _active_locale() -> String:
+	return I18n.normalize_preference(TranslationServer.get_locale())
+
+
+func _load_language_preference(config: ConfigFile) -> void:
+	language_preference = I18n.normalize_preference(String(config.get_value("settings", "language", "")))
+
+
+func _store_language_preference(config: ConfigFile) -> void:
+	if language_preference != "":
+		config.set_value("settings", "language", language_preference)
 
 
 # Forward a catalog-built event through the analytics port. Call sites use the
@@ -1174,6 +1196,14 @@ func get_water_effect_particle_cap_for_test() -> int:
 	return WATER_EFFECT_PARTICLE_CAP
 
 
+func get_language_preference_for_test() -> String:
+	return language_preference
+
+
+func get_active_locale_for_test() -> String:
+	return _active_locale()
+
+
 func get_oil_sheen_band_count_for_test() -> int:
 	return OIL_SHEEN_BAND_COUNT
 
@@ -1508,6 +1538,10 @@ func _handle_tap(point: Vector2) -> bool:
 		elif _pause_button_rect(2).has_point(point):
 			_toggle_sound()
 			queue_redraw()
+		elif _pause_language_option_rect("ko").has_point(point):
+			_select_language("ko")
+		elif _pause_language_option_rect("en").has_point(point):
+			_select_language("en")
 		elif _pause_button_rect(3).has_point(point):
 			show_pause = false
 			_tutorial_returns_to_pause = true
@@ -1652,6 +1686,17 @@ func _toggle_sound() -> void:
 	if sound_enabled:
 		_play_ui_select()
 	_save_progress()
+
+
+func _select_language(locale: String) -> void:
+	var preference := I18n.normalize_preference(locale)
+	if preference == "":
+		return
+	_play_ui_select()
+	language_preference = preference
+	_apply_language_preference()
+	_save_progress()
+	queue_redraw()
 
 
 func apply_foam_bomb(free := false) -> bool:
@@ -4295,6 +4340,10 @@ func _pause_action_labels() -> Array[String]:
 	return [tr("RESUME"), tr("PAUSE_RESTART"), tr("SOUND_ON") if sound_enabled else tr("SOUND_OFF"), tr("GUIDE"), tr("HOME"), tr("QUIT")]
 
 
+func _pause_language_labels() -> Array[String]:
+	return [tr("LANGUAGE_KO"), tr("LANGUAGE_EN")]
+
+
 func _draw_pause_menu() -> void:
 	if not show_pause:
 		return
@@ -4312,6 +4361,19 @@ func _draw_pause_menu() -> void:
 		draw_style_box(_style("pause_sh_%d" % i, Color(0.0, 0.0, 0.0, 0.18), 14.0), Rect2(r.position + Vector2(0.0, 4.0), r.size))
 		draw_style_box(_style("pause_btn_%d" % i, fills[i], 14.0), r)
 		draw_string(font, Vector2(r.position.x, r.position.y + 33.0), labels[i], HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 17, text_cols[i])
+
+	var language_labels := _pause_language_labels()
+	var active_locale := _active_locale()
+	for index in range(2):
+		var locale := "ko" if index == 0 else "en"
+		var option_rect := _pause_language_option_rect(locale)
+		var selected := locale == active_locale
+		var fill := Color("#d7f8e5") if selected else Color("#e5eef5")
+		var visual_state := "selected" if selected else "idle"
+		draw_style_box(_style("pause_language_%s_%s" % [locale, visual_state], fill, 14.0), option_rect)
+		draw_string(font, Vector2(option_rect.position.x, option_rect.position.y + 31.0), language_labels[index], HORIZONTAL_ALIGNMENT_CENTER, option_rect.size.x, 16, Color("#123246"))
+		if selected:
+			draw_style_box(_style("pause_language_mark_%s" % locale, Color("#159f6d"), 2.0), Rect2(option_rect.position + Vector2(14.0, option_rect.size.y - 7.0), Vector2(option_rect.size.x - 28.0, 3.0)))
 
 
 func _draw_quit_confirm() -> void:
@@ -4457,9 +4519,9 @@ func _get_double_rect() -> Rect2:
 	return Rect2(58.0, 352.0, 274.0, 42.0)
 
 
-# Pause/settings sheet: resume / restart / sound / guide / home / quit.
+# Pause/settings sheet: resume / restart / sound / language / guide / home / quit.
 func _pause_panel() -> Rect2:
-	var panel_height := 476.0
+	var panel_height := 500.0
 	var insets := _safe_area_design_insets()
 	var min_y := insets.y + 16.0
 	var max_y := DESIGN_SIZE.y - insets.w - 16.0 - panel_height
@@ -4468,11 +4530,29 @@ func _pause_panel() -> Rect2:
 
 
 func _pause_button_rect(index: int) -> Rect2:
+	var row := index if index < 3 else index + 1
+	return _pause_row_rect(row)
+
+
+func _pause_language_rect() -> Rect2:
+	return _pause_row_rect(3)
+
+
+func _pause_language_option_rect(locale: String) -> Rect2:
+	var row := _pause_language_rect()
+	var gap := 8.0
+	var option_width := (row.size.x - gap) * 0.5
+	if locale == "ko":
+		return Rect2(row.position, Vector2(option_width, row.size.y))
+	return Rect2(row.position + Vector2(option_width + gap, 0.0), Vector2(option_width, row.size.y))
+
+
+func _pause_row_rect(row_index: int) -> Rect2:
 	var panel := _pause_panel()
-	var button_h := 50.0
-	var gap := 10.0
+	var button_h := 46.0
+	var gap := 8.0
 	var y0 := panel.position.y + 72.0
-	return Rect2(panel.position.x + 24.0, y0 + float(index) * (button_h + gap), panel.size.x - 48.0, button_h)
+	return Rect2(panel.position.x + 24.0, y0 + float(row_index) * (button_h + gap), panel.size.x - 48.0, button_h)
 
 
 func _quit_panel() -> Rect2:

@@ -3,10 +3,9 @@ extends RefCounted
 # Runtime localization for the canvas-drawn UI. The game renders every label with
 # draw_string, so there is no scene-tree text to auto-translate; instead we push a
 # Korean + English message table into the TranslationServer and each draw site
-# calls tr("KEY"). Locale is chosen once at startup from the device language:
-# Korean device -> ko, everything else -> en. AppsInToss (Toss, Korea) resolves to
-# ko, so the mini-app ships fully Korean; Google Play / App Store users get their
-# language via the same device-locale path.
+# calls tr("KEY"). A persisted ko/en preference wins; without one, Korean devices
+# resolve to ko and every other device resolves to en. The pause/settings sheet
+# can switch the active TranslationServer locale without rebuilding the scene.
 #
 # Strings that carry printf placeholders keep them inside the translated value,
 # e.g. tr("CONTINUE") % [car, level]. Decorative glyphs are limited to ones the
@@ -106,6 +105,8 @@ const STRINGS := {
 	"QUIT": ["종료", "Quit"],
 	"SOUND_ON": ["소리 끄기", "Mute"],
 	"SOUND_OFF": ["소리 켜기", "Unmute"],
+	"LANGUAGE_KO": ["한국어", "한국어"],
+	"LANGUAGE_EN": ["English", "English"],
 	"QUIT_CONFIRM": ["앱을 종료할까요?", "Quit the app?"],
 	"QUIT_YES": ["종료", "Quit"],
 	"QUIT_NO": ["취소", "Cancel"],
@@ -145,10 +146,30 @@ const STRINGS := {
 	"SKIN_PURPLE": ["퍼플", "Purple"],
 }
 
+const SUPPORTED_LOCALES := ["ko", "en"]
 
-# Registers the ko/en tables with the TranslationServer and selects the locale
-# from the device language. Safe to call more than once. Returns the chosen locale.
-static func setup() -> String:
+
+static func normalize_preference(locale: String) -> String:
+	var language := locale.strip_edges().to_lower().replace("-", "_").get_slice("_", 0)
+	return language if language in SUPPORTED_LOCALES else ""
+
+
+static func resolve_locale(preferred_locale: String, device_language: String) -> String:
+	var preferred := normalize_preference(preferred_locale)
+	if preferred != "":
+		return preferred
+	return "ko" if normalize_preference(device_language) == "ko" else "en"
+
+
+static func select_locale(preferred_locale: String = "") -> String:
+	var locale := resolve_locale(preferred_locale, OS.get_locale_language())
+	TranslationServer.set_locale(locale)
+	return locale
+
+
+# Registers the ko/en tables and selects a stored preference or the device
+# fallback. Safe to call more than once. Returns the chosen locale.
+static func setup(preferred_locale: String = "") -> String:
 	var tr_ko := Translation.new()
 	tr_ko.locale = "ko"
 	var tr_en := Translation.new()
@@ -159,6 +180,4 @@ static func setup() -> String:
 		tr_en.add_message(key, pair[1])
 	TranslationServer.add_translation(tr_ko)
 	TranslationServer.add_translation(tr_en)
-	var locale := "ko" if OS.get_locale_language() == "ko" else "en"
-	TranslationServer.set_locale(locale)
-	return locale
+	return select_locale(preferred_locale)

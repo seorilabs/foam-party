@@ -130,10 +130,16 @@ func _run() -> void:
 		return
 	node.call("reset_game", 1, "oil_sheen_screenshot_cleanup")
 	node.call("_on_back_pressed")
+	node.call("_select_language", "ko")
 	await _settle(5)
 	if not await _capture(out_dir.path_join("shot_pause.png")):
 		quit(1)
 		return
+	node.call("_select_language", "en")
+	if not await _capture(out_dir.path_join("shot_pause_language_en.png")):
+		quit(1)
+		return
+	node.call("_select_language", "ko")
 	node.call("_on_back_pressed")
 
 	var wash_points := {
