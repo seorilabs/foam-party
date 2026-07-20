@@ -1049,13 +1049,7 @@ func _test_ftue_entry_and_tutorial_event_order_and_params(events: Array[Dictiona
 func _test_tool_scoped_skin_ownership(root_node: Node) -> bool:
 	# AC-1 through AC-4: each tool owns and pays for gold independently while
 	# every tool keeps its free classic skin.
-	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
-	var baseline_hud_rects := {
-		"status": root_node.call("_get_status_rect"),
-		"grade": root_node.call("_get_grade_rect"),
-		"customer": root_node.call("_get_customer_rect"),
-		"mission": root_node.call("_get_daily_mission_rect"),
-	}
+	var persistent_hud_before := _capture_persistent_hud_state(root_node)
 	var original_coins := int(root_node.get("coins"))
 	var original_owned: Dictionary = root_node.get("owned_skins").duplicate(true)
 	var original_skins := {
@@ -1138,11 +1132,7 @@ func _test_tool_scoped_skin_ownership(root_node: Node) -> bool:
 			or not main_source.contains("_store_nozzle_skin_customization(config)"):
 		_fail("progress persistence must use tool-scoped nozzle save helpers")
 		return false
-	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
-		_fail("tool-scoped skin ownership must not add persistent UI controls")
-		return false
-	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
-		_fail("tool-scoped skin ownership must keep the HUD residency unchanged")
+	if not _assert_persistent_hud_unchanged(root_node, persistent_hud_before):
 		return false
 
 	root_node.set("coins", original_coins)
@@ -1152,6 +1142,26 @@ func _test_tool_scoped_skin_ownership(root_node: Node) -> bool:
 	root_node.set("skin_soap", original_skins["soap"])
 	root_node.set("skin_sponge", original_skins["sponge"])
 	root_node.set("_skin_panel_tab", original_tab)
+	return true
+
+
+func _capture_persistent_hud_state(root_node: Node) -> Dictionary:
+	return {
+		"control_count": root_node.find_children("*", "Control", true, false).size(),
+		"status_rect": root_node.call("_get_status_rect"),
+		"grade_rect": root_node.call("_get_grade_rect"),
+		"customer_rect": root_node.call("_get_customer_rect"),
+		"mission_rect": root_node.call("_get_daily_mission_rect"),
+	}
+
+
+func _assert_persistent_hud_unchanged(root_node: Node, before: Dictionary) -> bool:
+	# AC-7: compare the complete persistent Control count and every resident HUD
+	# slot before and after all tool-scoped purchase, save, load, and panel checks.
+	var after := _capture_persistent_hud_state(root_node)
+	if after != before:
+		_fail("tool-scoped skin ownership must keep the persistent HUD unchanged: %s -> %s" % [before, after])
+		return false
 	return true
 
 

@@ -150,24 +150,7 @@ func _run_core_tests() -> void:
 	# --- Economy: skin purchase intents ---
 	var SkinCatalog: GDScript = load("res://core/domain/skin_catalog.gd")
 	var catalog: Dictionary = SkinCatalog.catalog()
-	var owned: Dictionary = Economy.default_skin_ownership(catalog)
-	var buy_intent: Dictionary = Economy.resolve_skin_purchase(catalog, "water", 1, owned, 200)
-	if String(buy_intent["action"]) != "buy" or int(buy_intent["cost"]) != 80 or String(buy_intent["id"]) != "coral":
-		_fail("affording an unowned skin should yield a buy intent")
-		return
-	var deny_intent: Dictionary = Economy.resolve_skin_purchase(catalog, "water", 1, owned, 10)
-	if String(deny_intent["action"]) != "deny":
-		_fail("insufficient coins should deny the skin purchase")
-		return
-	var select_intent: Dictionary = Economy.resolve_skin_purchase(catalog, "water", 0, owned, 0)
-	if String(select_intent["action"]) != "select" or String(select_intent["id"]) != "classic":
-		_fail("classic should be owned for every tool by default")
-		return
-	owned[Economy.skin_ownership_key("water", "gold")] = true
-	var water_gold_intent: Dictionary = Economy.resolve_skin_purchase(catalog, "water", 3, owned, 0)
-	var air_gold_intent: Dictionary = Economy.resolve_skin_purchase(catalog, "air", 3, owned, 150)
-	if String(water_gold_intent["action"]) != "select" or String(air_gold_intent["action"]) != "buy":
-		_fail("water gold ownership must not unlock air gold")
+	if not _test_tool_scoped_skin_purchase_intents(Economy, catalog):
 		return
 	var migrated_owned: Dictionary = Economy.normalize_skin_ownership(catalog, {
 		"classic": true,
@@ -500,6 +483,26 @@ func _run_core_tests() -> void:
 
 	print("CORE TESTS PASSED")
 	quit(0)
+
+
+func _test_tool_scoped_skin_purchase_intents(Economy: GDScript, catalog: Dictionary) -> bool:
+	# AC-2: the same gold id must resolve buy, select, and deny from the exact
+	# (tool, skin) ownership tuple rather than from the skin id alone.
+	var owned: Dictionary = Economy.default_skin_ownership(catalog)
+	owned[Economy.skin_ownership_key("water", "gold")] = true
+	var water_select: Dictionary = Economy.resolve_skin_purchase(catalog, "water", 3, owned, 0)
+	var air_buy: Dictionary = Economy.resolve_skin_purchase(catalog, "air", 3, owned, 150)
+	var air_deny: Dictionary = Economy.resolve_skin_purchase(catalog, "air", 3, owned, 149)
+	if water_select != {"action": "select", "cost": 150, "id": "gold"}:
+		_fail("owned water gold must resolve to select for water")
+		return false
+	if air_buy != {"action": "buy", "cost": 150, "id": "gold"}:
+		_fail("water gold ownership must still resolve to buy for air")
+		return false
+	if air_deny != {"action": "deny", "cost": 150, "id": "gold"}:
+		_fail("unowned air gold with insufficient coins must resolve to deny")
+		return false
+	return true
 
 
 func _test_ftue_release_attribution_and_shared_native_path(FtueEvents: GDScript) -> bool:
