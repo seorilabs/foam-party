@@ -131,6 +131,7 @@ const DAILY_MISSION_REWARD := GameConfig.DAILY_MISSION_REWARD
 
 var selected_tool: String = TOOL_WATER
 var dirt_patches: Array = []
+var _wheel_dirt_indices: Array[int] = []
 var particles: Array = []
 var rng := RandomNumberGenerator.new()
 var is_washing := false
@@ -1131,6 +1132,24 @@ func get_patch_centers_for_test() -> Array[Vector2]:
 	return centers
 
 
+func get_wheel_specs_for_test() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for wheel in _wheel_specs():
+		result.append({
+			"center": _gameplay_point(wheel["center"]),
+			"radius": _gameplay_length(float(wheel["radius"])),
+		})
+	return result
+
+
+func get_wheel_dirt_indices_for_test() -> Array[int]:
+	return _wheel_dirt_indices.duplicate()
+
+
+func get_initial_dirt_total_for_test() -> float:
+	return initial_dirt_total
+
+
 func get_dirt_spawn_pool_size_for_test() -> int:
 	return _dirt_spawn_positions().size()
 
@@ -2055,6 +2074,7 @@ func _set_car_palette() -> void:
 
 func _spawn_dirt() -> void:
 	dirt_patches.clear()
+	_wheel_dirt_indices.clear()
 	_hint_patch = null
 	var spawn_seed := 42690 + int(active_level_index) * 97
 	rng.seed = spawn_seed
@@ -2095,10 +2115,11 @@ func _spawn_dirt() -> void:
 			health_base_max = 150.0
 
 	var spawn_count: int = DirtSpawnPlan.spawn_count(active_level_index, pool.size())
-	var gold_spot_index := GoldSpot.spawn_index(active_level_index, spawn_count, spawn_seed)
+	var body_spawn_count := maxi(0, spawn_count - _wheel_specs().size())
+	var gold_spot_index := GoldSpot.spawn_index(active_level_index, body_spawn_count, spawn_seed)
 	var density_radius_scale: float = DirtSpawnPlan.radius_scale_for_count(spawn_count)
 	var health_scale := 1.0 + float(active_level_index - 1) * 0.06
-	for index in range(spawn_count):
+	for index in range(body_spawn_count):
 		var kind: String = type_pool[index % type_pool.size()]
 		var base_position: Vector2 = _gameplay_point(pool[index])
 		var radius := _gameplay_length(rng.randf_range(radius_min, radius_max) * density_radius_scale)
@@ -2111,11 +2132,28 @@ func _spawn_dirt() -> void:
 			health += 20.0 * health_scale
 		var patch := DirtPatch.new(kind, base_position, radius, health, rng.randf_range(0.0, 10.0), index == gold_spot_index)
 		dirt_patches.append(patch)
+	_spawn_wheel_dirt(health_scale, spawn_seed)
 
 	initial_dirt_total = 0.0
 	for patch in dirt_patches:
 		initial_dirt_total += (patch as DirtPatch).max_health
 	initial_dirt_total = max(1.0, initial_dirt_total)
+
+
+func _spawn_wheel_dirt(health_scale: float, spawn_seed: int) -> void:
+	var wheels := _wheel_specs()
+	for wheel_index in range(wheels.size()):
+		var wheel: Dictionary = wheels[wheel_index]
+		var wheel_radius := float(wheel["radius"])
+		var patch := DirtPatch.new(
+			"mud",
+			_gameplay_point(wheel["center"]),
+			_gameplay_length(wheel_radius * 0.58),
+			(88.0 + wheel_radius * 0.3) * health_scale,
+			float(spawn_seed % 997) * 0.01 + float(wheel_index) * 1.37
+		)
+		_wheel_dirt_indices.append(dirt_patches.size())
+		dirt_patches.append(patch)
 
 
 func _dirt_spawn_positions() -> Array[Vector2]:
@@ -3173,23 +3211,11 @@ func _draw_car() -> void:
 	var shapes: Dictionary = car_shapes[car_type]
 	_draw_ellipse_shape(Vector2(195.0, 668.0), Vector2(168.0, 20.0), Color(0.0, 0.0, 0.0, 0.16))
 
-	var wheel_y := 642.0
-	var wheel_radius := 31.0
-	if car_type == "truck":
-		wheel_y = 636.0
-		wheel_radius = 35.0
-	elif car_type == "offroad":
-		wheel_y = 632.0
-		wheel_radius = 37.0
-	elif car_type == "van":
-		wheel_y = 640.0
-		wheel_radius = 33.0
-	elif car_type == "sports":
-		wheel_y = 646.0
-		wheel_radius = 29.0
-	for wheel_x in [98.0, 292.0]:
-		draw_circle(Vector2(wheel_x, wheel_y), wheel_radius, Color("#1d2b33"))
-		draw_circle(Vector2(wheel_x, wheel_y), wheel_radius * 0.48, Color("#cfd8dc"))
+	for wheel in _wheel_specs():
+		var wheel_center: Vector2 = wheel["center"]
+		var wheel_radius := float(wheel["radius"])
+		draw_circle(wheel_center, wheel_radius, Color("#1d2b33"))
+		draw_circle(wheel_center, wheel_radius * 0.48, Color("#cfd8dc"))
 
 	var silhouette: PackedVector2Array = shapes["silhouette"]
 	draw_colored_polygon(silhouette, car_color)
@@ -3232,6 +3258,27 @@ func _draw_car() -> void:
 	draw_rect(plate, outline, false, 2.5)
 	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), license_plate_text, HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
 	_draw_body_foam(silhouette)
+
+
+func _wheel_specs() -> Array[Dictionary]:
+	var wheel_y := 642.0
+	var wheel_radius := 31.0
+	if car_type == "truck":
+		wheel_y = 636.0
+		wheel_radius = 35.0
+	elif car_type == "offroad":
+		wheel_y = 632.0
+		wheel_radius = 37.0
+	elif car_type == "van":
+		wheel_y = 640.0
+		wheel_radius = 33.0
+	elif car_type == "sports":
+		wheel_y = 646.0
+		wheel_radius = 29.0
+	return [
+		{"center": Vector2(98.0, wheel_y), "radius": wheel_radius},
+		{"center": Vector2(292.0, wheel_y), "radius": wheel_radius},
+	]
 
 
 func _draw_body_foam(silhouette: PackedVector2Array) -> void:

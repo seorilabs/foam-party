@@ -95,6 +95,18 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return
+	if not await _capture(out_dir.path_join("shot_wheel_dirt.png")):
+		quit(1)
+		return
+	for wheel_dirt_index in node.call("get_wheel_dirt_indices_for_test"):
+		node.get("dirt_patches")[wheel_dirt_index].set("health", 0.0)
+	node.call("_update_clean_progress")
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_wheels_clean.png")):
+		quit(1)
+		return
+	node.call("reset_game", 1, "wheel_dirt_screenshot_cleanup")
+	await _settle(3)
 	if not bool(node.call("set_patch_gold_spot_for_test", 0, true)):
 		push_error("gold spot screenshot setup failed")
 		quit(1)
