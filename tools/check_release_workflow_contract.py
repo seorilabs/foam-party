@@ -57,34 +57,58 @@ class ReleaseWorkflowContractTest(unittest.TestCase):
         cls.workflow_lines = DEPLOY_ALL.read_text(encoding="utf-8").splitlines()
 
     def test_deploy_all_forwards_google_play_inputs(self) -> None:
-        start, end, _indent = block_for(
-            self.workflow_lines, ("jobs", "google-play", "with")
-        )
-        reusable_inputs = self.workflow_lines[start:end]
-        self.assertIn(
-            "      track: ${{ inputs.google_play_track }}", reusable_inputs
-        )
-        self.assertIn(
-            "      release_status: ${{ inputs.google_play_release_status }}",
-            reusable_inputs,
+        reusable_path = ("jobs", "google-play", "with")
+        self.assertEqual(
+            {
+                "track": scalar(self.workflow_lines, reusable_path, "track"),
+                "release_status": scalar(
+                    self.workflow_lines, reusable_path, "release_status"
+                ),
+            },
+            {
+                "track": "${{ inputs.google_play_track }}",
+                "release_status": "${{ inputs.google_play_release_status }}",
+            },
         )
 
     def test_deploy_all_exposes_track_and_status_choices(self) -> None:
-        expectations = {
-            "google_play_track": ("internal", "[internal,production]"),
-            "google_play_release_status": ("completed", "[draft,completed]"),
-        }
-        for input_name, (expected_default, expected_options) in expectations.items():
-            with self.subTest(input_name=input_name):
-                path = ("on", "workflow_dispatch", "inputs", input_name)
-                self.assertEqual(scalar(self.workflow_lines, path, "type"), "choice")
-                self.assertEqual(
-                    scalar(self.workflow_lines, path, "default"), expected_default
-                )
-                self.assertEqual(
-                    scalar(self.workflow_lines, path, "options").replace(" ", ""),
-                    expected_options,
-                )
+        track_path = ("on", "workflow_dispatch", "inputs", "google_play_track")
+        status_path = (
+            "on",
+            "workflow_dispatch",
+            "inputs",
+            "google_play_release_status",
+        )
+        self.assertEqual(
+            {
+                "google_play_track": {
+                    "type": scalar(self.workflow_lines, track_path, "type"),
+                    "default": scalar(self.workflow_lines, track_path, "default"),
+                    "options": scalar(
+                        self.workflow_lines, track_path, "options"
+                    ).replace(" ", ""),
+                },
+                "google_play_release_status": {
+                    "type": scalar(self.workflow_lines, status_path, "type"),
+                    "default": scalar(self.workflow_lines, status_path, "default"),
+                    "options": scalar(
+                        self.workflow_lines, status_path, "options"
+                    ).replace(" ", ""),
+                },
+            },
+            {
+                "google_play_track": {
+                    "type": "choice",
+                    "default": "internal",
+                    "options": "[internal,production]",
+                },
+                "google_play_release_status": {
+                    "type": "choice",
+                    "default": "completed",
+                    "options": "[draft,completed]",
+                },
+            },
+        )
 
     def test_production_documentation_covers_account_gate(self) -> None:
         release_doc = GOOGLE_PLAY_DOC.read_text(encoding="utf-8")
