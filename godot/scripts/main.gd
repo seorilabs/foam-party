@@ -193,6 +193,7 @@ var _combo_milestone_count := 0
 var _customer_cheer_text := ""
 var _customer_cheer_time := -10.0
 var _customer_completion_time := -10.0
+var _last_grade_tracker_text := ""
 var best_times: Dictionary = {}
 var best_stars: Dictionary = {}
 var is_new_record := false
@@ -1281,6 +1282,10 @@ func calc_stars_for_test() -> int:
 
 func get_grade_slot_state_for_test(slot_index: int) -> String:
 	return _grade_slot_state(slot_index)
+
+
+func get_last_grade_tracker_text_for_test() -> String:
+	return _last_grade_tracker_text
 
 
 func get_grade_time_to_downgrade_for_test() -> float:
@@ -4417,6 +4422,7 @@ func _draw_grade_tracker() -> void:
 		col = Color(1.0, 0.88, 0.55)
 	else:
 		text = tr("GRADE_TIME") % _format_time(level_time)
+	_last_grade_tracker_text = text
 	var text_font_size := 11
 	while text_font_size > 8 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, text_font_size).x > rect.size.x - 8.0:
 		text_font_size -= 1
