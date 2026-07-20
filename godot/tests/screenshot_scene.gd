@@ -79,6 +79,30 @@ func _run() -> void:
 
 	node.set("selected_tool", "water")
 	node.set("pointer_position", Vector2(195.0, 520.0))
+	node.get("particles").clear()
+	node.set("is_washing", true)
+	await _settle(4)
+	if not await _capture(out_dir.path_join("shot_water_impact.png")):
+		quit(1)
+		return
+	node.set("is_washing", false)
+	node.get("particles").clear()
+	node.set("combo_count", 1)
+	node.call("_spawn_water_removal_splash", Vector2(195.0, 520.0), 18.0)
+	if not await _capture(out_dir.path_join("shot_water_combo_low.png")):
+		quit(1)
+		return
+	node.get("particles").clear()
+	node.set("combo_count", 9)
+	node.call("_spawn_water_removal_splash", Vector2(195.0, 520.0), 18.0)
+	if not await _capture(out_dir.path_join("shot_water_combo_hot.png")):
+		quit(1)
+		return
+	node.set("combo_count", 0)
+	node.get("particles").clear()
+
+	node.set("selected_tool", "water")
+	node.set("pointer_position", Vector2(195.0, 520.0))
 	for patch in node.get("dirt_patches"):
 		if patch.get("position").distance_to(Vector2(195.0, 520.0)) < 120.0:
 			patch.set("health", 1.0)
