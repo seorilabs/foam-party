@@ -2,7 +2,9 @@
 
 Engine-independent rules and use cases live here when they are extracted from the Godot prototype.
 
-Current status: scaffold only. The shipped gameplay still lives in `godot/scripts/main.gd`.
+Shipped engine-independent washing, scoring, economy, progression, and coaching rules live here. Godot scene/input/rendering orchestration remains in `godot/scripts/main.gd`.
+
+Wash mutation rates are centralized in `src/domain/game_config.gd`; `src/use_cases/wash_rules.gd` owns formulas and state transitions without embedding balance coefficients.
 
 ## Boundary
 

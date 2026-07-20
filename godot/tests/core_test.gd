@@ -223,6 +223,8 @@ func _run_core_tests() -> void:
 	if WashRules == null:
 		_fail("wash_rules failed to load through res://core symlink")
 		return
+	if not _test_wash_tuning_profiles(GameConfig):
+		return
 	var mud = DirtPatch.new("mud", Vector2(100.0, 100.0), 20.0, 100.0, 0.5)
 	WashRules.apply_water(mud, 0.5, 1.0, 1.0)
 	if mud.health >= 100.0 or mud.wetness <= 0.0:
@@ -505,6 +507,16 @@ func _test_correct_wash_snapshots(WashRules: GDScript, DirtPatch: GDScript) -> b
 	if absf(mud.health - 19.0) > 0.001:
 		_fail("correct mud rinse timing changed")
 		return false
+	var dust = DirtPatch.new("dust", Vector2.ZERO, 18.0, 100.0, 0.5)
+	WashRules.apply_water(dust, 0.5, 1.0, 1.0)
+	if absf(dust.health - 33.4) > 0.001 or absf(dust.wetness - 0.925) > 0.001:
+		_fail("correct dust rinse damage or wetness timing changed")
+		return false
+	var leaf = DirtPatch.new("leaf", Vector2.ZERO, 18.0, 100.0, 0.5)
+	WashRules.apply_air(leaf, 0.1, Vector2(0.0, 20.0), 1.0, 0.0)
+	if absf(leaf.health - 79.48) > 0.001 or absf(leaf.drift.y + 26.82) > 0.001:
+		_fail("correct leaf air damage or motion timing changed")
+		return false
 
 	var oil = DirtPatch.new("oil", Vector2.ZERO, 18.0, 100.0, 0.5)
 	WashRules.apply_soap(oil, 0.5, 1.0, 1.0)
@@ -518,6 +530,38 @@ func _test_correct_wash_snapshots(WashRules: GDScript, DirtPatch: GDScript) -> b
 	WashRules.apply_water(poop, 0.5, 1.0, 1.0)
 	if absf(poop.health - 2.8) > 0.001:
 		_fail("correct poop soap-and-rinse timing changed")
+		return false
+	return true
+
+
+func _test_wash_tuning_profiles(GameConfig: GDScript) -> bool:
+	var profile_tables := [
+		GameConfig.RUNOFF_CLEANUP_PROFILES,
+		GameConfig.AIR_WASH_PROFILES,
+		GameConfig.WATER_WASH_PROFILES,
+		GameConfig.SOAP_WASH_PROFILES,
+		GameConfig.SPONGE_WASH_PROFILES,
+	]
+	for table in profile_tables:
+		for dirt_kind in GameConfig.DIRT_TYPES:
+			if not table.has(dirt_kind):
+				_fail("wash tuning profile missing dirt kind: " + dirt_kind)
+				return false
+	if absf(float(GameConfig.AIR_WASH_PROFILES["dust"]["damage"]) - 2.15) > 0.0001 \
+		or absf(float(GameConfig.WATER_WASH_PROFILES["mud"]["damage"]) - 2.25) > 0.0001 \
+		or absf(float(GameConfig.SOAP_WASH_PROFILES["oil"]["damage"]) - 0.05) > 0.0001 \
+		or absf(float(GameConfig.SPONGE_WASH_PROFILES["road_grime"]["prepared_base"]) - 1.2) > 0.0001 \
+		or absf(float(GameConfig.MISAPPLIED_DAMAGE_COEFFICIENT) - 0.002) > 0.0001:
+		_fail("central wash tuning values changed during extraction")
+		return false
+	var wash_source := FileAccess.get_file_as_string("res://core/use_cases/wash_rules.gd")
+	for config_name in ["RUNOFF_CLEANUP_PROFILES", "AIR_WASH_PROFILES", "AIR_MOTION_PROFILE", "WATER_WASH_PROFILES", "WATER_LEAF_PUSH_VELOCITY", "SOAP_WASH_PROFILES", "SPONGE_WASH_PROFILES", "SPONGE_MOTION_PROFILE", "MISAPPLIED_DAMAGE_COEFFICIENT"]:
+		if not wash_source.contains("GameConfig." + config_name):
+			_fail("wash rule does not consume central tuning: " + config_name)
+			return false
+	var coaching_source := FileAccess.get_file_as_string("res://core/use_cases/coaching.gd")
+	if not coaching_source.contains("GameConfig.WATER_WASH_PROFILES") or not coaching_source.contains("GameConfig.SPONGE_WASH_PROFILES"):
+		_fail("coaching must share the same preparation thresholds as wash rules")
 		return false
 	return true
 

@@ -11,6 +11,105 @@ const STAR2_TIME := 140.0
 const STAR_WARN_SECONDS := 15.0
 const COMBO_WINDOW := 2.5
 const CLEAN_DAMAGE_RATE := 72.0
+
+# Tool/dirt mutation rates are data, while wash_rules.gd owns state transitions
+# and formulas. Keeping every shipped dirt kind explicit makes a balance change a
+# config-only edit and prevents a new kind from silently inheriting another rate.
+# Wrong-tool DPS stays at 4% of the slowest valid preparation coefficient.
+const MISAPPLIED_DAMAGE_COEFFICIENT := 0.002
+const RUNOFF_CLEANUP_PROFILES := {
+	"mud": {"base": 0.42, "wetness": 0.25},
+	"dust": {"base": 0.42, "wetness": 0.25},
+	"oil": {"soap": 0.18, "looseness": 0.32},
+	"bug": {"soap": 0.18, "looseness": 0.32},
+	"poop": {"soap": 0.22, "looseness": 0.28},
+	"road_grime": {"soap": 0.10, "looseness": 0.14},
+	"leaf": {"base": 0.08},
+	"_default": {"base": 0.08},
+}
+const AIR_WASH_PROFILES := {
+	"mud": {"looseness": 0.08},
+	"dust": {"looseness": 2.2, "damage": 2.15},
+	"leaf": {"looseness": 2.2, "damage": 2.85},
+	"oil": {"looseness": 0.08},
+	"bug": {"looseness": 0.08},
+	"poop": {"looseness": 0.08},
+	"road_grime": {"looseness": 0.08},
+	"_default": {"looseness": 0.08},
+}
+const AIR_MOTION_PROFILE := {
+	"base_speed": 235.0,
+	"radius_speed": 3.5,
+	"velocity_response": 9.0,
+	"heavy_drift": 7.0,
+	"heavy_drift_limit": 5.5,
+}
+const WATER_WETNESS_RATE := 1.85
+const WATER_RUNOFF_RATE := 0.8
+const WATER_LEAF_PUSH_VELOCITY := Vector2(12.0, 36.0)
+const WATER_WASH_PROFILES := {
+	"mud": {"runoff_wetness": 0.3, "looseness": 1.1, "damage": 2.25},
+	"dust": {"looseness": 1.0, "damage": 1.85},
+	"leaf": {"damage": 0.25},
+	"oil": {
+		"rinse_power_threshold": 0.25, "rinse_base": 0.75, "rinse_looseness": 1.0,
+		"prepared_damage": 1.75, "prepared_looseness": 0.55, "prepared_soap_decay": 0.45,
+		"dry_damage": 0.08, "dry_soap_decay": 0.12,
+	},
+	"bug": {
+		"rinse_power_threshold": 0.25, "rinse_base": 0.75, "rinse_looseness": 1.0,
+		"prepared_damage": 1.75, "prepared_looseness": 0.55, "prepared_soap_decay": 0.45,
+		"dry_damage": 0.08, "dry_soap_decay": 0.12,
+	},
+	"poop": {
+		"prepared_soap_threshold": 0.25, "rinse_soap_floor": 0.3,
+		"rinse_base": 0.9, "rinse_looseness": 0.5, "prepared_damage": 2.2,
+		"prepared_looseness": 0.45, "prepared_soap_decay": 0.55, "dry_damage": 0.04,
+	},
+	"road_grime": {"looseness": 0.75, "damage": 0.28},
+	"_default": {"damage": 0.45},
+}
+const SOAP_WASH_PROFILES := {
+	"mud": {"soap_build": 0.85, "looseness": 0.42, "damage": 0.12},
+	"dust": {"soap_build": 0.25, "soap_cap": 0.45},
+	"leaf": {"soap_build": 0.25, "soap_cap": 0.45},
+	"oil": {"loosened_threshold": 0.65, "soap_build": 1.65, "looseness": 0.95, "damage": 0.05},
+	"bug": {"loosened_threshold": 0.65, "soap_build": 1.65, "looseness": 0.95, "damage": 0.05},
+	"poop": {"loosened_threshold": 0.5, "soap_build": 2.0, "looseness": 1.2, "damage": 0.06},
+	"road_grime": {"loosened_threshold": 0.45, "soap_build": 1.25, "looseness": 0.8, "damage": 0.06},
+	"_default": {"soap_build": 0.25, "soap_cap": 0.45},
+}
+const SPONGE_WASH_PROFILES := {
+	"mud": {"wetness_threshold": 0.2, "soap_threshold": 0.15, "prepared_damage": 1.15, "dry_damage": 0.35},
+	"dust": {"damage": 0.45},
+	"leaf": {"damage": 0.2},
+	"oil": {
+		"soap_threshold": 0.25, "looseness_threshold": 0.35,
+		"prepared_looseness": 1.2, "prepared_base": 1.15, "soap_bonus": 1.0,
+		"soap_decay": 0.22, "dry_damage": 0.12,
+	},
+	"bug": {
+		"soap_threshold": 0.25, "looseness_threshold": 0.35,
+		"prepared_looseness": 1.2, "prepared_base": 1.15, "soap_bonus": 1.0,
+		"soap_decay": 0.22, "dry_damage": 0.12,
+	},
+	"poop": {
+		"soap_threshold": 0.25, "looseness_threshold": 0.35,
+		"prepared_looseness": 0.8, "prepared_base": 0.8, "soap_bonus": 0.6,
+		"soap_decay": 0.18, "dry_damage": 0.08,
+	},
+	"road_grime": {
+		"wetness_threshold": 0.2, "soap_threshold": 0.15, "looseness_threshold": 0.35,
+		"prepared_looseness": 1.25, "prepared_base": 1.2,
+		"soap_bonus": 0.55, "wetness_bonus": 0.25, "soap_decay": 0.18,
+		"dry_damage": 0.12,
+	},
+	"_default": {},
+}
+const SPONGE_MOTION_PROFILE := {
+	"drift": 3.0,
+	"drift_limit": 7.0,
+}
 const BOMB_COST := 40
 # Rewarded ad grants at most this many free foam bombs per level; beyond the cap
 # the bomb falls back to the coin price so ad inventory is not farmed endlessly.
