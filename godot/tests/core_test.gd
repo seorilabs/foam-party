@@ -13,6 +13,7 @@ func _run_core_tests() -> void:
 	var Scoring: GDScript = load("res://core/use_cases/scoring.gd")
 	var Economy: GDScript = load("res://core/use_cases/economy.gd")
 	var Coaching: GDScript = load("res://core/use_cases/coaching.gd")
+	var StalledDirtHighlight: GDScript = load("res://core/use_cases/stalled_dirt_highlight.gd")
 	var DailyMission: GDScript = load("res://core/use_cases/daily_mission.gd")
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
 	var StageSelection: GDScript = load("res://core/use_cases/stage_selection.gd")
@@ -22,7 +23,7 @@ func _run_core_tests() -> void:
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
 	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
 	var I18n: GDScript = load("res://scripts/services/i18n.gd")
-	if Scoring == null or Economy == null or Coaching == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
+	if Scoring == null or Economy == null or Coaching == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
 		return
 	if not _test_car_roster_and_saved_level_mapping(GameConfig):
@@ -171,6 +172,29 @@ func _run_core_tests() -> void:
 		return
 	if String(Coaching.active_hint_tool(null, true)) != "":
 		_fail("a null hint patch should report no active hint")
+		return
+
+	# --- Late-cleaning guidance: exact progress and idle-time boundaries ---
+	if absf(float(StalledDirtHighlight.PROGRESS_THRESHOLD) - 0.90) > 0.0001:
+		_fail("stalled dirt progress threshold should stay at 90 percent")
+		return
+	if absf(float(StalledDirtHighlight.IDLE_SECONDS_THRESHOLD) - 3.0) > 0.0001:
+		_fail("stalled dirt idle threshold should stay at 3 seconds")
+		return
+	if bool(StalledDirtHighlight.should_show(0.8999, 10.0)):
+		_fail("late-cleaning highlight must stay off below the progress threshold")
+		return
+	if bool(StalledDirtHighlight.should_show(0.90, 2.999)):
+		_fail("late-cleaning highlight must stay off during normal progress")
+		return
+	if not bool(StalledDirtHighlight.should_show(0.90, 3.0)):
+		_fail("late-cleaning highlight should turn on at both exact boundaries")
+		return
+	if not bool(StalledDirtHighlight.cleaning_resumed(0.92, 0.921)):
+		_fail("a meaningful progress increase should clear the stalled state")
+		return
+	if bool(StalledDirtHighlight.cleaning_resumed(0.92, 0.920001)):
+		_fail("floating-point noise must not look like resumed cleaning")
 		return
 
 	# --- Daily mission: deterministic in the date string ---

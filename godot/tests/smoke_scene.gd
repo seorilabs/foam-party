@@ -380,6 +380,28 @@ func _run_smoke() -> void:
 		return
 	if not _test_native_ad_contract():
 		return
+	for stalled_method in ["get_stalled_dirt_highlight_for_test", "get_stalled_dirt_progress_threshold_for_test", "get_stalled_dirt_idle_seconds_for_test", "simulate_stalled_dirt_highlight_for_test", "simulate_cleaning_resumed_for_test"]:
+		if not root_node.has_method(stalled_method):
+			_fail("stalled dirt helper API missing: " + stalled_method)
+			return
+	if absf(float(root_node.call("get_stalled_dirt_progress_threshold_for_test")) - 0.90) > 0.0001:
+		_fail("stalled dirt progress threshold mismatch")
+		return
+	if absf(float(root_node.call("get_stalled_dirt_idle_seconds_for_test")) - 3.0) > 0.0001:
+		_fail("stalled dirt idle threshold mismatch")
+		return
+	if bool(root_node.call("simulate_stalled_dirt_highlight_for_test", 0.89, 8.0)):
+		_fail("stalled dirt highlight must stay off below 90 percent")
+		return
+	if bool(root_node.call("simulate_stalled_dirt_highlight_for_test", 0.95, 2.9)):
+		_fail("stalled dirt highlight must stay off before 3 idle seconds")
+		return
+	if not bool(root_node.call("simulate_stalled_dirt_highlight_for_test", 0.95, 3.0)):
+		_fail("stalled dirt highlight should activate for a late cleaning stall")
+		return
+	if bool(root_node.call("simulate_cleaning_resumed_for_test", 0.001)):
+		_fail("resumed cleaning must clear the stalled dirt highlight")
+		return
 
 	# --- contextual "use this tool" hint ---
 	for hint_method in ["is_tool_misapplied_for_test", "get_recommended_tool_for_test", "get_patch_hint_time_for_test", "simulate_patch_hint_for_test", "get_patch_count_by_kind_for_test", "spawn_patch_for_test"]:

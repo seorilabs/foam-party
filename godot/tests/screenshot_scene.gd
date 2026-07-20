@@ -125,6 +125,14 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_clean_shine_98.png")):
 		quit(1)
 		return
+	if not _isolate_stalled_dirt_patch(node):
+		push_error("stalled dirt screenshot setup failed")
+		quit(1)
+		return
+	node.call("simulate_stalled_dirt_highlight_for_test", node.call("get_clean_progress_for_test"), 3.0)
+	if not await _capture(out_dir.path_join("shot_stalled_dirt_highlight.png")):
+		quit(1)
+		return
 	node.call("reset_game", 1, "clean_shine_screenshot_cleanup")
 	var oil_patch: Variant = _isolate_oil_patch(node, 1.0)
 	if oil_patch == null:
@@ -276,6 +284,29 @@ func _isolate_oil_patch(node: Node, strength: float) -> Variant:
 	node.call("_update_clean_progress")
 	node.queue_redraw()
 	return oil_patch
+
+
+func _isolate_stalled_dirt_patch(node: Node) -> bool:
+	var target_patch: Variant = null
+	for raw_patch in node.get("dirt_patches"):
+		if target_patch == null or float(raw_patch.get("max_health")) > float(target_patch.get("max_health")):
+			target_patch = raw_patch
+	if target_patch == null:
+		return false
+	for raw_patch in node.get("dirt_patches"):
+		if raw_patch == target_patch:
+			raw_patch.set("state", "stuck")
+			raw_patch.set("health", float(raw_patch.get("max_health")) * 0.08)
+		else:
+			raw_patch.set("state", "removed")
+			raw_patch.set("health", 0.0)
+	# A synthetic total keeps the faint isolated patch at exactly 94% overall
+	# progress, matching the low-alpha last-sliver manual QA scenario.
+	node.set("initial_dirt_total", float(target_patch.get("health")) / 0.06)
+	node.set("completed", false)
+	node.call("_update_clean_progress")
+	node.queue_redraw()
+	return absf(float(node.call("get_clean_progress_for_test")) - 0.94) < 0.001
 
 
 func _capture(path: String) -> bool:

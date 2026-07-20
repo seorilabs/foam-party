@@ -8,6 +8,7 @@ const SkinCatalog = preload("res://core/domain/skin_catalog.gd")
 const Scoring = preload("res://core/use_cases/scoring.gd")
 const Economy = preload("res://core/use_cases/economy.gd")
 const Coaching = preload("res://core/use_cases/coaching.gd")
+const StalledDirtHighlight = preload("res://core/use_cases/stalled_dirt_highlight.gd")
 const DailyMission = preload("res://core/use_cases/daily_mission.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
 const StageSelection = preload("res://core/use_cases/stage_selection.gd")
@@ -70,6 +71,8 @@ const TOOL_BUTTON_Y := 764.0
 const TOOL_BUTTON_HEIGHT := 72.0
 const TOOL_BUTTON_BOTTOM_PADDING := 12.0
 const TOOLBAR_TOP_GAP := 20.0
+const STALLED_DIRT_PROGRESS_THRESHOLD := StalledDirtHighlight.PROGRESS_THRESHOLD
+const STALLED_DIRT_IDLE_SECONDS := StalledDirtHighlight.IDLE_SECONDS_THRESHOLD
 # Washing (bram/water/soap/sponge input) only acts within the car + dirt band,
 # not the top HUD (card/buttons) or below the toolbar. Matches the dirt bounds
 # used by _is_patch_outside_wash_area so a touch can only wash where dirt lives.
@@ -290,6 +293,9 @@ var _hint_shadow_box: StyleBoxFlat
 var _tool_hint_box: StyleBoxFlat
 var _gold_spot_pop_box: StyleBoxFlat
 var _hint_patch: DirtPatch = null
+var _stalled_dirt_highlight_active := false
+var _seconds_without_cleaning := 0.0
+var _last_observed_clean_progress := 0.0
 var car_shapes: Dictionary = {}
 var _body_foam_spot_cache: Dictionary = {}
 # Audio-trigger decision state stays here (main decides WHEN to play); the
@@ -707,6 +713,7 @@ func _process(delta: float) -> void:
 	_update_particles(delta)
 	body_foam_runoff = maxf(0.0, body_foam_runoff - delta * BODY_FOAM_RUNOFF_DECAY)
 	_update_clean_progress()
+	_update_stalled_dirt_highlight(delta)
 	_update_audio()
 	if _gleam_time >= 0.0:
 		_gleam_time = minf(_gleam_time + delta / GLEAM_DURATION, 1.0)
@@ -1054,6 +1061,7 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_set_car_palette()
 	_spawn_dirt()
 	_update_clean_progress()
+	_reset_stalled_dirt_highlight()
 	_emit_analytics(FtueEvents.level_load_complete(active_level_index, car_type, load_reason))
 	if game_state == STATE_PLAYING:
 		_mark_level_started()
@@ -1081,6 +1089,33 @@ func get_dirt_spawn_min_center_distance_for_test() -> float:
 
 func get_clean_progress_for_test() -> float:
 	return clean_progress
+
+
+func get_stalled_dirt_highlight_for_test() -> bool:
+	return _stalled_dirt_highlight_active
+
+
+func get_stalled_dirt_progress_threshold_for_test() -> float:
+	return STALLED_DIRT_PROGRESS_THRESHOLD
+
+
+func get_stalled_dirt_idle_seconds_for_test() -> float:
+	return STALLED_DIRT_IDLE_SECONDS
+
+
+func simulate_stalled_dirt_highlight_for_test(progress: float, idle_seconds: float) -> bool:
+	clean_progress = clampf(progress, 0.0, 1.0)
+	_last_observed_clean_progress = clean_progress
+	_seconds_without_cleaning = 0.0
+	_stalled_dirt_highlight_active = false
+	_update_stalled_dirt_highlight(maxf(idle_seconds, 0.0))
+	return _stalled_dirt_highlight_active
+
+
+func simulate_cleaning_resumed_for_test(progress_delta: float) -> bool:
+	clean_progress = clampf(clean_progress + maxf(progress_delta, 0.0), 0.0, 1.0)
+	_update_stalled_dirt_highlight(0.0)
+	return _stalled_dirt_highlight_active
 
 
 func get_clean_shine_alpha_for_test(progress: float) -> float:
@@ -2657,6 +2692,39 @@ func _update_clean_progress() -> void:
 			Input.vibrate_handheld(80)
 
 
+func _reset_stalled_dirt_highlight() -> void:
+	_stalled_dirt_highlight_active = false
+	_seconds_without_cleaning = 0.0
+	_last_observed_clean_progress = clean_progress
+
+
+func _update_stalled_dirt_highlight(delta: float) -> void:
+	if StalledDirtHighlight.cleaning_resumed(_last_observed_clean_progress, clean_progress):
+		_seconds_without_cleaning = 0.0
+		_stalled_dirt_highlight_active = false
+		_last_observed_clean_progress = clean_progress
+	elif clean_progress < _last_observed_clean_progress:
+		# Reset/load paths normally call _reset_stalled_dirt_highlight directly;
+		# keep this defensive branch for test fixtures and future level flows.
+		_last_observed_clean_progress = clean_progress
+
+	var gameplay_active := game_state == STATE_PLAYING \
+		and not completed \
+		and not show_tutorial \
+		and not show_pause \
+		and not show_quit_confirm \
+		and not _car_transition_blocks_gameplay()
+	if not gameplay_active:
+		_stalled_dirt_highlight_active = false
+		return
+
+	_seconds_without_cleaning += maxf(delta, 0.0)
+	_stalled_dirt_highlight_active = StalledDirtHighlight.should_show(
+		clean_progress,
+		_seconds_without_cleaning
+	)
+
+
 # Star time threshold tightens 1.5% per level after the first (floor at 60% of base).
 # This ensures experienced players face a gradually rising skill ceiling.
 func _star_time_threshold(tier: int) -> float:
@@ -3355,6 +3423,18 @@ func _draw_dirt() -> void:
 		if patch.is_gold_spot:
 			_draw_gold_spot_marker(patch, center, strength)
 
+	# Late-cleaning guidance is a car-surface overlay only. Draw it after dirt so
+	# even very faint remaining patches stay discoverable without adding HUD UI.
+	if _stalled_dirt_highlight_active:
+		for raw_patch in dirt_patches:
+			var remaining_patch := raw_patch as DirtPatch
+			if _is_patch_removed(remaining_patch):
+				continue
+			_draw_stalled_dirt_highlight(
+				remaining_patch,
+				_patch_center(remaining_patch) + Vector2(remaining_patch.shake_x, 0.0)
+			)
+
 	# Coaching hints are drawn last so they stay above any overlapping dirt.
 	for raw_patch in dirt_patches:
 		var hint_patch := raw_patch as DirtPatch
@@ -3362,6 +3442,22 @@ func _draw_dirt() -> void:
 			continue
 		if hint_patch.hint_time > 0.0 and hint_patch.hint_tool != "":
 			_draw_patch_hint(hint_patch, _patch_center(hint_patch) + Vector2(hint_patch.shake_x, 0.0))
+
+
+func _draw_stalled_dirt_highlight(patch: DirtPatch, center: Vector2) -> void:
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	var pulse := 0.5 + sin(time_now * 3.8 + patch.seed_offset) * 0.5
+	var radius := patch.radius + 8.0 + pulse * 3.0
+	var alpha := 0.46 + pulse * 0.22
+	var shadow := Color(0.03, 0.16, 0.28, alpha * 0.76)
+	var highlight := Color(0.64, 0.94, 1.0, alpha)
+	draw_arc(center, radius, 0.0, TAU, 30, shadow, 5.0)
+	draw_arc(center, radius, 0.0, TAU, 30, highlight, 2.4)
+	# Four short brackets keep the cue readable as a location marker even when
+	# its cyan hue has low contrast against the current vehicle color.
+	for index in range(4):
+		var angle := TAU * float(index) / 4.0
+		draw_arc(center, radius + 3.5, angle - 0.22, angle + 0.22, 5, Color(1.0, 1.0, 1.0, alpha), 2.8)
 
 
 func _draw_gold_spot_marker(patch: DirtPatch, center: Vector2, strength: float) -> void:
