@@ -931,6 +931,19 @@ func _test_car_paint_customization(root_node: Node) -> bool:
 	if not main_source.contains("Economy.resolve_skin_purchase(_car_paints, CAR_PAINT_TOOL"):
 		_fail("car paint purchase and selection must call the shared economy resolver")
 		return false
+	var draw_start := main_source.find("func _draw() -> void:")
+	var draw_end := main_source.find("\nfunc ", draw_start + 1)
+	var car_draw_start := main_source.find("func _draw_car() -> void:")
+	var car_draw_end := main_source.find("\nfunc ", car_draw_start + 1)
+	if draw_start < 0 or draw_end < 0 or car_draw_start < 0 or car_draw_end < 0:
+		_fail("shared car render functions must remain discoverable")
+		return false
+	var draw_body := main_source.substr(draw_start, draw_end - draw_start)
+	var car_draw_body := main_source.substr(car_draw_start, car_draw_end - car_draw_start)
+	if draw_body.count("\n\t_draw_car()\n") != 1 \
+			or not car_draw_body.contains("draw_colored_polygon(silhouette, car_color)"):
+		_fail("title, gameplay, and completion must share one unconditional car_color render path")
+		return false
 	for paint_index in range(paints.size()):
 		if not panel.encloses(root_node.call("_skin_card_rect", panel, paint_index)):
 			_fail("car paint cards must stay inside the existing customization sheet")
