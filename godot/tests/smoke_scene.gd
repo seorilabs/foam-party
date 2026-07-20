@@ -1398,20 +1398,23 @@ func _test_scaled_grade_tracker_prompt_contract(root_node: Node) -> bool:
 		"customer": root_node.call("_get_customer_rect"),
 		"mission": root_node.call("_get_daily_mission_rect"),
 	}
-	root_node.call("reset_game", 4, "scaled_grade_tracker_prompt_smoke")
-	root_node.set("level_time", 40.0)
-	root_node.set("best_combo", 4)
-	if String(root_node.call("_grade_slot_state", 2)) != "target":
-		_fail("scaled grade tracker prompt requires the third star to remain a reachable target")
-		return false
-	var expected_prompt := TranslationServer.translate("GRADE_COMBO_FOR3") % 5
-	root_node.queue_redraw()
-	await process_frame
-	await process_frame
-	var rendered_prompt := String(root_node.call("get_last_grade_tracker_text_for_test"))
-	if rendered_prompt != expected_prompt:
-		_fail("existing grade tracker draw execution must render the scaled level 4 combo requirement x5 (got '%s', want '%s')" % [rendered_prompt, expected_prompt])
-		return false
+	var expected_prompts := {1: 4, 4: 5, 7: 6, 19: 10}
+	for level in expected_prompts:
+		var combo_requirement := int(expected_prompts[level])
+		root_node.call("reset_game", int(level), "scaled_grade_tracker_prompt_smoke")
+		root_node.set("level_time", 20.0)
+		root_node.set("best_combo", combo_requirement - 1)
+		if String(root_node.call("_grade_slot_state", 2)) != "target":
+			_fail("scaled grade tracker prompt requires the third star to remain a reachable target at level %d" % level)
+			return false
+		var expected_prompt := TranslationServer.translate("GRADE_COMBO_FOR3") % combo_requirement
+		root_node.queue_redraw()
+		await process_frame
+		await process_frame
+		var rendered_prompt := String(root_node.call("get_last_grade_tracker_text_for_test"))
+		if rendered_prompt != expected_prompt:
+			_fail("existing grade tracker draw execution must render scaled level %d combo requirement x%d (got '%s', want '%s')" % [level, combo_requirement, rendered_prompt, expected_prompt])
+			return false
 	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
 		_fail("scaled grade tracker prompt must not add persistent UI controls")
 		return false
