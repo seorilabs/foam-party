@@ -52,6 +52,14 @@ func _run_core_tests() -> void:
 		return
 
 	# --- Scoring: star boundaries (matches smoke_scene 3/2/1-star cases) ---
+	var combo_requirements := {0: 4, 1: 4, 3: 4, 4: 5, 6: 5, 7: 6, 19: 10, 40: 10}
+	for level in combo_requirements:
+		if int(Scoring.star3_combo_requirement(level)) != int(combo_requirements[level]):
+			_fail("scaled third-star combo requirement mismatch at level %d" % level)
+			return
+	if int(GameConfig.STAR3_COMBO_LEVEL_STEP) != 3 or int(GameConfig.STAR3_COMBO_MAX) != 10:
+		_fail("third-star combo scaling constants changed unexpectedly")
+		return
 	if int(Scoring.star_time_threshold(3, 1)) != 75:
 		_fail("3-star threshold at level 1 should be 75s")
 		return
@@ -64,6 +72,9 @@ func _run_core_tests() -> void:
 	if int(Scoring.calc_stars(200.0, 10, 1)) != 1:
 		_fail("slow clear should be 1 star")
 		return
+	if int(Scoring.calc_stars(60.0, 4, 4)) != 2 or int(Scoring.calc_stars(60.0, 5, 4)) != 3:
+		_fail("level 4 third star must switch exactly at the scaled combo requirement")
+		return
 
 	# --- Scoring: live grade tracker slots + countdown ---
 	if String(Scoring.grade_slot_state(2, 60.0, 5, 1, "earned", "target", "locked")) != "earned":
@@ -74,6 +85,10 @@ func _run_core_tests() -> void:
 		return
 	if String(Scoring.grade_slot_state(2, 100.0, 5, 1, "earned", "target", "locked")) != "locked":
 		_fail("slow-but-not-slowest clear should lock the third star")
+		return
+	if String(Scoring.grade_slot_state(2, 60.0, 4, 4, "earned", "target", "locked")) != "target" \
+			or String(Scoring.grade_slot_state(2, 60.0, 5, 4, "earned", "target", "locked")) != "earned":
+		_fail("level 4 grade tracker must use the scaled combo requirement")
 		return
 	if String(Scoring.grade_slot_state(1, 200.0, 5, 1, "earned", "target", "locked")) != "locked":
 		_fail("very slow clear should lock the second star")

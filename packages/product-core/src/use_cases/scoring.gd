@@ -12,8 +12,15 @@ static func star_time_threshold(tier: int, level_index: int) -> float:
 	return base * maxf(0.6, 1.0 - float(max(0, level_index - 1)) * 0.015)
 
 
+static func star3_combo_requirement(level_index: int) -> int:
+	var safe_level := maxi(level_index, 1)
+	var levels_per_step := maxi(GameConfig.STAR3_COMBO_LEVEL_STEP, 1)
+	var step_count := floori(float(safe_level - 1) / float(levels_per_step))
+	return clampi(GameConfig.STAR3_COMBO + step_count, GameConfig.STAR3_COMBO, GameConfig.STAR3_COMBO_MAX)
+
+
 static func calc_stars(level_time: float, best_combo: int, level_index: int) -> int:
-	if level_time <= star_time_threshold(3, level_index) and best_combo >= GameConfig.STAR3_COMBO:
+	if level_time <= star_time_threshold(3, level_index) and best_combo >= star3_combo_requirement(level_index):
 		return 3
 	if level_time <= star_time_threshold(2, level_index):
 		return 2
@@ -30,7 +37,7 @@ static func grade_slot_state(slot_index: int, level_time: float, best_combo: int
 		2:
 			if level_time > star_time_threshold(3, level_index):
 				return locked
-			return earned if best_combo >= GameConfig.STAR3_COMBO else target
+			return earned if best_combo >= star3_combo_requirement(level_index) else target
 	return locked
 
 
