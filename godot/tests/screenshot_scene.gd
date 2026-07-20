@@ -114,6 +114,21 @@ func _run() -> void:
 		quit(1)
 		return
 	node.call("reset_game", 1, "clean_shine_screenshot_cleanup")
+	var oil_patch: Variant = _isolate_oil_patch(node, 1.0)
+	if oil_patch == null:
+		push_error("oil sheen screenshot setup failed")
+		quit(1)
+		return
+	if not await _capture(out_dir.path_join("shot_oil_sheen_full.png")):
+		quit(1)
+		return
+	oil_patch.set("health", float(oil_patch.get("max_health")) * 0.35)
+	node.call("_update_clean_progress")
+	node.queue_redraw()
+	if not await _capture(out_dir.path_join("shot_oil_sheen_faded.png")):
+		quit(1)
+		return
+	node.call("reset_game", 1, "oil_sheen_screenshot_cleanup")
 	node.call("_on_back_pressed")
 	await _settle(5)
 	if not await _capture(out_dir.path_join("shot_pause.png")):
@@ -224,6 +239,25 @@ func _set_clean_progress(node: Node, progress: float) -> void:
 	node.call("_update_clean_progress")
 	node.set("_progress_milestone_hit", 3)
 	node.set("_progress_milestone_time", -1.0)
+
+
+func _isolate_oil_patch(node: Node, strength: float) -> Variant:
+	node.call("reset_game", 2, "oil_sheen_screenshot")
+	for raw_patch in node.get("dirt_patches"):
+		raw_patch.set("state", "removed")
+		raw_patch.set("health", 0.0)
+	var oil_index: int = node.call("spawn_patch_for_test", "oil")
+	if oil_index < 0:
+		return null
+	var oil_patch: Variant = node.get("dirt_patches")[oil_index]
+	oil_patch.set("radius", 34.0)
+	oil_patch.set("seed_offset", 0.73)
+	oil_patch.set("health", float(oil_patch.get("max_health")) * clampf(strength, 0.0, 1.0))
+	node.set("initial_dirt_total", float(oil_patch.get("max_health")))
+	node.set("completed", false)
+	node.call("_update_clean_progress")
+	node.queue_redraw()
+	return oil_patch
 
 
 func _capture(path: String) -> bool:

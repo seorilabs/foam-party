@@ -97,6 +97,8 @@ const WATER_EFFECT_PARTICLE_CAP := 72
 const FOAM_EFFECT_STYLES := [STYLE_BUBBLE, STYLE_FOAM]
 const FOAM_EFFECT_PARTICLE_CAP := 64
 const FOAM_BOMB_BURST_PARTICLE_COUNT := 28
+const OIL_SHEEN_BAND_COUNT := 5
+const OIL_SHEEN_MAX_ALPHA := 0.46
 const BODY_FOAM_SOAP_RATE := 0.36
 const BODY_FOAM_WATER_RATE := 0.72
 const BODY_FOAM_RUNOFF_DECAY := 1.15
@@ -1170,6 +1172,18 @@ func get_water_effect_particle_count_for_test() -> int:
 
 func get_water_effect_particle_cap_for_test() -> int:
 	return WATER_EFFECT_PARTICLE_CAP
+
+
+func get_oil_sheen_band_count_for_test() -> int:
+	return OIL_SHEEN_BAND_COUNT
+
+
+func get_oil_sheen_alpha_for_test(strength: float) -> float:
+	return _oil_sheen_alpha(strength)
+
+
+func get_oil_sheen_saturation_for_test(strength: float) -> float:
+	return _oil_sheen_saturation(strength)
 
 
 func calc_coin_reward_for_test() -> int:
@@ -3193,7 +3207,7 @@ func _draw_dirt() -> void:
 		elif patch.kind == "leaf":
 			_draw_leaf_patch(center, patch.radius, strength)
 		elif patch.kind == "oil":
-			_draw_oil_patch(center, patch.radius, strength)
+			_draw_oil_patch(center, patch.radius, strength, patch.seed_offset)
 		elif patch.kind == "bug":
 			_draw_bug_patch(center, patch.radius, strength, patch.seed_offset)
 		elif patch.kind == "poop":
@@ -3303,10 +3317,41 @@ func _draw_leaf_patch(center: Vector2, radius: float, strength: float) -> void:
 	draw_line(center + Vector2(-radius, 0.0).rotated(tilt), center + Vector2(-radius * 1.35, 0.18 * radius).rotated(tilt), vein, 2.5)
 
 
-func _draw_oil_patch(center: Vector2, radius: float, strength: float) -> void:
-	draw_circle(center, radius * 1.1, Color(0.03, 0.05, 0.08, 0.82 * strength))
-	draw_circle(center + Vector2(radius * 0.25, -radius * 0.28), radius * 0.28, Color(0.2, 0.35, 0.5, 0.5 * strength))
-	draw_circle(center + Vector2(-radius * 0.18, radius * 0.12), radius * 0.42, Color(0.06, 0.12, 0.16, 0.55 * strength))
+func _draw_oil_patch(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
+	var s := clampf(strength, 0.0, 1.0)
+	draw_circle(center, radius * 1.1, Color(0.03, 0.05, 0.08, 0.82 * s))
+	draw_circle(center + Vector2(radius * 0.25, -radius * 0.28), radius * 0.28, Color(0.2, 0.35, 0.5, 0.5 * s))
+	draw_circle(center + Vector2(-radius * 0.18, radius * 0.12), radius * 0.42, Color(0.06, 0.12, 0.16, 0.55 * s))
+	_draw_oil_sheen(center, radius, s, seed_value)
+
+
+func _draw_oil_sheen(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
+	var sheen_alpha := _oil_sheen_alpha(strength)
+	if sheen_alpha <= 0.0:
+		return
+	var saturation := _oil_sheen_saturation(strength)
+	var hue_phase := fposmod(seed_value * 0.137, 1.0)
+	for index in range(OIL_SHEEN_BAND_COUNT):
+		var progress := float(index) / float(OIL_SHEEN_BAND_COUNT - 1)
+		var hue := fposmod(hue_phase + progress * 0.82, 1.0)
+		var arc_radius := radius * (0.42 + progress * 0.45)
+		var start_angle := -2.95 + float(index) * 0.20 + sin(seed_value + float(index)) * 0.08
+		var band_offset := Vector2.from_angle(seed_value + float(index) * 1.7) * radius * 0.045
+		var band_color := Color.from_hsv(hue, saturation, 1.0, sheen_alpha * (0.76 + progress * 0.18))
+		draw_arc(center + band_offset, arc_radius, start_angle, start_angle + 2.25, 14, band_color, maxf(1.5, radius * 0.105))
+
+	# A pale, continuous crescent keeps the oily film readable without relying
+	# on hue alone. It is one fixed draw call alongside the five HSV bands.
+	var gloss_color := Color(0.92, 0.98, 1.0, 0.38 * strength)
+	draw_arc(center + Vector2(-radius * 0.06, -radius * 0.08), radius * 0.88, -2.85, -0.48, 18, gloss_color, maxf(1.5, radius * 0.085))
+
+
+func _oil_sheen_alpha(strength: float) -> float:
+	return clampf(strength, 0.0, 1.0) * OIL_SHEEN_MAX_ALPHA
+
+
+func _oil_sheen_saturation(strength: float) -> float:
+	return clampf(strength, 0.0, 1.0) * 0.90
 
 
 func _draw_bug_patch(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
