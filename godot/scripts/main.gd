@@ -3514,6 +3514,14 @@ func _draw_tool_icon(tool_id: String, center: Vector2) -> void:
 		draw_circle(center + Vector2(12.0, 13.0), 4.0, Color(1.0, 1.0, 1.0, 0.9))
 
 
+func _pause_title_text() -> String:
+	return tr("PAUSE_TITLE")
+
+
+func _pause_action_labels() -> Array[String]:
+	return [tr("RESUME"), tr("SOUND_ON") if sound_enabled else tr("SOUND_OFF"), tr("GUIDE"), tr("HOME"), tr("QUIT")]
+
+
 func _draw_pause_menu() -> void:
 	if not show_pause:
 		return
@@ -3522,8 +3530,8 @@ func _draw_pause_menu() -> void:
 	var panel := _pause_panel()
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 46.0), tr("PAUSE_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#123246"))
-	var labels := [tr("RESUME"), tr("SOUND_ON") if sound_enabled else tr("SOUND_OFF"), tr("GUIDE"), tr("HOME"), tr("QUIT")]
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 46.0), _pause_title_text(), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#123246"))
+	var labels := _pause_action_labels()
 	var fills := [Color("#39d98a"), Color("#7fd6e6"), Color("#a9d7ff"), Color("#f8d97a"), Color("#f2a0a0")]
 	var text_cols := [Color("#0d3b2a"), Color("#0d3b55"), Color("#123246"), Color("#5b4a10"), Color("#5a1616")]
 	for i in range(5):

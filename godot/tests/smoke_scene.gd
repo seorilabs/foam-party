@@ -470,12 +470,14 @@ func _run_smoke() -> void:
 
 	var previous_locale := TranslationServer.get_locale()
 	TranslationServer.set_locale("ko")
-	if TranslationServer.translate("GUIDE") != "세차 가이드":
-		_fail("pause guide label must use the Korean i18n key")
+	var pause_labels_ko: Array = root_node.call("_pause_action_labels")
+	if root_node.call("_pause_title_text") != "일시정지 · 설정" or String(pause_labels_ko[2]) != "세차 가이드":
+		_fail("pause title and guide action must use Korean i18n keys")
 		return
 	TranslationServer.set_locale("en")
-	if TranslationServer.translate("GUIDE") != "Wash Guide":
-		_fail("pause guide label must use the English i18n key")
+	var pause_labels_en: Array = root_node.call("_pause_action_labels")
+	if root_node.call("_pause_title_text") != "Paused · Settings" or String(pause_labels_en[2]) != "Wash Guide":
+		_fail("pause title and guide action must use English i18n keys")
 		return
 	TranslationServer.set_locale(previous_locale)
 
