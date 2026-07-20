@@ -45,4 +45,9 @@ const DIRT_UNLOCK_LEVELS := {
 	"poop": 3,
 	"road_grime": 4,
 }
-const CAR_TYPES := ["compact", "sports", "truck"]
+const CAR_TYPES := ["compact", "sports", "truck", "van", "offroad"]
+
+
+static func car_type_for_level(level: int) -> String:
+	var safe_level := maxi(1, level)
+	return CAR_TYPES[(safe_level - 1) % CAR_TYPES.size()]

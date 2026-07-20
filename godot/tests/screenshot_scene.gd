@@ -108,7 +108,7 @@ func _run() -> void:
 		quit(1)
 		return
 
-	for level in [2, 3]:
+	for level in [2, 3, 4, 5]:
 		node.call("reset_game", level)
 		await _settle(10)
 		var car_name: String = node.call("get_car_type_for_test")
