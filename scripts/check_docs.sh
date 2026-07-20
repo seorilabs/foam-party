@@ -33,8 +33,18 @@ analytics_contracts=(
   'first_open → title_screen_view → level_load_complete → play_tap → level_start → tutorial_complete'
 )
 
+contains_literal() {
+  local needle="$1"
+  local file="$2"
+  if command -v rg >/dev/null 2>&1; then
+    rg --fixed-strings --quiet -- "${needle}" "${file}"
+  else
+    grep --fixed-strings --quiet -- "${needle}" "${file}"
+  fi
+}
+
 for contract in "${analytics_contracts[@]}"; do
-  if ! rg --fixed-strings --quiet -- "${contract}" docs/analytics-events.md; then
+  if ! contains_literal "${contract}" docs/analytics-events.md; then
     echo "Missing analytics docs contract: ${contract}" >&2
     exit 1
   fi
