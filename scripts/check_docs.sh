@@ -6,6 +6,7 @@ required_files=(
   "docs/01-planning/product-spec.md"
   "docs/02-decisions/0001-docs-as-source-of-truth.md"
   "docs/03-architecture/clean-architecture.md"
+  "docs/analytics-events.md"
   "docs/05-markets/google-play.md"
   "docs/05-markets/app-store.md"
   "docs/05-markets/apps-in-toss.md"
@@ -21,5 +22,22 @@ for file in "${required_files[@]}"; do
   fi
 done
 
-echo "Docs source-of-truth structure check passed."
+analytics_contracts=(
+  'title_screen_view'
+  'level_load_start'
+  'level_load_complete'
+  'play_tap'
+  'tutorial_step_view'
+  'tutorial_complete'
+  'app_info.version'
+  'first_open → title_screen_view → level_load_complete → play_tap → level_start → tutorial_complete'
+)
 
+for contract in "${analytics_contracts[@]}"; do
+  if ! rg --fixed-strings --quiet -- "${contract}" docs/analytics-events.md; then
+    echo "Missing analytics docs contract: ${contract}" >&2
+    exit 1
+  fi
+done
+
+echo "Docs source-of-truth structure check passed."

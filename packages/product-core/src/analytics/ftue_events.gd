@@ -22,6 +22,9 @@ const ALL := [
 const ENTRY_COLD_START := "cold_start"
 const ENTRY_PAUSE_HOME := "pause_home"
 const TUTORIAL_STEP_OVERVIEW := "overview"
+# Firebase/GA4 attaches this export field to every native event. It is the
+# canonical release dimension; custom events must not duplicate it as a param.
+const VERSION_DIMENSION := "app_info.version"
 
 
 static func title_screen_view(entry: String) -> Dictionary:
