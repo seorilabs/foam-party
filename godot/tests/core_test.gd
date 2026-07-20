@@ -299,15 +299,7 @@ func _run_core_tests() -> void:
 	if FtueEvents == null:
 		_fail("ftue_events failed to load through res://core symlink")
 		return
-	if String(FtueEvents.VERSION_DIMENSION) != "app_info.version":
-		_fail("FTUE release dimension must remain GA4 app_info.version")
-		return
-	var native_adapter_source := FileAccess.get_file_as_string("res://scripts/services/firebase_analytics_adapter.gd")
-	if not native_adapter_source.contains('OS.has_feature("ios")') or not native_adapter_source.contains('OS.has_feature("android")'):
-		_fail("Android and iOS must share FirebaseAnalyticsAdapter")
-		return
-	if not native_adapter_source.contains("func log_event(event_name: String, params: Dictionary = {})"):
-		_fail("native FTUE events must keep the shared AnalyticsPort log_event path")
+	if not _test_ftue_release_attribution_and_shared_native_path(FtueEvents):
 		return
 	var e_title: Dictionary = FtueEvents.title_screen_view("cold_start")
 	var e_play: Dictionary = FtueEvents.play_tap(2)
@@ -340,6 +332,20 @@ func _run_core_tests() -> void:
 
 	print("CORE TESTS PASSED")
 	quit(0)
+
+
+func _test_ftue_release_attribution_and_shared_native_path(FtueEvents: GDScript) -> bool:
+	if String(FtueEvents.VERSION_DIMENSION) != "app_info.version":
+		_fail("FTUE release dimension must remain GA4 app_info.version")
+		return false
+	var native_adapter_source := FileAccess.get_file_as_string("res://scripts/services/firebase_analytics_adapter.gd")
+	if not native_adapter_source.contains('OS.has_feature("ios")') or not native_adapter_source.contains('OS.has_feature("android")'):
+		_fail("Android and iOS must share FirebaseAnalyticsAdapter")
+		return false
+	if not native_adapter_source.contains("func log_event(event_name: String, params: Dictionary = {})"):
+		_fail("native FTUE events must keep the shared AnalyticsPort log_event path")
+		return false
+	return true
 
 
 func _fail(message: String) -> void:

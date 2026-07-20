@@ -69,49 +69,13 @@ func _run_smoke() -> void:
 	if bool(root_node.get("show_tutorial")):
 		_fail("tutorial should dismiss")
 		return
-	var ftue_names: Array[String] = []
-	for event in analytics_recorder.events:
-		ftue_names.append(String(event["name"]))
-	var expected_ftue_names: Array[String] = [
-		"title_screen_view",
-		"play_tap",
-		"game_start",
-		"level_start",
-		"tutorial_step_view",
-		"tutorial_complete",
-	]
-	if ftue_names != expected_ftue_names:
-		_fail("FTUE event order changed: " + str(ftue_names))
-		return
-	if analytics_recorder.events[0]["params"] != {"entry": "pause_home"}:
-		_fail("title screen entry params changed: " + str(analytics_recorder.events[0]))
-		return
-	if analytics_recorder.events[1]["params"] != {"level": "1"}:
-		_fail("play tap params changed: " + str(analytics_recorder.events[1]))
-		return
-	if analytics_recorder.events[4]["params"] != {"step": "overview", "source": "first_run"}:
-		_fail("tutorial view params changed: " + str(analytics_recorder.events[4]))
-		return
-	if analytics_recorder.events[5]["params"] != {"step": "overview", "source": "first_run"}:
-		_fail("tutorial completion params changed: " + str(analytics_recorder.events[5]))
+	if not _test_ftue_entry_and_tutorial_event_order_and_params(analytics_recorder.events):
 		return
 
 	analytics_recorder.events.clear()
 	root_node.call("reset_game", 2, "smoke_retry")
-	var load_names: Array[String] = []
-	for event in analytics_recorder.events:
-		load_names.append(String(event["name"]))
-	if load_names != ["level_load_start", "level_load_complete", "level_start"]:
-		_fail("level load event order changed: " + str(load_names))
+	if not _test_level_load_event_order_and_params(analytics_recorder.events):
 		return
-	if analytics_recorder.events[0]["params"] != {"level": "2", "reason": "smoke_retry"}:
-		_fail("level load start params changed: " + str(analytics_recorder.events[0]))
-		return
-	var load_complete_params: Dictionary = analytics_recorder.events[1]["params"]
-	if String(load_complete_params.get("level", "")) != "2" or String(load_complete_params.get("reason", "")) != "smoke_retry" or String(load_complete_params.get("car_type", "")).is_empty():
-		_fail("level load complete params changed: " + str(load_complete_params))
-		return
-	print("FTUE analytics smoke passed: " + " -> ".join(expected_ftue_names))
 
 	# Early dirt catalogs grow monotonically and every spawned kind respects the
 	# level gate. Repeating level 1 must preserve the seeded spawn sequence.
@@ -626,6 +590,54 @@ func _run_smoke() -> void:
 	root_node.free()
 	await process_frame
 	quit(0)
+
+
+func _test_ftue_entry_and_tutorial_event_order_and_params(events: Array[Dictionary]) -> bool:
+	var actual_names: Array[String] = []
+	for event in events:
+		actual_names.append(String(event["name"]))
+	var expected_names: Array[String] = [
+		"title_screen_view",
+		"play_tap",
+		"game_start",
+		"level_start",
+		"tutorial_step_view",
+		"tutorial_complete",
+	]
+	if actual_names != expected_names:
+		_fail("FTUE event order changed: " + str(actual_names))
+		return false
+	if events[0]["params"] != {"entry": "pause_home"}:
+		_fail("title screen entry params changed: " + str(events[0]))
+		return false
+	if events[1]["params"] != {"level": "1"}:
+		_fail("play tap params changed: " + str(events[1]))
+		return false
+	if events[4]["params"] != {"step": "overview", "source": "first_run"}:
+		_fail("tutorial view params changed: " + str(events[4]))
+		return false
+	if events[5]["params"] != {"step": "overview", "source": "first_run"}:
+		_fail("tutorial completion params changed: " + str(events[5]))
+		return false
+	print("FTUE analytics smoke passed: " + " -> ".join(expected_names))
+	return true
+
+
+func _test_level_load_event_order_and_params(events: Array[Dictionary]) -> bool:
+	var actual_names: Array[String] = []
+	for event in events:
+		actual_names.append(String(event["name"]))
+	if actual_names != ["level_load_start", "level_load_complete", "level_start"]:
+		_fail("level load event order changed: " + str(actual_names))
+		return false
+	if events[0]["params"] != {"level": "2", "reason": "smoke_retry"}:
+		_fail("level load start params changed: " + str(events[0]))
+		return false
+	var load_complete_params: Dictionary = events[1]["params"]
+	if String(load_complete_params.get("level", "")) != "2" or String(load_complete_params.get("reason", "")) != "smoke_retry" or String(load_complete_params.get("car_type", "")).is_empty():
+		_fail("level load complete params changed: " + str(load_complete_params))
+		return false
+	return true
 
 
 func _fail(message: String) -> void:
