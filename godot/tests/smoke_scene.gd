@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_car_type_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -782,6 +782,13 @@ func _run_smoke() -> void:
 
 
 func _test_daily_mission_reward_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
 	var original_state := {
 		"type": root_node.get("daily_mission_type"),
 		"label": root_node.get("daily_mission_label"),
@@ -815,9 +822,23 @@ func _test_daily_mission_reward_contract(root_node: Node, analytics_recorder: An
 	if claim_events.size() != 1 or String(claim_events[0]["params"].get("reward", "")) != str(reward):
 		_fail("daily mission analytics must receive the granted reward")
 		return false
+	root_node.set("coins", 300)
+	var retroactive_reward := int(root_node.call("grant_daily_mission_retroactive_for_test", "road_grime"))
+	if retroactive_reward != reward or int(root_node.call("get_coins_for_test")) != 300 + reward:
+		_fail("retroactive daily mission grant must use the same mission reward")
+		return false
 	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
 	if not main_source.contains('tr("DM_REWARD") % daily_mission_reward'):
 		_fail("title mission card must display the actual mission reward")
+		return false
+	if not main_source.contains("_grant_daily_mission_coins()"):
+		_fail("live and retroactive daily mission paths must share the coin grant")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("daily mission reward must not add persistent HUD controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("daily mission reward must keep existing HUD residency unchanged")
 		return false
 	for key in original_state:
 		if key == "coins":

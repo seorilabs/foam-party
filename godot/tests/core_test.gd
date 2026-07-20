@@ -199,6 +199,7 @@ func _run_core_tests() -> void:
 		"road_grime": 85,
 	}
 	var previous_reward := 0
+	var seen_rewards: Array[int] = []
 	for mission_type in ["leaf", "dust", "mud", "oil", "bug", "poop", "road_grime"]:
 		var reward := int(DailyMission.reward_for_type(mission_type))
 		if reward != int(expected_mission_rewards[mission_type]):
@@ -207,6 +208,10 @@ func _run_core_tests() -> void:
 		if reward <= previous_reward:
 			_fail("harder daily missions must always pay more than easier missions")
 			return
+		if seen_rewards.has(reward):
+			_fail("every daily mission must have a unique reward")
+			return
+		seen_rewards.append(reward)
 		previous_reward = reward
 	if int(DailyMission.reward_for_type("unknown")) != int(GameConfig.DAILY_MISSION_REWARD):
 		_fail("unknown daily mission should use the legacy reward fallback")

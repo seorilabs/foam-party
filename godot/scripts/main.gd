@@ -438,7 +438,7 @@ func _load_progress() -> void:
 			daily_mission_progress = daily_mission_target
 	daily_mission_date = saved_date
 	if main_save_ok and daily_mission_claimed and main_claimed_date != today:
-		coins += daily_mission_reward
+		_grant_daily_mission_coins()
 		_main_save_dirty = true
 
 
@@ -1299,6 +1299,12 @@ func prepare_daily_mission_for_test(mission_type: String) -> void:
 
 func claim_daily_mission_for_test() -> bool:
 	return _claim_daily_mission_reward()
+
+
+func grant_daily_mission_retroactive_for_test(mission_type: String) -> int:
+	daily_mission_type = mission_type
+	daily_mission_reward = DailyMission.reward_for_type(mission_type)
+	return _grant_daily_mission_coins()
 
 
 func get_wash_trail_count_for_test() -> int:
@@ -4073,8 +4079,8 @@ func _claim_daily_mission_reward() -> bool:
 	if daily_mission_claimed or daily_mission_target <= 0 or daily_mission_progress < daily_mission_target:
 		return false
 	daily_mission_claimed = true
-	coins += daily_mission_reward
-	_emit_analytics(ContentEvents.daily_mission_claim(daily_mission_type, daily_mission_reward))
+	var granted_reward := _grant_daily_mission_coins()
+	_emit_analytics(ContentEvents.daily_mission_claim(daily_mission_type, granted_reward))
 	_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
 	var daily_err := _save_daily()
 	if daily_err != OK:
@@ -4085,6 +4091,11 @@ func _claim_daily_mission_reward() -> bool:
 	if OS.has_feature("mobile"):
 		Input.vibrate_handheld(60)
 	return true
+
+
+func _grant_daily_mission_coins() -> int:
+	coins += daily_mission_reward
+	return daily_mission_reward
 
 
 func _draw_daily_mission() -> void:
