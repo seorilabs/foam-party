@@ -64,6 +64,29 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return
+	node.call("apply_body_foam_tool_for_test", "soap", 1.35)
+	if not await _capture(out_dir.path_join("shot_body_foam_partial.png")):
+		quit(1)
+		return
+	node.call("reset_game", 1, "foam_bomb_screenshot")
+	node.get("particles").clear()
+	if not bool(node.call("apply_foam_bomb", true)):
+		push_error("foam bomb screenshot setup failed")
+		quit(1)
+		return
+	if not await _capture(out_dir.path_join("shot_foam_bomb_burst.png")):
+		quit(1)
+		return
+	node.get("particles").clear()
+	if not await _capture(out_dir.path_join("shot_body_foam_full.png")):
+		quit(1)
+		return
+	node.call("apply_body_foam_tool_for_test", "water", 0.9)
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_body_foam_rinse.png")):
+		quit(1)
+		return
+	node.call("reset_game", 1, "body_foam_screenshot_cleanup")
 	_set_clean_progress(node, 0.0)
 	if not await _capture(out_dir.path_join("shot_clean_shine_0.png")):
 		quit(1)

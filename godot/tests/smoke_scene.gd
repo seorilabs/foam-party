@@ -233,6 +233,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_water_impact_presentation_contract(root_node):
 		return
+	if not _test_body_foam_coverage_contract(root_node):
+		return
 	if not _test_clean_shine_progression_contract(root_node):
 		return
 	if not _test_stage_selection_and_retry_contract(root_node):
@@ -762,6 +764,104 @@ func _particle_style_count(particles: Array, style: String) -> int:
 		if String(raw_particle.get("style")) == style:
 			count += 1
 	return count
+
+
+func _test_body_foam_coverage_contract(root_node: Node) -> bool:
+	var required_methods := [
+		"get_body_foam_coverage_for_test",
+		"get_body_foam_runoff_for_test",
+		"get_body_foam_spot_count_for_test",
+		"get_foam_bomb_burst_count_for_test",
+		"get_foam_effect_particle_count_for_test",
+		"get_foam_effect_particle_cap_for_test",
+		"apply_body_foam_tool_for_test",
+	]
+	for method_name in required_methods:
+		if not root_node.has_method(method_name):
+			_fail("body foam helper API missing: " + method_name)
+			return false
+
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	for level in [1, 2, 3, 4, 5]:
+		root_node.call("reset_game", level, "body_foam_roster_smoke")
+		if int(root_node.call("get_body_foam_spot_count_for_test")) < 18:
+			_fail("body foam coverage should fit the full level %d car silhouette" % level)
+			return false
+
+	root_node.call("reset_game", 1, "body_foam_smoke")
+	root_node.call("apply_body_foam_tool_for_test", "soap", 1.0)
+	var soap_coverage: float = root_node.call("get_body_foam_coverage_for_test")
+	if soap_coverage < 0.3 or soap_coverage >= 1.0:
+		_fail("soap should build partial body-wide foam coverage")
+		return false
+	root_node.call("apply_body_foam_tool_for_test", "water", 0.25)
+	if float(root_node.call("get_body_foam_coverage_for_test")) >= soap_coverage:
+		_fail("water should rinse body-wide foam coverage")
+		return false
+	if float(root_node.call("get_body_foam_runoff_for_test")) <= 0.0:
+		_fail("water rinse should leave a short-lived foam runoff read")
+		return false
+
+	# Level 5 fills the 24-position pool, so its 72 patch bubbles deliberately
+	# exceed the cap before the full-body burst is appended.
+	root_node.call("reset_game", 5, "body_foam_cap_smoke")
+	root_node.get("particles").clear()
+	root_node.set("coins", 100)
+	var burst_before: int = root_node.call("get_foam_bomb_burst_count_for_test")
+	if not bool(root_node.call("apply_foam_bomb")):
+		_fail("affordable foam bomb should apply")
+		return false
+	if float(root_node.call("get_body_foam_coverage_for_test")) < 0.999:
+		_fail("foam bomb should cover the full car body immediately")
+		return false
+	if int(root_node.call("get_foam_bomb_burst_count_for_test")) != burst_before + 1:
+		_fail("successful foam bomb should emit exactly one full-body burst")
+		return false
+	var foam_particle_count: int = root_node.call("get_foam_effect_particle_count_for_test")
+	var foam_particle_cap: int = root_node.call("get_foam_effect_particle_cap_for_test")
+	if foam_particle_count <= 0 or foam_particle_count > foam_particle_cap:
+		_fail("foam effects must stay inside their particle cap")
+		return false
+	root_node.set("coins", 0)
+	if bool(root_node.call("apply_foam_bomb")) or int(root_node.call("get_foam_bomb_burst_count_for_test")) != burst_before + 1:
+		_fail("failed foam bomb must not emit another burst")
+		return false
+
+	root_node.set("body_foam_coverage", 0.75)
+	root_node.set("body_foam_runoff", 0.5)
+	for raw_patch in root_node.get("dirt_patches"):
+		raw_patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	if not bool(root_node.get("completed")) or float(root_node.call("get_body_foam_coverage_for_test")) > 0.001 or float(root_node.call("get_body_foam_runoff_for_test")) > 0.001:
+		_fail("level completion should clear persistent foam and runoff")
+		return false
+
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("body foam presentation must not add persistent HUD controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("body foam presentation must not change top HUD residency")
+		return false
+
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var car_start := source.find("func _draw_car() -> void:")
+	var car_end := source.find("\nfunc ", car_start + 1)
+	var car_body := source.substr(car_start, car_end - car_start)
+	if car_body.find("_draw_body_foam(silhouette)") < 0:
+		_fail("body foam must stay inside the car silhouette render pass")
+		return false
+
+	root_node.call("reset_game", 1, "body_foam_smoke_cleanup")
+	if float(root_node.call("get_body_foam_coverage_for_test")) > 0.001 or float(root_node.call("get_body_foam_runoff_for_test")) > 0.001:
+		_fail("level reset should clear body foam state")
+		return false
+	return true
 
 
 func _test_clean_shine_progression_contract(root_node: Node) -> bool:

@@ -88,6 +88,25 @@ const STYLE_SPARKLE := "sparkle"
 const STYLE_CONFETTI := "confetti"
 const WATER_EFFECT_STYLES := [STYLE_DROPLET, STYLE_MIST, STYLE_SPRAY_FAN, STYLE_SPLASH]
 const WATER_EFFECT_PARTICLE_CAP := 72
+const FOAM_EFFECT_STYLES := [STYLE_BUBBLE, STYLE_FOAM]
+const FOAM_EFFECT_PARTICLE_CAP := 64
+const FOAM_BOMB_BURST_PARTICLE_COUNT := 28
+const BODY_FOAM_SOAP_RATE := 0.36
+const BODY_FOAM_WATER_RATE := 0.72
+const BODY_FOAM_RUNOFF_DECAY := 1.15
+# Normalized, deliberately interleaved spots keep partial coverage distributed
+# across every silhouette instead of painting one scanline at a time.
+const BODY_FOAM_SPOT_UVS := [
+	Vector2(0.50, 0.46), Vector2(0.24, 0.62), Vector2(0.76, 0.62), Vector2(0.36, 0.30),
+	Vector2(0.64, 0.30), Vector2(0.18, 0.78), Vector2(0.82, 0.78), Vector2(0.50, 0.72),
+	Vector2(0.31, 0.49), Vector2(0.69, 0.49), Vector2(0.42, 0.86), Vector2(0.58, 0.86),
+	Vector2(0.15, 0.52), Vector2(0.85, 0.52), Vector2(0.50, 0.20), Vector2(0.28, 0.75),
+	Vector2(0.72, 0.75), Vector2(0.40, 0.58), Vector2(0.60, 0.58), Vector2(0.22, 0.88),
+	Vector2(0.78, 0.88), Vector2(0.34, 0.40), Vector2(0.66, 0.40), Vector2(0.50, 0.92),
+	Vector2(0.12, 0.68), Vector2(0.88, 0.68), Vector2(0.43, 0.24), Vector2(0.57, 0.24),
+	Vector2(0.26, 0.55), Vector2(0.74, 0.55), Vector2(0.38, 0.69), Vector2(0.62, 0.69),
+	Vector2(0.31, 0.84), Vector2(0.69, 0.84), Vector2(0.46, 0.38), Vector2(0.54, 0.78),
+]
 const DAILY_MISSION_POOL := GameConfig.DAILY_MISSION_POOL
 const DAILY_MISSION_REWARD := GameConfig.DAILY_MISSION_REWARD
 
@@ -122,6 +141,9 @@ const GLEAM_DURATION := 0.72
 # Single tuning hook for low-end/reduced-motion policy (#75). The clean-shine
 # renderer reads this scale only; gameplay progress and completion stay untouched.
 const CLEAN_SHINE_INTENSITY_SCALE := 1.0
+var body_foam_coverage := 0.0
+var body_foam_runoff := 0.0
+var _foam_bomb_burst_count := 0
 var _progress_milestone_hit := 0
 var _progress_milestone_time := -1.0
 var _progress_milestone_text := ""
@@ -249,6 +271,7 @@ var _hint_shadow_box: StyleBoxFlat
 var _tool_hint_box: StyleBoxFlat
 var _hint_patch: DirtPatch = null
 var car_shapes: Dictionary = {}
+var _body_foam_spot_cache: Dictionary = {}
 # Audio-trigger decision state stays here (main decides WHEN to play); the
 # players/streams themselves moved to AudioService in PR-R3.
 var _prev_star3_time_ok := true
@@ -567,6 +590,7 @@ func _process(delta: float) -> void:
 	_update_wash_trail(delta)
 	_update_dirt_motion(delta)
 	_update_particles(delta)
+	body_foam_runoff = maxf(0.0, body_foam_runoff - delta * BODY_FOAM_RUNOFF_DECAY)
 	_update_clean_progress()
 	_update_audio()
 	if _gleam_time >= 0.0:
@@ -855,6 +879,9 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_level_started = false
 	completed = false
 	completion_burst_done = false
+	body_foam_coverage = 0.0
+	body_foam_runoff = 0.0
+	_foam_bomb_burst_count = 0
 	_free_ad_bombs_used = 0
 	_double_claimed = false
 	_double_offer_shown = false
@@ -922,6 +949,39 @@ func get_clean_shine_alpha_for_test(progress: float) -> float:
 
 func get_clean_shine_intensity_scale_for_test() -> float:
 	return CLEAN_SHINE_INTENSITY_SCALE
+
+
+func get_body_foam_coverage_for_test() -> float:
+	return body_foam_coverage
+
+
+func get_body_foam_runoff_for_test() -> float:
+	return body_foam_runoff
+
+
+func get_body_foam_spot_count_for_test() -> int:
+	var shapes: Dictionary = car_shapes[car_type]
+	var silhouette: PackedVector2Array = shapes["silhouette"]
+	return _body_foam_spots(silhouette).size()
+
+
+func get_foam_bomb_burst_count_for_test() -> int:
+	return _foam_bomb_burst_count
+
+
+func get_foam_effect_particle_count_for_test() -> int:
+	return _foam_effect_particle_count()
+
+
+func get_foam_effect_particle_cap_for_test() -> int:
+	return FOAM_EFFECT_PARTICLE_CAP
+
+
+func apply_body_foam_tool_for_test(tool_id: String, delta: float) -> void:
+	var previous_tool := selected_tool
+	selected_tool = tool_id
+	_update_body_foam_from_tool(delta)
+	selected_tool = previous_tool
 
 
 func get_selected_tool_label_for_test() -> String:
@@ -1454,6 +1514,7 @@ func apply_foam_bomb(free := false) -> bool:
 	if completed or (not free and coins < BOMB_COST):
 		return false
 	var applied := false
+	var patch_bubbles: Array[WashParticle] = []
 	for raw_patch in dirt_patches:
 		var patch := raw_patch as DirtPatch
 		if _is_patch_removed(patch) or patch.state == STATE_FLYING:
@@ -1477,15 +1538,48 @@ func apply_foam_bomb(free := false) -> bool:
 		var center := _patch_center(patch)
 		for bubble_index in range(3):
 			var offset := Vector2(rng.randf_range(-patch.radius, patch.radius), rng.randf_range(-patch.radius, patch.radius))
-			particles.append(WashParticle.new(center + offset, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-40.0, -16.0)), rng.randf_range(0.6, 1.1), rng.randf_range(4.0, 9.0), Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85), STYLE_BUBBLE))
+			patch_bubbles.append(WashParticle.new(center + offset, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-40.0, -16.0)), rng.randf_range(0.6, 1.1), rng.randf_range(4.0, 9.0), Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85), STYLE_BUBBLE))
 	if not applied:
 		return false
+	_append_foam_effect_batch(patch_bubbles)
+	body_foam_coverage = 1.0
+	body_foam_runoff = 0.0
+	_spawn_foam_bomb_burst()
 	if not free:
 		coins -= BOMB_COST
 	audio.play_bomb()
 	_emit_analytics(ContentEvents.foam_bomb_use(active_level_index, free, BOMB_COST))
 	_save_progress()
 	return true
+
+
+func _spawn_foam_bomb_burst() -> void:
+	_foam_bomb_burst_count += 1
+	var shapes: Dictionary = car_shapes[car_type]
+	var silhouette: PackedVector2Array = shapes["silhouette"]
+	var spots: Array = _body_foam_spots(silhouette)
+	var burst: Array[WashParticle] = []
+	var car_center := _gameplay_point(Vector2(195.0, 520.0))
+	for index in range(mini(FOAM_BOMB_BURST_PARTICLE_COUNT, spots.size())):
+		var local_center: Vector2 = spots[index]["center"]
+		var center := _gameplay_point(local_center)
+		var direction := (center - car_center).normalized()
+		if direction.length() < 0.1:
+			direction = Vector2.UP
+		var tint := Color.from_hsv(fmod(float(index) * 0.077, 1.0), 0.10, 1.0, 0.92)
+		burst.append(WashParticle.new(
+			center,
+			direction * rng.randf_range(36.0, 92.0) + Vector2(0.0, rng.randf_range(-54.0, -18.0)),
+			rng.randf_range(0.65, 1.05),
+			_gameplay_length(float(spots[index]["radius"]) * rng.randf_range(0.62, 1.0)),
+			tint,
+			STYLE_FOAM if index % 3 != 0 else STYLE_BUBBLE
+		))
+	_append_foam_effect_batch(burst)
+	# Two bounded shock rings make the one-time action read across the whole car;
+	# the persistent silhouette layer carries the state after the rings fade.
+	particles.append(WashParticle.new(car_center, Vector2.ZERO, 0.42, _gameplay_length(44.0), Color(0.92, 0.99, 1.0, 0.74), STYLE_RING))
+	particles.append(WashParticle.new(car_center, Vector2.ZERO, 0.58, _gameplay_length(78.0), Color(1.0, 0.93, 0.72, 0.52), STYLE_RING))
 
 
 # A rewarded free bomb is offered while inventory is ready and the per-level cap
@@ -1675,7 +1769,20 @@ func _apply_tool_at(point: Vector2, delta: float) -> void:
 		_update_patch_hint(focus_patch, delta)
 
 	if applied:
+		_update_body_foam_from_tool(delta)
 		_spawn_tool_particles(point, delta)
+
+
+func _update_body_foam_from_tool(delta: float) -> void:
+	var safe_delta := maxf(delta, 0.0)
+	if selected_tool == TOOL_SOAP:
+		body_foam_coverage = minf(1.0, body_foam_coverage + safe_delta * BODY_FOAM_SOAP_RATE)
+	elif selected_tool == TOOL_WATER and body_foam_coverage > 0.0:
+		var removed := minf(body_foam_coverage, safe_delta * BODY_FOAM_WATER_RATE)
+		body_foam_coverage = maxf(0.0, body_foam_coverage - removed)
+		# A rinse creates a short-lived downward read even after the scalar coverage
+		# has changed, so water feels like it carries the foam off the body.
+		body_foam_runoff = maxf(body_foam_runoff, clampf(0.24 + removed * 2.8, 0.0, 1.0))
 
 
 # Decides whether the current tool is the wrong choice for this patch right now.
@@ -2130,6 +2237,37 @@ func _water_effect_particle_count() -> int:
 	return count
 
 
+func _append_foam_effect_batch(batch: Array[WashParticle]) -> void:
+	# Foam is persistent in the silhouette layer, so transient bubbles can safely
+	# evict the oldest foam particles without changing gameplay state.
+	# A high-level bomb can produce a batch larger than the cap by itself; keep
+	# only its newest particles before considering already-active effects.
+	var batch_start := maxi(0, batch.size() - FOAM_EFFECT_PARTICLE_CAP)
+	var incoming_count := batch.size() - batch_start
+	var overflow := _foam_effect_particle_count() + incoming_count - FOAM_EFFECT_PARTICLE_CAP
+	while overflow > 0:
+		var removed_one := false
+		for index in range(particles.size()):
+			var candidate := particles[index] as WashParticle
+			if candidate.style in FOAM_EFFECT_STYLES:
+				particles.remove_at(index)
+				overflow -= 1
+				removed_one = true
+				break
+		if not removed_one:
+			break
+	for index in range(batch_start, batch.size()):
+		particles.append(batch[index])
+
+
+func _foam_effect_particle_count() -> int:
+	var count := 0
+	for raw_particle in particles:
+		if (raw_particle as WashParticle).style in FOAM_EFFECT_STYLES:
+			count += 1
+	return count
+
+
 func _spawn_air_particles(point: Vector2) -> void:
 	for index in range(3):
 		var angle := rng.randf_range(-0.5, 0.5) + (PI if rng.randf() < 0.5 else 0.0)
@@ -2142,19 +2280,23 @@ func _spawn_air_particles(point: Vector2) -> void:
 
 
 func _spawn_soap_particles(point: Vector2) -> void:
+	var batch: Array[WashParticle] = []
 	for index in range(5):
 		var jitter := Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-14.0, 14.0))
 		var velocity := Vector2(rng.randf_range(-22.0, 22.0), rng.randf_range(-46.0, -14.0))
 		var tint := Color.from_hsv(rng.randf(), 0.12, 1.0, 0.85)
-		particles.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.5, 1.0), rng.randf_range(3.0, 8.0), tint, STYLE_BUBBLE))
+		batch.append(WashParticle.new(point + jitter, velocity, rng.randf_range(0.5, 1.0), rng.randf_range(3.0, 8.0), tint, STYLE_BUBBLE))
+	_append_foam_effect_batch(batch)
 
 
 func _spawn_sponge_particles(point: Vector2) -> void:
+	var batch: Array[WashParticle] = []
 	for index in range(3):
 		var jitter := Vector2(rng.randf_range(-18.0, 18.0), rng.randf_range(-10.0, 14.0))
-		particles.append(WashParticle.new(point + jitter, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-8.0, 4.0)), rng.randf_range(0.4, 0.8), rng.randf_range(5.0, 10.0), Color(1.0, 1.0, 1.0, 0.7), STYLE_FOAM))
+		batch.append(WashParticle.new(point + jitter, Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-8.0, 4.0)), rng.randf_range(0.4, 0.8), rng.randf_range(5.0, 10.0), Color(1.0, 1.0, 1.0, 0.7), STYLE_FOAM))
 	if rng.randf() < 0.7:
-		particles.append(WashParticle.new(point + Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-12.0, 8.0)), Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-36.0, -12.0)), rng.randf_range(0.4, 0.8), rng.randf_range(2.5, 5.0), Color(0.95, 1.0, 1.0, 0.8), STYLE_BUBBLE))
+		batch.append(WashParticle.new(point + Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-12.0, 8.0)), Vector2(rng.randf_range(-16.0, 16.0), rng.randf_range(-36.0, -12.0)), rng.randf_range(0.4, 0.8), rng.randf_range(2.5, 5.0), Color(0.95, 1.0, 1.0, 0.8), STYLE_BUBBLE))
+	_append_foam_effect_batch(batch)
 
 
 func _update_particles(delta: float) -> void:
@@ -2195,6 +2337,8 @@ func _update_clean_progress() -> void:
 
 	if clean_progress >= 0.985 and not completed:
 		completed = true
+		body_foam_coverage = 0.0
+		body_foam_runoff = 0.0
 		_gleam_time = 0.0
 		is_washing = false
 		earned_stars = _calc_stars()
@@ -2442,6 +2586,7 @@ func _daily_mission_display_label() -> String:
 
 
 func _build_car_shapes() -> void:
+	_body_foam_spot_cache.clear()
 	car_shapes["compact"] = {
 		"silhouette": _smooth_polygon(PackedVector2Array([
 			Vector2(60.0, 650.0), Vector2(50.0, 588.0), Vector2(52.0, 518.0), Vector2(66.0, 478.0),
@@ -2623,6 +2768,84 @@ func _draw_car() -> void:
 	draw_rect(plate, Color("#f7fbff"))
 	draw_rect(plate, outline, false, 2.5)
 	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), "FOAM", HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
+	_draw_body_foam(silhouette)
+
+
+func _draw_body_foam(silhouette: PackedVector2Array) -> void:
+	var coverage := clampf(body_foam_coverage, 0.0, 1.0)
+	var runoff := clampf(body_foam_runoff, 0.0, 1.0)
+	if coverage <= 0.001 and runoff <= 0.001:
+		return
+
+	if coverage > 0.001:
+		# The polygon fill is the mask: it can never extend beyond the active car's
+		# silhouette, including the taller van and wider off-road body.
+		var milk_alpha := 0.045 * coverage + 0.12 * coverage * coverage
+		draw_colored_polygon(silhouette, Color(0.92, 0.985, 1.0, milk_alpha))
+		var spots := _body_foam_spots(silhouette)
+		var visible_float := coverage * float(spots.size())
+		var visible_count := mini(spots.size(), ceili(visible_float))
+		var time_now := float(Time.get_ticks_msec()) / 1000.0
+		for index in range(visible_count):
+			var reveal := clampf(visible_float - float(index), 0.0, 1.0)
+			var center: Vector2 = spots[index]["center"]
+			var radius: float = float(spots[index]["radius"]) * (0.88 + 0.06 * sin(time_now * 2.4 + float(index)))
+			var alpha := (0.56 + coverage * 0.28) * reveal
+			draw_circle(center, radius, Color(0.92, 0.985, 1.0, alpha))
+			draw_circle(center + Vector2(radius * 0.58, radius * 0.12), radius * 0.66, Color(1.0, 1.0, 1.0, alpha * 0.82))
+			draw_circle(center + Vector2(-radius * 0.48, radius * 0.24), radius * 0.54, Color(0.82, 0.95, 1.0, alpha * 0.68))
+			draw_arc(center + Vector2(-radius * 0.16, -radius * 0.20), radius * 0.54, -2.7, -0.7, 8, Color(1.0, 1.0, 1.0, alpha * 0.86), 1.4)
+
+	if runoff > 0.001:
+		_draw_body_foam_runoff(silhouette, runoff)
+
+
+func _draw_body_foam_runoff(silhouette: PackedVector2Array, amount: float) -> void:
+	var bounds := _polygon_bounds(silhouette)
+	var time_now := float(Time.get_ticks_msec()) / 1000.0
+	for index in range(6):
+		var x_ratio := 0.23 + float(index) * 0.108
+		var start := bounds.position + Vector2(bounds.size.x * x_ratio, bounds.size.y * (0.43 + 0.025 * float(index % 3)))
+		var end := start + Vector2(sin(time_now * 2.2 + float(index)) * 3.5, bounds.size.y * (0.22 + 0.035 * float(index % 2)))
+		if not Geometry2D.is_point_in_polygon(start, silhouette) or not Geometry2D.is_point_in_polygon(end, silhouette):
+			continue
+		var color := Color(0.88, 0.98, 1.0, amount * (0.30 + 0.06 * float(index % 3)))
+		draw_line(start, end, color, 2.8 + amount * 2.2)
+		draw_circle(end, 2.8 + amount * 2.0, Color(1.0, 1.0, 1.0, color.a * 0.88))
+
+
+func _body_foam_spots(silhouette: PackedVector2Array) -> Array:
+	if _body_foam_spot_cache.has(car_type):
+		return _body_foam_spot_cache[car_type]
+	var spots: Array = []
+	if silhouette.is_empty():
+		return spots
+	var bounds := _polygon_bounds(silhouette)
+	for index in range(BODY_FOAM_SPOT_UVS.size()):
+		var uv: Vector2 = BODY_FOAM_SPOT_UVS[index]
+		var center := bounds.position + Vector2(bounds.size.x * uv.x, bounds.size.y * uv.y)
+		var radius := 8.2 + float((index * 7) % 5) * 1.15
+		var margin := radius * 0.78
+		var fits := Geometry2D.is_point_in_polygon(center, silhouette)
+		for direction in [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]:
+			fits = fits and Geometry2D.is_point_in_polygon(center + direction * margin, silhouette)
+		if fits:
+			spots.append({"center": center, "radius": radius})
+	_body_foam_spot_cache[car_type] = spots
+	return spots
+
+
+func _polygon_bounds(points: PackedVector2Array) -> Rect2:
+	if points.is_empty():
+		return Rect2()
+	var min_point := points[0]
+	var max_point := points[0]
+	for point in points:
+		min_point.x = minf(min_point.x, point.x)
+		min_point.y = minf(min_point.y, point.y)
+		max_point.x = maxf(max_point.x, point.x)
+		max_point.y = maxf(max_point.y, point.y)
+	return Rect2(min_point, max_point - min_point)
 
 
 func _clean_shine_alpha(progress: float) -> float:
