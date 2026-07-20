@@ -57,14 +57,16 @@ class ReleaseWorkflowContractTest(unittest.TestCase):
         cls.workflow_lines = DEPLOY_ALL.read_text(encoding="utf-8").splitlines()
 
     def test_deploy_all_forwards_google_play_inputs(self) -> None:
-        reusable_call = ("jobs", "google-play", "with")
-        self.assertEqual(
-            scalar(self.workflow_lines, reusable_call, "track"),
-            "${{ inputs.google_play_track }}",
+        start, end, _indent = block_for(
+            self.workflow_lines, ("jobs", "google-play", "with")
         )
-        self.assertEqual(
-            scalar(self.workflow_lines, reusable_call, "release_status"),
-            "${{ inputs.google_play_release_status }}",
+        reusable_inputs = self.workflow_lines[start:end]
+        self.assertIn(
+            "      track: ${{ inputs.google_play_track }}", reusable_inputs
+        )
+        self.assertIn(
+            "      release_status: ${{ inputs.google_play_release_status }}",
+            reusable_inputs,
         )
 
     def test_deploy_all_exposes_track_and_status_choices(self) -> None:
