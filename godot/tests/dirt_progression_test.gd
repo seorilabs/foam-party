@@ -25,7 +25,7 @@ func test_unlock_curve(DirtProgression: GDScript, GameConfig: GDScript) -> bool:
 		2: ["mud", "dust", "leaf", "oil"],
 		3: ["mud", "dust", "leaf", "oil", "bug", "poop"],
 		4: ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"],
-		5: ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"],
+		5: ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime", "sap"],
 	}
 	var previous_count := 0
 	for level in expected_dirt_by_level:
@@ -37,8 +37,8 @@ func test_unlock_curve(DirtProgression: GDScript, GameConfig: GDScript) -> bool:
 			_fail("dirt unlock count must not shrink at level %d" % level)
 			return false
 		previous_count = actual.size()
-	if DirtProgression.allowed_types_for_level(4) != GameConfig.DIRT_TYPES:
-		_fail("level 4 must converge to the full dirt catalog")
+	if DirtProgression.allowed_types_for_level(5) != GameConfig.DIRT_TYPES:
+		_fail("level 5 must converge to the full dirt catalog")
 		return false
 	return true
 

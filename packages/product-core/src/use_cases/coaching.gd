@@ -56,6 +56,13 @@ static func tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 			if not road_grime_softened:
 				return tool_id == TOOL_SPONGE
 			return false
+		"sap":
+			if tool_id == TOOL_AIR or tool_id == TOOL_WATER:
+				return true
+			var sponge_profile: Dictionary = GameConfig.SPONGE_WASH_PROFILES[patch.kind]
+			var sap_softened: bool = patch.soap > float(sponge_profile["soap_threshold"]) \
+				or patch.looseness > float(sponge_profile["looseness_threshold"])
+			return tool_id == TOOL_SPONGE and not sap_softened
 	return false
 
 
@@ -79,6 +86,12 @@ static func recommended_tool(patch: DirtPatch) -> String:
 			if patch.wetness > float(sponge_profile["wetness_threshold"]) or patch.soap > float(sponge_profile["soap_threshold"]) or patch.looseness > float(sponge_profile["looseness_threshold"]):
 				return TOOL_SPONGE
 			return TOOL_WATER
+		"sap":
+			var sponge_profile: Dictionary = GameConfig.SPONGE_WASH_PROFILES[patch.kind]
+			if patch.soap > float(sponge_profile["soap_threshold"]) \
+					or patch.looseness > float(sponge_profile["looseness_threshold"]):
+				return TOOL_SPONGE
+			return TOOL_SOAP
 	return TOOL_WATER
 
 

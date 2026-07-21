@@ -68,6 +68,10 @@ static func apply_air(patch: DirtPatch, delta: float, source_point: Vector2, pro
 
 
 static func apply_water(patch: DirtPatch, delta: float, proximity: float, mult: float) -> void:
+	# Resin repels a water-only wash. Keep every preparation and health field
+	# unchanged so the coaching path remains strictly soap then sponge.
+	if patch.kind == "sap":
+		return
 	var was_misapplied := Coaching.tool_misapplied(Coaching.TOOL_WATER, patch)
 	var health_before := patch.health
 	var wr := GameConfig.CLEAN_DAMAGE_RATE * mult
@@ -132,6 +136,11 @@ static func apply_soap(patch: DirtPatch, delta: float, proximity: float, mult: f
 		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
 		patch.state = STATE_LOOSENED if patch.looseness > float(profile["loosened_threshold"]) else STATE_SOAPED
 		patch.health -= float(profile["damage"]) * proximity * delta * sr
+	elif patch.kind == "sap":
+		patch.soap = min(1.0, patch.soap + delta * proximity * float(profile["soap_build"]))
+		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
+		patch.state = STATE_LOOSENED if patch.looseness > float(profile["loosened_threshold"]) else STATE_SOAPED
+		patch.health -= float(profile["damage"]) * proximity * delta * sr
 	elif patch.kind == "mud":
 		patch.soap = min(1.0, patch.soap + delta * proximity * float(profile["soap_build"]))
 		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
@@ -164,6 +173,14 @@ static func apply_sponge(patch: DirtPatch, delta: float, source_point: Vector2, 
 	patch.drift = patch.drift.limit_length(float(GameConfig.SPONGE_MOTION_PROFILE["drift_limit"]))
 
 	if patch.kind == "oil" or patch.kind == "bug":
+		if patch.soap > float(profile["soap_threshold"]) or patch.looseness > float(profile["looseness_threshold"]):
+			patch.state = STATE_LOOSENED
+			patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["prepared_looseness"]))
+			patch.health -= (float(profile["prepared_base"]) + patch.soap * float(profile["soap_bonus"])) * proximity * delta * spr
+			patch.soap = max(0.0, patch.soap - delta * proximity * float(profile["soap_decay"]))
+		else:
+			patch.health -= float(profile["dry_damage"]) * proximity * delta * spr
+	elif patch.kind == "sap":
 		if patch.soap > float(profile["soap_threshold"]) or patch.looseness > float(profile["looseness_threshold"]):
 			patch.state = STATE_LOOSENED
 			patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["prepared_looseness"]))

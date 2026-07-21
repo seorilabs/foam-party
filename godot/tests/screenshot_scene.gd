@@ -259,6 +259,23 @@ func _run() -> void:
 		quit(1)
 		return
 	node.call("reset_game", 1, "oil_sheen_screenshot_cleanup")
+	var sap_patch: Variant = _isolate_sap_patch(node)
+	if sap_patch == null:
+		push_error("sap screenshot setup failed")
+		quit(1)
+		return
+	if not await _capture(out_dir.path_join("shot_sap_dry.png")):
+		quit(1)
+		return
+	sap_patch.set("soap", 0.75)
+	sap_patch.set("looseness", 0.5)
+	sap_patch.set("state", "loosened")
+	node.queue_redraw()
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_sap_soaped.png")):
+		quit(1)
+		return
+	node.call("reset_game", 1, "sap_screenshot_cleanup")
 	node.call("_on_back_pressed")
 	node.call("_select_language", "ko")
 	await _settle(5)
@@ -420,6 +437,24 @@ func _isolate_oil_patch(node: Node, strength: float) -> Variant:
 	node.call("_update_clean_progress")
 	node.queue_redraw()
 	return oil_patch
+
+
+func _isolate_sap_patch(node: Node) -> Variant:
+	node.call("reset_game", 6, "sap_screenshot")
+	for raw_patch in node.get("dirt_patches"):
+		raw_patch.set("state", "removed")
+		raw_patch.set("health", 0.0)
+	var sap_index: int = node.call("spawn_patch_for_test", "sap")
+	if sap_index < 0:
+		return null
+	var sap_patch: Variant = node.get("dirt_patches")[sap_index]
+	sap_patch.set("radius", 34.0)
+	sap_patch.set("seed_offset", 1.37)
+	node.set("initial_dirt_total", float(sap_patch.get("max_health")))
+	node.set("completed", false)
+	node.call("_update_clean_progress")
+	node.queue_redraw()
+	return sap_patch
 
 
 func _isolate_stalled_dirt_patch(node: Node) -> bool:

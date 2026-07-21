@@ -23,9 +23,9 @@ const SILHOUETTE_EDGE_MARGIN := 8.0
 # Duplicate entries are intentional weights. Keeping the catalog in core makes
 # both the level gate and each car's dirt bias independently testable.
 const CAR_TYPE_POOLS := {
-	# Parked city cars collect airborne dust, leaves, bird droppings, and road
-	# residue. Mud, oil, and bugs stay in the catalog as low-frequency accents.
-	"compact": ["dust", "leaf", "poop", "dust", "leaf", "road_grime", "poop", "dust", "leaf", "mud", "oil", "bug"],
+	# Parked city cars collect airborne dust, leaves, bird droppings, road residue,
+	# and tree sap. Mud, oil, and bugs stay as low-frequency accents.
+	"compact": ["dust", "leaf", "poop", "dust", "leaf", "road_grime", "poop", "dust", "leaf", "sap", "mud", "oil", "bug"],
 	"sports": ["oil", "dust", "oil", "dust", "road_grime", "leaf", "dust", "bug", "mud"],
 	"truck": ["mud", "mud", "bug", "leaf", "mud", "poop", "dust", "road_grime", "leaf"],
 	"van": ["dust", "road_grime", "leaf", "dust", "mud", "road_grime", "oil", "leaf", "bug"],
