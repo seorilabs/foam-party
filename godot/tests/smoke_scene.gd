@@ -2791,6 +2791,28 @@ func _test_audio_bus_contract(root_node: Node) -> bool:
 			_fail("effect player must route to SFX: " + String(player_name))
 			return false
 
+	# Issue #73: all three BGM variants are synthesized during setup even in
+	# headless mode. Their PCM signatures differ, and the finished-track path
+	# advances through every variant before wrapping without starting playback.
+	if int(root_node.call("get_bgm_variant_count_for_test")) != 3:
+		_fail("expected three runtime-synthesized BGM variants")
+		return false
+	var bgm_signatures: Array[int] = root_node.call("get_bgm_variant_signatures_for_test")
+	var unique_bgm_signatures := {}
+	for signature in bgm_signatures:
+		unique_bgm_signatures[signature] = true
+	if bgm_signatures.size() != 3 or unique_bgm_signatures.size() != 3:
+		_fail("each BGM variant must have distinct synthesized PCM data")
+		return false
+	if int(root_node.call("get_bgm_variant_index_for_test")) != 0:
+		_fail("BGM rotation must start from variant zero")
+		return false
+	for expected_variant in [1, 2, 0]:
+		root_node.call("advance_bgm_variant_for_test")
+		if int(root_node.call("get_bgm_variant_index_for_test")) != expected_variant:
+			_fail("BGM rotation did not advance to variant %d" % expected_variant)
+			return false
+
 	# AC-2/5: muting either channel changes only its own bus and never Master.
 	root_node.set("music_enabled", false)
 	root_node.set("sfx_enabled", true)
