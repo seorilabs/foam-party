@@ -52,6 +52,10 @@ const BAR_COL_END   := Color(0.224, 0.851, 0.541)  # #39d98a
 const SAVE_PATH := "user://foam_party_save.cfg"
 const DAILY_SAVE_PATH := "user://foam_party_daily.cfg"
 const BOMB_COST := GameConfig.BOMB_COST
+const WATER_BOOST_COST := GameConfig.WATER_BOOST_COST
+const WATER_BOOST_DURATION := GameConfig.WATER_BOOST_DURATION
+const WATER_BOOST_RADIUS_MULT := GameConfig.WATER_BOOST_RADIUS_MULT
+const WATER_BOOST_POWER_MULT := GameConfig.WATER_BOOST_POWER_MULT
 const UPGRADE_COSTS := GameConfig.UPGRADE_COSTS
 const UPGRADE_MULTS := GameConfig.UPGRADE_MULTS
 const UPGRADE_KEYS := GameConfig.UPGRADE_KEYS
@@ -166,6 +170,7 @@ const CLEAN_SHINE_INTENSITY_SCALE := 1.0
 var body_foam_coverage := 0.0
 var body_foam_runoff := 0.0
 var _foam_bomb_burst_count := 0
+var _water_boost_remaining := 0.0
 var _progress_milestone_hit := 0
 var _progress_milestone_time := -1.0
 var _progress_milestone_text := ""
@@ -278,6 +283,7 @@ var upgrade_sponge := 0
 var show_upgrade_panel := false
 var show_skin_panel := false
 var show_stage_panel := false
+var show_booster_panel := false
 var _stage_page := 0
 var _skin_panel_tab := 0
 var skin_water := "classic"
@@ -692,6 +698,8 @@ func _on_back_js(_args: Array) -> void:
 func _on_back_pressed() -> void:
 	if show_quit_confirm:
 		show_quit_confirm = false
+	elif show_booster_panel:
+		show_booster_panel = false
 	elif show_pause:
 		show_pause = false  # back on the pause menu = resume
 	elif show_tutorial:
@@ -715,6 +723,7 @@ func _go_home() -> void:
 	show_pause = false
 	show_quit_confirm = false
 	show_stage_panel = false
+	show_booster_panel = false
 	is_washing = false
 	game_state = STATE_TITLE
 	_emit_analytics(FtueEvents.title_screen_view(FtueEvents.ENTRY_PAUSE_HOME))
@@ -733,8 +742,16 @@ func _quit_app() -> void:
 func _process(delta: float) -> void:
 	_ensure_back_handler()
 	var transition_blocks_gameplay := _car_transition_blocks_gameplay()
-	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm and not transition_blocks_gameplay:
+	var gameplay_active := game_state == STATE_PLAYING \
+		and not completed \
+		and not show_tutorial \
+		and not show_pause \
+		and not show_quit_confirm \
+		and not show_booster_panel \
+		and not transition_blocks_gameplay
+	if gameplay_active:
 		level_time += delta
+		_update_water_boost(delta)
 		_check_star_time_loss()
 		var _warn_time := _grade_time_to_downgrade()
 		var _in_warn := _warn_time >= 0.0 and _warn_time <= STAR_WARN_SECONDS
@@ -760,7 +777,7 @@ func _process(delta: float) -> void:
 		_prev_in_warn_zone = _wt >= 0.0 and _wt <= STAR_WARN_SECONDS
 		_prev_patience_zone = CustomerPatience.zone(_current_customer_patience())
 
-	if is_washing and not completed and game_state == STATE_PLAYING and not show_tutorial and not transition_blocks_gameplay:
+	if is_washing and gameplay_active:
 		_apply_tool_at(pointer_position, delta)
 
 	_update_car_transition(delta)
@@ -1051,19 +1068,21 @@ func _draw() -> void:
 		_draw_daily_mission()
 		_draw_tool_hint()
 		_draw_combo_badge()
-		_draw_bomb_button()
+		_draw_booster_button()
 		_draw_toolbar()
 		_draw_completion_panel()
 		_draw_combo_milestone_flash()
 		_draw_gold_spot_reward_pop()
 	# Playing HUD exposes one pause/settings entry only. Sound and guide actions
 	# live inside that sheet; title-screen shortcuts remain available before play.
-	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm and not _car_transition_blocks_gameplay():
+	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm and not show_booster_panel and not _car_transition_blocks_gameplay():
 		_draw_pause_entry()
 	elif game_state == STATE_TITLE and not (show_upgrade_panel or show_skin_panel or show_stage_panel):
 		_draw_top_buttons()
 	if show_tutorial:
 		_draw_tutorial()
+	if show_booster_panel:
+		_draw_booster_panel()
 	_draw_pause_menu()
 	_draw_quit_confirm()
 
@@ -1082,6 +1101,8 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	body_foam_coverage = 0.0
 	body_foam_runoff = 0.0
 	_foam_bomb_burst_count = 0
+	_water_boost_remaining = 0.0
+	show_booster_panel = false
 	_free_ad_bombs_used = 0
 	_double_claimed = false
 	_double_offer_shown = false
@@ -1257,6 +1278,22 @@ func get_body_foam_spot_count_for_test() -> int:
 
 func get_foam_bomb_burst_count_for_test() -> int:
 	return _foam_bomb_burst_count
+
+
+func get_water_boost_remaining_for_test() -> float:
+	return _water_boost_remaining
+
+
+func get_water_boost_cost_for_test() -> int:
+	return WATER_BOOST_COST
+
+
+func get_tool_radius_for_test(tool_id: String) -> float:
+	return _tool_radius(tool_id)
+
+
+func get_tool_power_multiplier_for_test(tool_id: String) -> float:
+	return _tool_power_multiplier(tool_id)
 
 
 func get_foam_effect_particle_count_for_test() -> int:
@@ -1807,6 +1844,10 @@ func _handle_tap(point: Vector2) -> bool:
 			queue_redraw()
 		return true
 
+	if show_booster_panel:
+		_handle_booster_panel_tap(point)
+		return true
+
 	if show_pause:
 		if _pause_button_rect(0).has_point(point):
 			show_pause = false
@@ -1905,21 +1946,12 @@ func _handle_tap(point: Vector2) -> bool:
 	if _car_transition_blocks_gameplay():
 		return true
 
-	if not completed and _get_bomb_rect().has_point(point):
-		# A: the free-via-ad bomb is offered whenever rewarded inventory is ready and
-		# the per-level cap is not hit — no longer gated on being out of coins. This
-		# is what actually surfaces the rewarded ad, since a cleared level usually
-		# leaves the player able to afford the coin price.
-		if _free_ad_bomb_available():
-			ads.show_rewarded("foam_bomb_free", _on_foam_bomb_reward)
-		elif coins >= BOMB_COST:
-			if apply_foam_bomb():
-				_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
-			else:
-				audio.play_bomb_deny()
-		else:
-			# No ad ready (or cap reached) and can't afford: deny.
-			audio.play_bomb_deny()
+	if not completed and _get_booster_rect().has_point(point):
+		show_booster_panel = true
+		is_washing = false
+		_stop_tool_loop()
+		_play_ui_select()
+		queue_redraw()
 		return true
 
 	for index in range(tool_ids.size()):
@@ -1931,6 +1963,36 @@ func _handle_tap(point: Vector2) -> bool:
 			return true
 
 	return false
+
+
+func _handle_booster_panel_tap(point: Vector2) -> void:
+	var panel := _booster_panel_rect()
+	if _booster_close_rect(panel).has_point(point):
+		show_booster_panel = false
+		_play_ui_select()
+		queue_redraw()
+		return
+
+	if _booster_card_rect(panel, 0).has_point(point):
+		if _free_ad_bomb_available():
+			show_booster_panel = false
+			ads.show_rewarded("foam_bomb_free", _on_foam_bomb_reward)
+		elif apply_foam_bomb():
+			show_booster_panel = false
+			_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
+		else:
+			audio.play_bomb_deny()
+		queue_redraw()
+		return
+
+	if _booster_card_rect(panel, 1).has_point(point):
+		if activate_water_boost():
+			show_booster_panel = false
+			_bomb_press_time = float(Time.get_ticks_msec()) / 1000.0
+			_play_ui_select()
+		else:
+			audio.play_bomb_deny()
+		queue_redraw()
 
 
 func _dismiss_tutorial() -> void:
@@ -1978,6 +2040,29 @@ func _select_language(locale: String) -> void:
 	_apply_language_preference()
 	_save_progress()
 	queue_redraw()
+
+
+func activate_water_boost() -> bool:
+	if completed or _water_boost_remaining > 0.0 or coins < WATER_BOOST_COST:
+		return false
+	coins -= WATER_BOOST_COST
+	_water_boost_remaining = WATER_BOOST_DURATION
+	selected_tool = TOOL_WATER
+	is_washing = false
+	_stop_tool_loop()
+	_save_progress()
+	queue_redraw()
+	return true
+
+
+func _update_water_boost(delta: float) -> void:
+	if _water_boost_remaining <= 0.0:
+		return
+	_water_boost_remaining = maxf(0.0, _water_boost_remaining - maxf(delta, 0.0))
+
+
+func _water_boost_active() -> bool:
+	return _water_boost_remaining > 0.0
 
 
 func apply_foam_bomb(free := false) -> bool:
@@ -2379,7 +2464,7 @@ func _apply_air_to_patch(patch: DirtPatch, delta: float, source_point: Vector2, 
 
 
 func _apply_water_to_patch(patch: DirtPatch, delta: float, proximity: float) -> void:
-	WashRules.apply_water(patch, delta, proximity, _upgrade_mult("water"))
+	WashRules.apply_water(patch, delta, proximity, _tool_power_multiplier(TOOL_WATER))
 
 
 func _apply_soap_to_patch(patch: DirtPatch, delta: float, proximity: float) -> void:
@@ -2687,7 +2772,17 @@ func _draw_wash_trail() -> void:
 
 
 func _tool_radius(tool_id: String) -> float:
-	return Coaching.tool_radius(tool_id)
+	var radius := Coaching.tool_radius(tool_id)
+	if tool_id == TOOL_WATER and _water_boost_active():
+		radius *= WATER_BOOST_RADIUS_MULT
+	return radius
+
+
+func _tool_power_multiplier(tool_id: String) -> float:
+	var power := 1.0 if tool_id == TOOL_AIR else _upgrade_mult(tool_id)
+	if tool_id == TOOL_WATER and _water_boost_active():
+		power *= WATER_BOOST_POWER_MULT
+	return power
 
 
 func _spawn_tool_particles(point: Vector2, delta: float) -> void:
@@ -2876,6 +2971,7 @@ func _update_clean_progress() -> void:
 
 	if clean_progress >= 0.985 and not completed:
 		completed = true
+		show_booster_panel = false
 		body_foam_coverage = 0.0
 		body_foam_runoff = 0.0
 		_gleam_time = 0.0
@@ -2932,6 +3028,7 @@ func _update_stalled_dirt_highlight(delta: float) -> void:
 		and not show_tutorial \
 		and not show_pause \
 		and not show_quit_confirm \
+		and not show_booster_panel \
 		and not _car_transition_blocks_gameplay()
 	if not gameplay_active:
 		_stalled_dirt_highlight_active = false
@@ -4475,55 +4572,79 @@ func _draw_tutorial() -> void:
 		draw_string(font, Vector2(panel.position.x + 92.0, row_y - 2.0), row[1], HORIZONTAL_ALIGNMENT_LEFT, 200.0, 17, Color("#123246"))
 		draw_string(font, Vector2(panel.position.x + 92.0, row_y + 20.0), row[2], HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 116.0, 13, Color("#2c6b78"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 410.0), tr("TUT_TIP") % BOMB_COST, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#2c6b78"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 410.0), tr("TUT_TIP") % [BOMB_COST, WATER_BOOST_COST], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#2c6b78"))
 	draw_string(font, Vector2(panel.position.x, panel.position.y + 436.0), tr("TUT_START"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 16, Color("#1f8a55"))
 
 
-func _draw_bomb_button() -> void:
+func _draw_booster_button() -> void:
 	if completed:
 		return
 	var font: Font = _font()
-	var rect := _get_bomb_rect()
+	var rect := _get_booster_rect()
 	var t := float(Time.get_ticks_msec()) / 1000.0
 	var pop := 1.0 + 0.14 * exp(-(t - _bomb_press_time) * 9.0)
 	if pop > 1.001:
 		var c := rect.get_center()
 		draw_set_transform(c * (1.0 - pop), 0.0, Vector2(pop, pop))
-	var can_afford := coins >= BOMB_COST
-	# A: whenever a rewarded free bomb is available (inventory ready + under the
-	# per-level cap), the chip is the green "watch ad for a free bomb" affordance —
-	# regardless of coin balance, so the ad actually gets shown. Falls back to the
-	# coin price only when no free ad is available.
-	var ad_ready := _free_ad_bomb_available()
-	var bg: Color
-	var style_key: String
-	if ad_ready:
-		bg = Color("#a8e6c0")
-		style_key = "bomb_ad"
-	elif can_afford:
-		bg = Color("#f8f4a6")
-		style_key = "bomb_on"
+	var active := _water_boost_active()
+	var bg := Color("#8fdcff") if active else Color("#f8f4a6")
+	draw_style_box(_style("booster_active" if active else "booster_entry", bg, 14.0), rect)
+	if active:
+		draw_circle(rect.position + Vector2(22.0, 20.0), 10.0, Color("#49a7ff"))
+		draw_colored_polygon(PackedVector2Array([
+			rect.position + Vector2(22.0, 5.0),
+			rect.position + Vector2(32.0, 20.0),
+			rect.position + Vector2(12.0, 20.0),
+		]), Color("#49a7ff"))
 	else:
-		bg = Color(0.55, 0.6, 0.63, 0.85)
-		style_key = "bomb_off"
-	draw_style_box(_style(style_key, bg, 14.0), rect)
-	draw_circle(rect.position + Vector2(22.0, 17.0), 9.0, Color(1.0, 1.0, 1.0, 0.95))
-	draw_circle(rect.position + Vector2(32.0, 12.0), 6.0, Color(1.0, 1.0, 1.0, 0.8))
-	draw_circle(rect.position + Vector2(30.0, 22.0), 4.5, Color(1.0, 1.0, 1.0, 0.8))
-	draw_string(font, Vector2(rect.position.x + 42.0, rect.position.y + 20.0), tr("BOMB_LABEL"), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 11, Color("#123246"))
-	if ad_ready:
-		# Play triangle + "free": tap plays a rewarded ad for a free foam bomb.
-		var tx := rect.position.x + 48.0
-		var ty := rect.position.y + 33.0
-		draw_colored_polygon(PackedVector2Array([Vector2(tx, ty - 6.0), Vector2(tx, ty + 6.0), Vector2(tx + 9.0, ty)]), Color("#123246"))
-		draw_string(font, Vector2(rect.position.x + 60.0, rect.position.y + 38.0), tr("BOMB_FREE"), HORIZONTAL_ALIGNMENT_LEFT, 34.0, 12, Color("#0d3b2a"))
-	else:
-		draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
-		draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
-		draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
-	_draw_unaffordable_lock(rect, ad_ready or can_afford, Color("#123246"))
+		draw_circle(rect.position + Vector2(20.0, 17.0), 9.0, Color(1.0, 1.0, 1.0, 0.95))
+		draw_circle(rect.position + Vector2(30.0, 12.0), 6.0, Color(1.0, 1.0, 1.0, 0.8))
+		draw_circle(rect.position + Vector2(28.0, 23.0), 5.0, Color("#72c7ff"))
+	draw_string(font, Vector2(rect.position.x + 40.0, rect.position.y + 20.0), tr("WATER_BOOST_SHORT") if active else tr("BOOSTER_LABEL"), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 11, Color("#123246"))
+	var sub_text := tr("BOOSTER_ACTIVE") % int(ceil(_water_boost_remaining)) if active else tr("BOOSTER_SELECT")
+	draw_string(font, Vector2(rect.position.x + 40.0, rect.position.y + 38.0), sub_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0, 12, Color("#0d516d") if active else Color("#6b5200"))
 	if pop > 1.001:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_booster_panel() -> void:
+	var font: Font = _font()
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.08, 0.14, 0.68))
+	var panel := _booster_panel_rect()
+	draw_style_box(_style("booster_panel_shadow", Color(0.03, 0.13, 0.19, 0.45), 22.0), Rect2(panel.position + Vector2(0.0, 6.0), panel.size))
+	draw_style_box(_style("booster_panel", Color("#f7fbff"), 22.0), panel)
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 42.0), tr("BOOSTER_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 66.0), tr("COINS_LABEL") % coins, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#3a7fc1"))
+	var close_rect := _booster_close_rect(panel)
+	draw_style_box(_style("booster_close", Color("#e0e9f5"), 10.0), close_rect)
+	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 26.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 18, Color("#123246"))
+
+	var foam_card := _booster_card_rect(panel, 0)
+	var foam_ad_ready := _free_ad_bomb_available()
+	var foam_available := foam_ad_ready or coins >= BOMB_COST
+	draw_style_box(_style("booster_foam_on" if foam_available else "booster_foam_off", Color("#e9fbf2") if foam_available else Color("#e4e8eb"), 15.0), foam_card)
+	draw_circle(foam_card.position + Vector2(34.0, 42.0), 16.0, Color(1.0, 1.0, 1.0, 0.96))
+	draw_circle(foam_card.position + Vector2(48.0, 31.0), 10.0, Color(1.0, 0.96, 0.76, 0.9))
+	draw_circle(foam_card.position + Vector2(49.0, 50.0), 8.0, Color("#b7f0ff"))
+	draw_string(font, Vector2(foam_card.position.x + 70.0, foam_card.position.y + 29.0), tr("BOOSTER_FOAM"), HORIZONTAL_ALIGNMENT_LEFT, 136.0, 17, Color("#123246"))
+	draw_string(font, Vector2(foam_card.position.x + 70.0, foam_card.position.y + 51.0), tr("BOOSTER_FOAM_DESC"), HORIZONTAL_ALIGNMENT_LEFT, 140.0, 11, Color("#2c6b78"))
+	var foam_action := Rect2(foam_card.end.x - 78.0, foam_card.position.y + 24.0, 66.0, 40.0)
+	draw_style_box(_style("booster_foam_action_on" if foam_available else "booster_foam_action_off", Color("#39d98a") if foam_available else Color("#aeb9bf"), 11.0), foam_action)
+	draw_string(font, Vector2(foam_action.position.x, foam_action.position.y + 26.0), tr("BOMB_FREE") if foam_ad_ready else tr("COST_COIN") % BOMB_COST, HORIZONTAL_ALIGNMENT_CENTER, foam_action.size.x, 12, Color("#123246"))
+	_draw_unaffordable_lock(foam_card, foam_available, Color("#40515a"))
+
+	var water_card := _booster_card_rect(panel, 1)
+	var water_active := _water_boost_active()
+	var water_available := water_active or coins >= WATER_BOOST_COST
+	draw_style_box(_style("booster_water_active" if water_active else ("booster_water_on" if water_available else "booster_water_off"), Color("#d9f3ff") if water_available else Color("#e4e8eb"), 15.0), water_card)
+	_draw_tool_icon(TOOL_WATER, water_card.position + Vector2(40.0, 42.0))
+	draw_string(font, Vector2(water_card.position.x + 70.0, water_card.position.y + 29.0), tr("BOOSTER_WATER"), HORIZONTAL_ALIGNMENT_LEFT, 136.0, 17, Color("#123246"))
+	draw_string(font, Vector2(water_card.position.x + 70.0, water_card.position.y + 51.0), tr("BOOSTER_WATER_DESC") % int(WATER_BOOST_DURATION), HORIZONTAL_ALIGNMENT_LEFT, 140.0, 11, Color("#2c6b78"))
+	var water_action := Rect2(water_card.end.x - 78.0, water_card.position.y + 24.0, 66.0, 40.0)
+	draw_style_box(_style("booster_water_action_active" if water_active else ("booster_water_action_on" if water_available else "booster_water_action_off"), Color("#49a7ff") if water_available else Color("#aeb9bf"), 11.0), water_action)
+	var water_action_text := tr("BOOSTER_ACTIVE") % int(ceil(_water_boost_remaining)) if water_active else tr("COST_COIN") % WATER_BOOST_COST
+	draw_string(font, Vector2(water_action.position.x, water_action.position.y + 26.0), water_action_text, HORIZONTAL_ALIGNMENT_CENTER, water_action.size.x, 12, Color("#123246"))
+	_draw_unaffordable_lock(water_card, water_available, Color("#40515a"))
 
 
 func _draw_unaffordable_lock(rect: Rect2, available: bool, color: Color) -> void:
@@ -5379,10 +5500,22 @@ func _get_title_help_rect() -> Rect2:
 	return Rect2(50.0, _title_button_y(), 30.0, 30.0)
 
 
-func _get_bomb_rect() -> Rect2:
+func _get_booster_rect() -> Rect2:
 	# Bottom aligned with the hint chip, above the toolbar PANEL top so a bottom
 	# safe-area inset never lets the panel overlap this chip.
 	return Rect2(276.0, minf(688.0, _tool_button_y() - 76.0), 92.0, 46.0)
+
+
+func _booster_panel_rect() -> Rect2:
+	return Rect2(34.0, 302.0, 322.0, 286.0)
+
+
+func _booster_close_rect(panel: Rect2) -> Rect2:
+	return Rect2(panel.end.x - 46.0, panel.position.y + 8.0, 36.0, 36.0)
+
+
+func _booster_card_rect(panel: Rect2, index: int) -> Rect2:
+	return Rect2(panel.position.x + 14.0, panel.position.y + 78.0 + float(index) * 98.0, panel.size.x - 28.0, 88.0)
 
 
 func _get_upgrade_btn_rect() -> Rect2:
