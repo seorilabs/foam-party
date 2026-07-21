@@ -150,6 +150,8 @@ const STRINGS := {
 	"SOUND_OFF": ["소리 켜기", "Unmute"],
 	"LANGUAGE_KO": ["한국어", "한국어"],
 	"LANGUAGE_EN": ["English", "English"],
+	"REDUCE_MOTION_ON": ["모션 줄이기  켜짐", "Reduced Motion  On"],
+	"REDUCE_MOTION_OFF": ["모션 줄이기  꺼짐", "Reduced Motion  Off"],
 	"QUIT_CONFIRM": ["앱을 종료할까요?", "Quit the app?"],
 	"QUIT_YES": ["종료", "Quit"],
 	"QUIT_NO": ["취소", "Cancel"],

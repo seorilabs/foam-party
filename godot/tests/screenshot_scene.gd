@@ -357,6 +357,11 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_pause.png")):
 		quit(1)
 		return
+	node.call("_handle_tap", node.call("_pause_reduce_motion_rect").get_center())
+	if not await _capture(out_dir.path_join("shot_reduced_motion_settings.png")):
+		quit(1)
+		return
+	node.call("_handle_tap", node.call("_pause_reduce_motion_rect").get_center())
 	node.call("_select_language", "en")
 	if not await _capture(out_dir.path_join("shot_pause_language_en.png")):
 		quit(1)
@@ -455,6 +460,15 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_complete.png")):
 		quit(1)
 		return
+	node.call("set_reduce_motion_for_test", true)
+	node.get("particles").clear()
+	node.set("completion_burst_done", false)
+	node.call("_spawn_completion_burst")
+	await _settle(1)
+	if not await _capture(out_dir.path_join("shot_reduced_motion_complete.png")):
+		quit(1)
+		return
+	node.call("set_reduce_motion_for_test", false)
 	node.call("set_text_scale_for_test", 1.5)
 	await _settle(2)
 	if not await _capture(out_dir.path_join("shot_text_scale_complete_150.png")):
