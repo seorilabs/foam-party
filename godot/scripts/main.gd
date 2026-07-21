@@ -67,6 +67,8 @@ const REACH_UPGRADE_KEYS := GameConfig.REACH_UPGRADE_KEYS
 const REACH_UPGRADE_MAX_LEVEL := GameConfig.REACH_UPGRADE_MAX_LEVEL
 const UPGRADE_TAB_POWER := 0
 const UPGRADE_TAB_REACH := 1
+const TUTORIAL_TAB_TOOLS := 0
+const TUTORIAL_TAB_DIRT := 1
 const STATE_TITLE := "title"
 const STATE_PLAYING := "playing"
 const GAMEPLAY_SCALE := 1.16
@@ -238,6 +240,7 @@ var sound_enabled := true
 var language_preference := ""
 var tutorial_seen := false
 var show_tutorial := false
+var _tutorial_tab := TUTORIAL_TAB_TOOLS
 var _tutorial_returns_to_pause := false
 var _tutorial_event_source := ""
 var persistence_enabled := true
@@ -1785,6 +1788,10 @@ func get_recommended_tool_for_test(patch_index: int) -> String:
 	return _recommended_tool(dirt_patches[patch_index] as DirtPatch)
 
 
+func get_wash_guide_entries_for_test() -> Array:
+	return Coaching.wash_guide_entries()
+
+
 func is_tool_misapplied_for_test(tool_id: String, patch_index: int) -> bool:
 	if patch_index < 0 or patch_index >= dirt_patches.size():
 		return false
@@ -2026,7 +2033,7 @@ func _handle_tap(point: Vector2) -> bool:
 		return true
 
 	if show_tutorial:
-		_dismiss_tutorial()
+		_handle_tutorial_tap(point)
 		return true
 
 	if game_state == STATE_TITLE:
@@ -2166,8 +2173,21 @@ func _dismiss_tutorial() -> void:
 		_save_progress()
 
 
+func _handle_tutorial_tap(point: Vector2) -> void:
+	if _tutorial_close_rect().has_point(point) or _tutorial_done_rect().has_point(point):
+		_dismiss_tutorial()
+		return
+	for tab in [TUTORIAL_TAB_TOOLS, TUTORIAL_TAB_DIRT]:
+		if _tutorial_tab_rect(tab).has_point(point):
+			_tutorial_tab = tab
+			_play_ui_select()
+			queue_redraw()
+			return
+
+
 func _show_tutorial(source: String) -> void:
 	show_tutorial = true
+	_tutorial_tab = TUTORIAL_TAB_TOOLS
 	_tutorial_event_source = source
 	_emit_analytics(FtueEvents.tutorial_step_view(FtueEvents.TUTORIAL_STEP_OVERVIEW, source))
 
@@ -4720,10 +4740,32 @@ func _draw_pause_entry() -> void:
 func _draw_tutorial() -> void:
 	var font: Font = _font()
 	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.55))
-	var panel := Rect2(30.0, 176.0, 330.0, 452.0)
+	var panel: Rect2 = _tutorial_panel_rect()
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 44.0), tr("TUT_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 40.0), tr("TUT_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#123246"))
+	var close_rect: Rect2 = _tutorial_close_rect()
+	draw_style_box(_style("tutorial_close", Color("#e0e9f5"), 10.0), close_rect)
+	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 25.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 17, Color("#123246"))
+
+	for tab in [TUTORIAL_TAB_TOOLS, TUTORIAL_TAB_DIRT]:
+		var tab_rect: Rect2 = _tutorial_tab_rect(tab)
+		var selected: bool = tab == _tutorial_tab
+		var tab_style_key: String = "tutorial_tab_%d_%s" % [tab, "selected" if selected else "idle"]
+		draw_style_box(_style(tab_style_key, Color("#3a9ef0") if selected else Color("#d5e3f1"), 10.0), tab_rect)
+		draw_string(font, Vector2(tab_rect.position.x, tab_rect.position.y + 23.0), tr("TUT_TAB_TOOLS") if tab == TUTORIAL_TAB_TOOLS else tr("TUT_TAB_DIRT"), HORIZONTAL_ALIGNMENT_CENTER, tab_rect.size.x, 14, Color.WHITE if selected else Color("#49677c"))
+
+	if _tutorial_tab == TUTORIAL_TAB_DIRT:
+		_draw_wash_guide_rows(panel, font)
+	else:
+		_draw_tool_guide_rows(panel, font)
+
+	var done_rect: Rect2 = _tutorial_done_rect()
+	draw_style_box(_style("tutorial_done", Color("#39d98a"), 12.0), done_rect)
+	draw_string(font, Vector2(done_rect.position.x, done_rect.position.y + 27.0), tr("TUT_START"), HORIZONTAL_ALIGNMENT_CENTER, done_rect.size.x, 15, Color("#123246"))
+
+
+func _draw_tool_guide_rows(panel: Rect2, font: Font) -> void:
 
 	var rows := [
 		[TOOL_AIR, tr("TOOL_AIR"), tr("TUT_AIR")],
@@ -4733,14 +4775,64 @@ func _draw_tutorial() -> void:
 	]
 	for row_index in range(rows.size()):
 		var row: Array = rows[row_index]
-		var row_y := panel.position.y + 92.0 + float(row_index) * 72.0
-		draw_style_box(_style("tutorial_row", Color("#e8f3f8"), 14.0), Rect2(panel.position.x + 18.0, row_y - 26.0, panel.size.x - 36.0, 58.0))
-		_draw_tool_icon(row[0], Vector2(panel.position.x + 52.0, row_y + 2.0))
-		draw_string(font, Vector2(panel.position.x + 92.0, row_y - 2.0), row[1], HORIZONTAL_ALIGNMENT_LEFT, 200.0, 17, Color("#123246"))
-		draw_string(font, Vector2(panel.position.x + 92.0, row_y + 20.0), row[2], HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 116.0, 13, Color("#2c6b78"))
+		var row_y: float = panel.position.y + 154.0 + float(row_index) * 94.0
+		draw_style_box(_style("tutorial_tool_row_%d" % row_index, Color("#e8f3f8"), 14.0), Rect2(panel.position.x + 18.0, row_y - 30.0, panel.size.x - 36.0, 72.0))
+		_draw_tool_icon(row[0], Vector2(panel.position.x + 55.0, row_y + 5.0))
+		draw_string(font, Vector2(panel.position.x + 96.0, row_y - 3.0), row[1], HORIZONTAL_ALIGNMENT_LEFT, 200.0, 17, Color("#123246"))
+		draw_string(font, Vector2(panel.position.x + 96.0, row_y + 21.0), row[2], HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 120.0, 12, Color("#2c6b78"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 410.0), tr("TUT_TIP") % [BOMB_COST, WATER_BOOST_COST], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#2c6b78"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 436.0), tr("TUT_START"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 16, Color("#1f8a55"))
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 548.0), tr("TUT_TIP") % [BOMB_COST, WATER_BOOST_COST], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 12, Color("#2c6b78"))
+
+
+func _draw_wash_guide_rows(panel: Rect2, font: Font) -> void:
+	draw_string(font, Vector2(panel.position.x + 56.0, panel.position.y + 122.0), tr("GUIDE_HEADER_DIRT"), HORIZONTAL_ALIGNMENT_LEFT, 82.0, 11, Color("#6a8294"))
+	draw_string(font, Vector2(panel.position.x + 144.0, panel.position.y + 122.0), tr("GUIDE_HEADER_PATH"), HORIZONTAL_ALIGNMENT_LEFT, 180.0, 11, Color("#6a8294"))
+	var entries: Array = Coaching.wash_guide_entries()
+	for row_index in range(entries.size()):
+		var entry: Dictionary = entries[row_index]
+		var kind: String = String(entry["kind"])
+		var row_rect: Rect2 = _tutorial_dirt_row_rect(row_index)
+		draw_style_box(_style("tutorial_dirt_row_%d" % row_index, Color("#e8f3f8") if row_index % 2 == 0 else Color("#edf6fa"), 12.0), row_rect)
+		_draw_wash_guide_dirt_icon(kind, Vector2(row_rect.position.x + 24.0, row_rect.position.y + 26.0))
+		draw_string(font, Vector2(row_rect.position.x + 45.0, row_rect.position.y + 23.0), tr("GUIDE_DIRT_" + kind.to_upper()), HORIZONTAL_ALIGNMENT_LEFT, 82.0, 12, Color("#123246"))
+		var primary_text: String = _localized_tool_list(entry["primary"] as Array)
+		var follow_up_text: String = _localized_tool_list(entry["follow_up"] as Array)
+		if follow_up_text.is_empty():
+			follow_up_text = tr("GUIDE_NONE")
+		var path_text: String = "%s  →  %s" % [primary_text, follow_up_text]
+		draw_string(font, Vector2(row_rect.position.x + 132.0, row_rect.position.y + 23.0), path_text, HORIZONTAL_ALIGNMENT_LEFT, row_rect.size.x - 142.0, 11, Color("#155879"))
+		draw_string(font, Vector2(row_rect.position.x + 45.0, row_rect.position.y + 45.0), tr(String(entry["description_key"])), HORIZONTAL_ALIGNMENT_LEFT, row_rect.size.x - 55.0, 10, Color("#49677c"))
+
+
+func _localized_tool_list(tool_ids_to_join: Array) -> String:
+	var labels: PackedStringArray = []
+	for tool_id in tool_ids_to_join:
+		labels.append(tr("TOOL_" + String(tool_id).to_upper()))
+	return "·".join(labels)
+
+
+func _draw_wash_guide_dirt_icon(kind: String, center: Vector2) -> void:
+	draw_circle(center, 17.0, Color("#f8fbfd"))
+	match kind:
+		"mud":
+			_draw_mud_patch(center, 10.0, 1.0, 0.8)
+		"dust":
+			draw_circle(center, 10.5, Color(0.86, 0.75, 0.52, 0.64))
+			for index in range(6):
+				var angle: float = float(index) * TAU / 6.0
+				draw_circle(center + Vector2.from_angle(angle) * 7.0, 1.8, Color(0.55, 0.43, 0.28, 0.72))
+		"leaf":
+			_draw_leaf_patch(center, 10.0, 1.0)
+		"oil":
+			_draw_oil_patch(center, 10.0, 1.0, 0.8)
+		"bug":
+			_draw_bug_patch(center, 10.0, 1.0, 0.8)
+		"poop":
+			_draw_poop_patch(center, 10.0, 1.0, 0.8)
+		"road_grime":
+			_draw_road_grime_patch(center, 10.0, 1.0, 0.8)
+		"sap":
+			_draw_sap_patch(center, 10.0, 1.0, 0.8)
 
 
 func _draw_booster_button() -> void:
@@ -5604,6 +5696,32 @@ func _pause_row_rect(row_index: int) -> Rect2:
 	var gap := 8.0
 	var y0 := panel.position.y + 72.0
 	return Rect2(panel.position.x + 24.0, y0 + float(row_index) * (button_h + gap), panel.size.x - 48.0, button_h)
+
+
+func _tutorial_panel_rect() -> Rect2:
+	return Rect2(20.0, 78.0, 350.0, 688.0)
+
+
+func _tutorial_close_rect() -> Rect2:
+	var panel: Rect2 = _tutorial_panel_rect()
+	return Rect2(panel.end.x - 46.0, panel.position.y + 8.0, 36.0, 36.0)
+
+
+func _tutorial_tab_rect(tab: int) -> Rect2:
+	var panel: Rect2 = _tutorial_panel_rect()
+	var gap: float = 8.0
+	var width: float = (panel.size.x - 40.0 - gap) * 0.5
+	return Rect2(panel.position.x + 20.0 + float(tab) * (width + gap), panel.position.y + 58.0, width, 34.0)
+
+
+func _tutorial_dirt_row_rect(index: int) -> Rect2:
+	var panel: Rect2 = _tutorial_panel_rect()
+	return Rect2(panel.position.x + 16.0, panel.position.y + 132.0 + float(index) * 60.0, panel.size.x - 32.0, 54.0)
+
+
+func _tutorial_done_rect() -> Rect2:
+	var panel: Rect2 = _tutorial_panel_rect()
+	return Rect2(panel.position.x + 72.0, panel.end.y - 54.0, panel.size.x - 144.0, 40.0)
 
 
 func _quit_panel() -> Rect2:

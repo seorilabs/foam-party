@@ -153,7 +153,12 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_tutorial.png")):
 		quit(1)
 		return
-	node.call("_dismiss_tutorial")
+	node.call("_handle_tap", node.call("_tutorial_tab_rect", 1).get_center())
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_wash_guide.png")):
+		quit(1)
+		return
+	node.call("_handle_tap", node.call("_tutorial_done_rect").get_center())
 	node.set("coins", 0)
 	node.call("_handle_tap", node.call("_get_booster_rect").get_center())
 	await _settle(3)

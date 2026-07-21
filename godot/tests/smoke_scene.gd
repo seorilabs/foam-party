@@ -323,6 +323,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_ftue_entry_and_tutorial_event_order_and_params(analytics_recorder.events):
 		return
+	if not _test_wash_guide_contract(root_node):
+		return
 
 	analytics_recorder.events.clear()
 	root_node.call("reset_game", 2, "smoke_retry")
@@ -2316,6 +2318,66 @@ func _test_non_color_accessibility_cues(root_node: Node) -> bool:
 			or not main_source.contains("_draw_patience_tier_pattern(bar, fill_rect"):
 		_fail("non-color accessibility cues must stay inside existing surface rects")
 		return false
+	return true
+
+
+func _test_wash_guide_contract(root_node: Node) -> bool:
+	var original_game_state: String = String(root_node.get("game_state"))
+	var baseline_control_count: int = root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	root_node.set("game_state", "title")
+	root_node.set("show_tutorial", false)
+	root_node.call("_handle_tap", root_node.call("_get_title_help_rect").get_center())
+	if not bool(root_node.get("show_tutorial")) or int(root_node.get("_tutorial_tab")) != 0:
+		_fail("title help must reopen the wash guide on its tools tab")
+		return false
+	root_node.call("_handle_tap", root_node.call("_tutorial_tab_rect", 1).get_center())
+	if not bool(root_node.get("show_tutorial")) or int(root_node.get("_tutorial_tab")) != 1:
+		_fail("wash guide must switch to the dirt catalog inside the same modal")
+		return false
+
+	var expected_kinds: Array = GameConfig.DIRT_TYPES
+	var entries: Array = root_node.call("get_wash_guide_entries_for_test")
+	if entries.size() != expected_kinds.size() or entries.size() != 8:
+		_fail("wash guide must cover all eight current dirt types")
+		return false
+	var panel: Rect2 = root_node.call("_tutorial_panel_rect")
+	var previous_row := Rect2()
+	for index in range(entries.size()):
+		var entry: Dictionary = entries[index]
+		if String(entry.get("kind", "")) != String(expected_kinds[index]) \
+				or (entry.get("primary", []) as Array).is_empty() \
+				or String(entry.get("description_key", "")).is_empty():
+			_fail("each current dirt must expose an icon row, primary path, and description")
+			return false
+		var row: Rect2 = root_node.call("_tutorial_dirt_row_rect", index)
+		if not panel.encloses(row) or (index > 0 and previous_row.intersects(row)):
+			_fail("all dirt guide rows must fit without overlap in the existing guide modal")
+			return false
+		previous_row = row
+	if not panel.encloses(root_node.call("_tutorial_tab_rect", 0)) \
+			or not panel.encloses(root_node.call("_tutorial_tab_rect", 1)) \
+			or not panel.encloses(root_node.call("_tutorial_done_rect")):
+		_fail("wash guide tabs and close action must remain inside the existing modal")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_count \
+			or root_node.call("_get_status_rect") != baseline_hud_rects["status"] \
+			or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] \
+			or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] \
+			or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("wash guide must not add or move a persistent gameplay HUD element")
+		return false
+
+	root_node.call("_handle_tap", root_node.call("_tutorial_done_rect").get_center())
+	if bool(root_node.get("show_tutorial")) or String(root_node.get("game_state")) != "title":
+		_fail("closing the wash guide must return immediately to the prior title screen")
+		return false
+	root_node.set("game_state", original_game_state)
 	return true
 
 
