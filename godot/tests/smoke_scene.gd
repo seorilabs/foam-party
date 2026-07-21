@@ -27,6 +27,36 @@ func _initialize() -> void:
 	_run_smoke.call_deferred()
 
 
+func _test_economy_balance_hud_residency(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	var original_level_time := float(root_node.get("level_time"))
+	var original_best_combo := int(root_node.get("best_combo"))
+	root_node.set("level_time", 60.0)
+	root_node.set("best_combo", 15)
+	var reward := int(root_node.call("calc_coin_reward_for_test"))
+	root_node.set("level_time", original_level_time)
+	root_node.set("best_combo", original_best_combo)
+	if reward != 70:
+		_fail("economy residency fixture must execute the combo-15 reward path")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("economy balance must not add persistent UI controls")
+		return false
+	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] \
+			or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] \
+			or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] \
+			or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("economy balance must keep the existing top HUD residency unchanged")
+		return false
+	return true
+
+
 func _test_native_ad_contract() -> bool:
 	if NativeAds.unit_id("interstitial", "game_over", "Android") != "ca-app-pub-3940256099942544/1033173712":
 		_fail("Android native interstitial test ID missing")
@@ -293,6 +323,8 @@ func _run_smoke() -> void:
 		_fail("no countdown should remain once only the floor star is left")
 		return
 	root_node.set("best_combo", 10)
+	if not _test_economy_balance_hud_residency(root_node):
+		return
 
 	if int(root_node.call("calc_coin_reward_for_test")) != 44:
 		_fail("expected 44 coins for 1-star clear at combo 10")
