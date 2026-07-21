@@ -212,6 +212,7 @@ var game_state := STATE_TITLE
 var coins := 0
 var total_stars := 0
 var coin_reward := 0
+var customer_tip_reward := 0
 var _level_milestone_bonus := 0
 var level_mistakes := 0
 var _perfect_wash_bonus := 0
@@ -1228,6 +1229,7 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_progress_milestone_text = ""
 	_progress_milestone_color = Color.WHITE
 	_level_milestone_bonus = 0
+	customer_tip_reward = 0
 	level_mistakes = 0
 	_perfect_wash_bonus = 0
 	_stop_tool_loop()
@@ -1293,6 +1295,14 @@ func is_star3_combo_unlocked_for_test() -> bool:
 
 func get_customer_patience_for_test(elapsed_seconds: float, progress: float) -> float:
 	return CustomerPatience.value(elapsed_seconds, progress)
+
+
+func calc_customer_tip_for_test(elapsed_seconds: float, progress: float, payout_ratio: float = 1.0) -> int:
+	return Economy.calc_customer_tip(CustomerPatience.value(elapsed_seconds, progress), payout_ratio)
+
+
+func get_customer_tip_reward_for_test() -> int:
+	return customer_tip_reward
 
 
 func get_customer_patience_zone_for_test(elapsed_seconds: float, progress: float) -> int:
@@ -3091,6 +3101,8 @@ func _update_clean_progress() -> void:
 		earned_stars = _calc_stars()
 		_customer_completion_time = float(Time.get_ticks_msec()) / 1000.0
 		coin_reward = _calc_coin_reward(earned_stars)
+		customer_tip_reward = Economy.calc_customer_tip(_current_customer_patience())
+		coin_reward += customer_tip_reward
 		_perfect_wash_bonus = Economy.perfect_wash_bonus(earned_stars) if level_mistakes == 0 else 0
 		coin_reward += _perfect_wash_bonus
 		_level_milestone_bonus = _calc_level_milestone_bonus(active_level_index)
@@ -5376,6 +5388,10 @@ func _draw_completion_panel() -> void:
 		draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#9a7400"), false, 1.5)
 	draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 21.0), "+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 15, Color("#6b5200"))  # numeric only, locale-neutral
 
+	var tip_chip := _customer_tip_chip_rect(panel)
+	draw_style_box(_style("tip_chip", Color("#f7d8ff"), 14.0), tip_chip)
+	draw_string(font, Vector2(tip_chip.position.x, tip_chip.position.y + 20.0), tr("PATIENCE_TIP_CHIP") % customer_tip_reward, HORIZONTAL_ALIGNMENT_CENTER, tip_chip.size.x, 13, Color("#70407d"))
+
 	if _level_milestone_bonus > 0:
 		var time_now2 := float(Time.get_ticks_msec()) / 1000.0
 		var milestone_chip := Rect2(panel.position.x + 10.0, panel.position.y - 14.0, 106.0, 30.0)
@@ -5427,7 +5443,11 @@ func _draw_completion_panel() -> void:
 
 
 func _completion_panel_rect() -> Rect2:
-	return Rect2(38.0, 198.0, 314.0, 232.0 + _completion_extra())
+	return Rect2(38.0, 198.0, 314.0, 272.0 + _completion_extra())
+
+
+func _customer_tip_chip_rect(panel: Rect2) -> Rect2:
+	return Rect2(panel.position.x + 76.0, panel.position.y + 148.0, 162.0, 28.0)
 
 
 func _perfect_chip_rect(panel: Rect2) -> Rect2:
@@ -5512,7 +5532,7 @@ func _completion_extra() -> float:
 
 
 func _get_double_rect() -> Rect2:
-	return Rect2(58.0, 352.0, 274.0, 42.0)
+	return Rect2(58.0, 392.0, 274.0, 42.0)
 
 
 # Pause/settings sheet: resume / restart / sound / language / guide / home / quit.
@@ -5568,11 +5588,11 @@ func _quit_no_rect() -> Rect2:
 
 
 func _get_retry_rect() -> Rect2:
-	return Rect2(58.0, 360.0 + _completion_extra(), 131.0, 46.0)
+	return Rect2(58.0, 400.0 + _completion_extra(), 131.0, 46.0)
 
 
 func _get_next_rect() -> Rect2:
-	return Rect2(201.0, 360.0 + _completion_extra(), 131.0, 46.0)
+	return Rect2(201.0, 400.0 + _completion_extra(), 131.0, 46.0)
 
 
 func _get_start_rect() -> Rect2:

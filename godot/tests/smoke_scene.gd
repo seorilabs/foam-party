@@ -2,6 +2,7 @@ extends SceneTree
 
 const AdService := preload("res://scripts/services/ad_service.gd")
 const GameConfig := preload("res://core/domain/game_config.gd")
+const Economy := preload("res://core/use_cases/economy.gd")
 const NativeAds := preload("res://scripts/services/native_ad_config.gd")
 
 
@@ -356,6 +357,8 @@ func _run_smoke() -> void:
 	if not _test_wheel_dirt_contract(root_node):
 		return
 	if not _test_customer_patience_contract(root_node):
+		return
+	if not _test_customer_tip_contract(root_node):
 		return
 	if not _test_non_color_accessibility_cues(root_node):
 		return
@@ -2144,6 +2147,142 @@ func _test_customer_patience_contract(root_node: Node) -> bool:
 	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
 		_fail("progress-aware patience must keep the existing HUD residency unchanged")
 		return false
+	return true
+
+
+func _test_customer_tip_contract(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	var original_state := {
+		"active_level": root_node.call("get_active_level_for_test"),
+		"game_state": root_node.get("game_state"),
+		"level_index": root_node.get("level_index"),
+		"coins": root_node.get("coins"),
+		"total_stars": root_node.get("total_stars"),
+		"best_times": root_node.get("best_times").duplicate(true),
+		"best_stars": root_node.get("best_stars").duplicate(true),
+		"achievement_counters": root_node.call("get_achievement_counters_for_test"),
+		"achievement_claimed": root_node.call("get_achievement_claimed_for_test"),
+		"main_save_dirty": root_node.get("_main_save_dirty"),
+		"double_offer": root_node.get("_double_offer_shown"),
+		"daily_type": root_node.get("daily_mission_type"),
+		"daily_label": root_node.get("daily_mission_label"),
+		"daily_target": root_node.get("daily_mission_target"),
+		"daily_requirement": root_node.get("daily_mission_requirement"),
+		"daily_reward": root_node.get("daily_mission_reward"),
+		"daily_progress": root_node.get("daily_mission_progress"),
+		"daily_claimed": root_node.get("daily_mission_claimed"),
+	}
+
+	# AC-1/2: the same progress-aware patience curve feeds a named linear rule.
+	# A later clear must pay less, zero patience pays zero, and full patience is
+	# capped even before a future rewashing ratio is applied.
+	var fast_tip := int(root_node.call("calc_customer_tip_for_test", 30.0, 1.0))
+	var late_tip := int(root_node.call("calc_customer_tip_for_test", 140.0, 1.0))
+	var exhausted_tip := int(root_node.call("calc_customer_tip_for_test", 500.0, 1.0))
+	if fast_tip != 11 or late_tip != 7 or not (fast_tip > late_tip and late_tip > exhausted_tip) \
+			or exhausted_tip != 0 \
+			or int(root_node.call("calc_customer_tip_for_test", 0.0, 0.0)) != GameConfig.PATIENCE_TIP_MAX_COINS:
+		_fail("completion tip must follow remaining patience from the named 12-coin cap to zero")
+		return false
+	if int(root_node.call("calc_customer_tip_for_test", 0.0, 0.0, 0.5)) != 6:
+		_fail("customer tip must expose the same 50 percent ratio needed by rewashing rewards")
+		return false
+
+	# Execute the real completion path at high and exhausted patience. Keep daily
+	# and achievement rewards inert so every observed coin belongs to completion.
+	root_node.call("reset_game", 1, "customer_tip_fast_smoke")
+	root_node.call("configure_daily_mission_for_test", "road_grime")
+	root_node.set("daily_mission_claimed", true)
+	root_node.call("set_achievement_state_for_test", {}, {})
+	root_node.set("coins", 0)
+	root_node.set("total_stars", 0)
+	root_node.set("level_time", 30.0)
+	root_node.set("best_combo", 4)
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	var fast_completion_tip := int(root_node.call("get_customer_tip_reward_for_test"))
+	var fast_expected_reward := int(Economy.calc_coin_reward(3, 4)) + int(Economy.perfect_wash_bonus(3)) + fast_completion_tip
+	if fast_completion_tip != fast_tip \
+			or int(root_node.get("coin_reward")) != fast_expected_reward \
+			or int(root_node.call("get_coins_for_test")) != fast_expected_reward:
+		_fail("fast real completion must add the latched patience tip exactly once")
+		return false
+
+	root_node.call("reset_game", 1, "customer_tip_exhausted_smoke")
+	root_node.call("configure_daily_mission_for_test", "road_grime")
+	root_node.set("daily_mission_claimed", true)
+	root_node.call("set_achievement_state_for_test", {}, {})
+	root_node.set("coins", 0)
+	root_node.set("total_stars", 0)
+	root_node.set("level_time", 500.0)
+	root_node.set("best_combo", 4)
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	var exhausted_expected_reward := int(Economy.calc_coin_reward(1, 4)) + int(Economy.perfect_wash_bonus(1))
+	if int(root_node.call("get_customer_tip_reward_for_test")) != 0 \
+			or int(root_node.get("coin_reward")) != exhausted_expected_reward \
+			or int(root_node.call("get_coins_for_test")) != exhausted_expected_reward:
+		_fail("exhausted real completion must grant no customer tip")
+		return false
+
+	# AC-4/5: the tip is a fixed chip inside the existing completion panel. The
+	# optional ad row and action buttons stay disjoint, and the playing HUD keeps
+	# its existing four resident rects and Control count.
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var completion_start := main_source.find("func _draw_completion_panel() -> void:")
+	var completion_end := main_source.find("\nfunc _completion_panel_rect() -> Rect2:", completion_start)
+	var completion_body := main_source.substr(completion_start, completion_end - completion_start)
+	if not completion_body.contains('tr("PATIENCE_TIP_CHIP") % customer_tip_reward') \
+			or not completion_body.contains('var tip_chip := _customer_tip_chip_rect(panel)'):
+		_fail("completion panel must render the latched customer tip in its own chip")
+		return false
+	root_node.set("_double_offer_shown", true)
+	var completion_panel: Rect2 = root_node.call("_completion_panel_rect")
+	var tip_chip: Rect2 = root_node.call("_customer_tip_chip_rect", completion_panel)
+	var double_rect: Rect2 = root_node.call("_get_double_rect")
+	var retry_rect: Rect2 = root_node.call("_get_retry_rect")
+	var next_rect: Rect2 = root_node.call("_get_next_rect")
+	if not completion_panel.encloses(tip_chip) \
+			or tip_chip.intersects(double_rect) \
+			or tip_chip.intersects(retry_rect) \
+			or tip_chip.intersects(next_rect) \
+			or double_rect.intersects(retry_rect) \
+			or double_rect.intersects(next_rect):
+		_fail("customer tip chip and existing completion actions must remain inside one non-overlapping panel")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children \
+			or root_node.call("_get_status_rect") != baseline_hud_rects["status"] \
+			or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] \
+			or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] \
+			or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("completion-only customer tip must not add or move a persistent playing HUD element")
+		return false
+
+	root_node.call("reset_game", int(original_state["active_level"]), "customer_tip_smoke_cleanup")
+	root_node.set("game_state", original_state["game_state"])
+	root_node.set("level_index", original_state["level_index"])
+	root_node.set("coins", original_state["coins"])
+	root_node.set("total_stars", original_state["total_stars"])
+	root_node.set("best_times", original_state["best_times"])
+	root_node.set("best_stars", original_state["best_stars"])
+	root_node.call("set_achievement_state_for_test", original_state["achievement_counters"], original_state["achievement_claimed"])
+	root_node.set("_main_save_dirty", original_state["main_save_dirty"])
+	root_node.set("_double_offer_shown", original_state["double_offer"])
+	root_node.set("daily_mission_type", original_state["daily_type"])
+	root_node.set("daily_mission_label", original_state["daily_label"])
+	root_node.set("daily_mission_target", original_state["daily_target"])
+	root_node.set("daily_mission_requirement", original_state["daily_requirement"])
+	root_node.set("daily_mission_reward", original_state["daily_reward"])
+	root_node.set("daily_mission_progress", original_state["daily_progress"])
+	root_node.set("daily_mission_claimed", original_state["daily_claimed"])
 	return true
 
 

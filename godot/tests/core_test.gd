@@ -139,6 +139,22 @@ func _run_core_tests() -> void:
 			or int(GameConfig.COIN_REWARD_COMBO_CAP) != 15:
 		_fail("completion reward tuning must remain centralized in GameConfig")
 		return
+	if absf(float(GameConfig.PATIENCE_TIP_COINS_PER_FULL_PATIENCE) - 12.0) > 0.001 \
+			or int(GameConfig.PATIENCE_TIP_MAX_COINS) != 12:
+		_fail("customer tip formula and cap must remain named GameConfig tuning")
+		return
+	if int(Economy.calc_customer_tip(-0.5)) != 0 \
+			or int(Economy.calc_customer_tip(0.0)) != 0 \
+			or int(Economy.calc_customer_tip(0.5)) != 6 \
+			or int(Economy.calc_customer_tip(0.75)) != 9 \
+			or int(Economy.calc_customer_tip(1.0)) != 12 \
+			or int(Economy.calc_customer_tip(2.0)) != 12:
+		_fail("customer tip must scale linearly from zero and stop at the named cap")
+		return
+	if int(Economy.calc_customer_tip(1.0, 0.5)) != 6 \
+			or int(Economy.calc_customer_tip(1.0, 2.0)) != 12:
+		_fail("customer tip must accept a bounded shared rewashing payout ratio after capping")
+		return
 	if GameConfig.COMBO_BONUS_AMOUNTS != {5: 5, 8: 8, 10: 10, 12: 12, 15: 15, 20: 20}:
 		_fail("combo milestone rewards must include the eight and twelve steps")
 		return

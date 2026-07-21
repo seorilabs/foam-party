@@ -401,6 +401,12 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_complete.png")):
 		quit(1)
 		return
+	node.set("_double_offer_shown", true)
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_complete_with_double_offer.png")):
+		quit(1)
+		return
+	node.set("_double_offer_shown", false)
 	for stars in [1, 2, 3]:
 		node.set("earned_stars", stars)
 		node.set("_customer_completion_time", float(Time.get_ticks_msec()) / 1000.0)

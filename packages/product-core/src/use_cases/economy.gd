@@ -16,6 +16,17 @@ static func calc_coin_reward(stars: int, best_combo: int) -> int:
 	)
 
 
+static func calc_customer_tip(patience: float, payout_ratio: float = 1.0) -> int:
+	var bounded_patience := clampf(patience, 0.0, 1.0)
+	var full_tip := mini(
+		floori(bounded_patience * GameConfig.PATIENCE_TIP_COINS_PER_FULL_PATIENCE),
+		GameConfig.PATIENCE_TIP_MAX_COINS
+	)
+	# Rewash reduction is applied after the full tip is capped. Issue #84 can
+	# therefore share its completion payout ratio without duplicating this rule.
+	return floori(float(full_tip) * clampf(payout_ratio, 0.0, 1.0))
+
+
 static func perfect_wash_bonus(stars: int) -> int:
 	if stars <= 0:
 		return 0
