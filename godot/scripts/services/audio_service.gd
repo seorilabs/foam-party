@@ -854,6 +854,13 @@ func get_bgm_variant_index_for_test() -> int:
 	return bgm_variant_index
 
 
+func get_bgm_playback_state_for_test() -> Dictionary:
+	return {
+		"enabled": audio_playback_enabled,
+		"playing": bgm_player.playing,
+	}
+
+
 func get_bgm_variant_signatures_for_test() -> Array[int]:
 	var signatures: Array[int] = []
 	for stream in bgm_streams:

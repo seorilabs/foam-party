@@ -1628,6 +1628,10 @@ func get_bgm_variant_index_for_test() -> int:
 	return audio.get_bgm_variant_index_for_test()
 
 
+func get_bgm_playback_state_for_test() -> Dictionary:
+	return audio.get_bgm_playback_state_for_test()
+
+
 func get_bgm_variant_signatures_for_test() -> Array[int]:
 	return audio.get_bgm_variant_signatures_for_test()
 

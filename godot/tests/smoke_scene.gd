@@ -2797,6 +2797,10 @@ func _test_audio_bus_contract(root_node: Node) -> bool:
 	if int(root_node.call("get_bgm_variant_count_for_test")) != 3:
 		_fail("expected three runtime-synthesized BGM variants")
 		return false
+	var bgm_playback_state: Dictionary = root_node.call("get_bgm_playback_state_for_test")
+	if bool(bgm_playback_state["enabled"]) or bool(bgm_playback_state["playing"]):
+		_fail("headless BGM smoke must synthesize streams without playback")
+		return false
 	var bgm_signatures: Array[int] = root_node.call("get_bgm_variant_signatures_for_test")
 	var unique_bgm_signatures := {}
 	for signature in bgm_signatures:
