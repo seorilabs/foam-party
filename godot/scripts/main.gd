@@ -1648,6 +1648,10 @@ func get_sfx_enabled_for_test() -> bool:
 	return sfx_enabled
 
 
+func get_soap_foam_layout_for_test(amount: float) -> Array[Dictionary]:
+	return _soap_foam_bubbles(Vector2.ZERO, 40.0, amount)
+
+
 func get_combo_for_test() -> int:
 	return combo_count
 
@@ -4734,13 +4738,102 @@ func _draw_wet_gloss(center: Vector2, radius: float, wetness: float) -> void:
 	draw_circle(center + Vector2(-radius * 0.28, -radius * 0.32), maxf(1.2, radius * 0.075), Color(1.0, 1.0, 1.0, alpha * 0.9))
 
 
+func _soap_foam_count(strength: float, satellite: bool) -> int:
+	if strength <= 0.0:
+		return 0
+	return 2 + roundi(strength * 5.0) if satellite else 4 + roundi(strength * 7.0)
+
+
+func _soap_foam_bubble_params(radius: float, strength: float, index: int, count: int, satellite: bool) -> Vector4:
+	if satellite:
+		var satellite_size := 0.08
+		match index % 3:
+			1:
+				satellite_size = 0.12
+			2:
+				satellite_size = 0.10
+		var satellite_angle := float(index) * TAU / float(count) + 0.47
+		var orbit := radius * (0.48 + 0.18 * sin(float(index) * 1.73 + 0.8))
+		var satellite_radius := maxf(
+			1.8,
+			radius * satellite_size * (0.78 + 0.22 * strength)
+		)
+		var satellite_offset := Vector2.from_angle(satellite_angle) * orbit
+		return Vector4(satellite_offset.x, satellite_offset.y, satellite_radius, fmod(0.58 + float(index) * 0.163, 1.0))
+	var cluster_size := 0.30
+	match index % 4:
+		1:
+			cluster_size = 0.21
+		2:
+			cluster_size = 0.26
+		3:
+			cluster_size = 0.18
+	var cluster_angle := float(index) * TAU / float(count) + sin(float(index) * 1.37) * 0.14
+	var ring := 0.10 + 0.46 * (0.5 + 0.5 * sin(float(index) * 2.17 + 0.4))
+	var cluster_offset := Vector2.from_angle(cluster_angle) * radius * ring * (0.74 + 0.26 * strength)
+	var cluster_radius := maxf(2.2, radius * cluster_size * (0.72 + 0.28 * strength))
+	return Vector4(cluster_offset.x, cluster_offset.y, cluster_radius, fmod(0.50 + float(index) * 0.117, 1.0))
+
+
+func _soap_foam_alpha(strength: float, index: int, satellite: bool) -> float:
+	if satellite:
+		return (0.43 + 0.05 * cos(float(index) * 2.11)) * (0.45 + 0.55 * strength)
+	return (0.48 + 0.07 * sin(float(index) * 1.91)) * (0.42 + 0.58 * strength)
+
+
+func _soap_foam_saturation(index: int, satellite: bool) -> float:
+	return 0.09 + 0.02 * float(index % 2) if satellite else 0.07 + 0.025 * float(index % 3)
+
+
+func _soap_foam_bubbles(center: Vector2, radius: float, amount: float) -> Array[Dictionary]:
+	# Test-only layout projection. Runtime drawing below uses the same scalar
+	# helpers directly so mobile frames do not allocate per-bubble Dictionaries.
+	var strength := clampf(amount, 0.0, 1.0)
+	var bubbles: Array[Dictionary] = []
+	for satellite in [false, true]:
+		var count := _soap_foam_count(strength, satellite)
+		for index in range(count):
+			var params := _soap_foam_bubble_params(radius, strength, index, count, satellite)
+			var bubble_radius := params.z
+			var alpha := _soap_foam_alpha(strength, index, satellite)
+			bubbles.append({
+				"role": "satellite" if satellite else "cluster",
+				"position": center + Vector2(params.x, params.y),
+				"radius": bubble_radius,
+				"fill": Color.from_hsv(params.w, _soap_foam_saturation(index, satellite), 1.0, alpha),
+				"highlight_offset": Vector2(-bubble_radius * (0.30 if satellite else 0.32), -bubble_radius * (0.32 if satellite else 0.34)),
+				"highlight_radius": maxf(0.9 if satellite else 1.1, bubble_radius * (0.22 if satellite else 0.21)),
+			})
+	return bubbles
+
+
+func _draw_soap_foam_bubble(center: Vector2, params: Vector4, alpha: float, saturation: float, satellite: bool) -> void:
+	var position := center + Vector2(params.x, params.y)
+	var bubble_radius := params.z
+	var fill := Color.from_hsv(params.w, saturation, 1.0, alpha)
+	var outline_hue := fmod(params.w + (0.06 if satellite else 0.05), 1.0)
+	var outline_saturation := 0.15 if satellite else 0.14
+	var outline_alpha := minf(0.74 if satellite else 0.78, alpha + (0.18 if satellite else 0.20))
+	var outline := Color.from_hsv(outline_hue, outline_saturation, 1.0, outline_alpha)
+	var shadow := Color(0.42, 0.73, 0.86, fill.a * 0.18)
+	var highlight_offset := Vector2(-bubble_radius * (0.30 if satellite else 0.32), -bubble_radius * (0.32 if satellite else 0.34))
+	var highlight_radius := maxf(0.9 if satellite else 1.1, bubble_radius * (0.22 if satellite else 0.21))
+	draw_circle(position + Vector2(0.0, bubble_radius * 0.12), bubble_radius * 1.03, shadow)
+	draw_circle(position, bubble_radius, fill)
+	draw_arc(position, bubble_radius, 0.0, TAU, 16, outline, maxf(1.0, bubble_radius * 0.11))
+	draw_circle(position + highlight_offset, highlight_radius, Color(1.0, 1.0, 1.0, minf(0.94, fill.a + 0.30)))
+
+
 func _draw_soap_foam(center: Vector2, radius: float, amount: float) -> void:
-	var bubble_count := 5 + int(amount * 8.0)
-	for index in range(bubble_count):
-		var angle := float(index) * TAU / float(bubble_count)
-		var offset := Vector2(cos(angle), sin(angle)) * radius * (0.3 + 0.45 * sin(float(index)))
-		var bubble_radius := radius * (0.16 + 0.1 * cos(float(index) * 1.7))
-		draw_circle(center + offset, max(2.0, bubble_radius), Color(1.0, 1.0, 1.0, 0.64 * amount))
+	var strength := clampf(amount, 0.0, 1.0)
+	var cluster_count := _soap_foam_count(strength, false)
+	for index in range(cluster_count):
+		var cluster_params := _soap_foam_bubble_params(radius, strength, index, cluster_count, false)
+		_draw_soap_foam_bubble(center, cluster_params, _soap_foam_alpha(strength, index, false), _soap_foam_saturation(index, false), false)
+	var satellite_count := _soap_foam_count(strength, true)
+	for index in range(satellite_count):
+		var satellite_params := _soap_foam_bubble_params(radius, strength, index, satellite_count, true)
+		_draw_soap_foam_bubble(center, satellite_params, _soap_foam_alpha(strength, index, true), _soap_foam_saturation(index, true), true)
 
 
 func _draw_particles() -> void:
