@@ -17,6 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from patch_ios_admob_project import BUILD_FILE, LOCAL_REF, patch
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CI_POST_CLONE = REPO_ROOT / "build" / "ios" / "ci_scripts" / "ci_post_clone.sh"
+
 
 # Godot 4.6.3 iOS export 가 굽는 pbxproj 의 최소 재현본. patch() 가 의존하는 앵커를
 # 모두 포함한다: PBXBuildFile/PBXGroup 섹션 주석, PBXFrameworksBuildPhase 의 files
@@ -134,6 +137,37 @@ class PatchIosAdMobProjectTest(unittest.TestCase):
         path = self._write_fixture(broken)
         with self.assertRaises(SystemExit):
             patch(path)
+
+
+class CiPostCloneOrchestrationTest(unittest.TestCase):
+    """Xcode Cloud ci_post_clone.sh 가 export 전후로 올바른 스크립트를 부르는지 고정한다.
+
+    headless export 는 AdMob export 플러그인의 deferred pbxproj 패치를 실행하지 않으므로
+    export 후 patch_ios_admob_project.py 호출이 반드시 있어야 GAD*/UMP* 링크가 성공한다.
+    광고 ID 는 export 시점의 .gdip 를 읽으므로 configure_native_ads.py 는 export 전에
+    실행돼야 한다. 두 호출의 상대적 순서가 계약이라 순서까지 assertion 으로 고정한다.
+    """
+
+    def setUp(self) -> None:
+        self.script = CI_POST_CLONE.read_text(encoding="utf-8")
+        self.export_at = self.script.find("--export-release iOS")
+        self.assertNotEqual(self.export_at, -1, "export 단계를 찾지 못함")
+
+    def test_patches_pbxproj_after_export(self) -> None:
+        """AC-1: export 후 tools/patch_ios_admob_project.py 로 pbxproj 를 패치한다."""
+        patch_at = self.script.find("tools/patch_ios_admob_project.py")
+        self.assertNotEqual(patch_at, -1, "patch_ios_admob_project.py 호출이 없음")
+        self.assertGreater(
+            patch_at, self.export_at, "패치는 export 뒤에서 실행돼야 함"
+        )
+
+    def test_configures_native_ads_before_export(self) -> None:
+        """AC-2: export 전 tools/configure_native_ads.py 로 광고 ID 를 확정한다."""
+        configure_at = self.script.find("tools/configure_native_ads.py")
+        self.assertNotEqual(configure_at, -1, "configure_native_ads.py 호출이 없음")
+        self.assertLess(
+            configure_at, self.export_at, "광고 ID 설정은 export 앞에서 실행돼야 함"
+        )
 
 
 if __name__ == "__main__":
