@@ -134,6 +134,12 @@ func _run_core_tests() -> void:
 			or int(Economy.perfect_wash_bonus(99)) != 20:
 		_fail("perfect wash bonus must scale 10/15/20 and cap at three stars")
 		return
+	if int(GameConfig.WATER_BOOST_COST) != 60 \
+			or absf(float(GameConfig.WATER_BOOST_DURATION) - 10.0) > 0.001 \
+			or absf(float(GameConfig.WATER_BOOST_RADIUS_MULT) - 1.5) > 0.001 \
+			or absf(float(GameConfig.WATER_BOOST_POWER_MULT) - 1.5) > 0.001:
+		_fail("water boost tuning must remain centralized in GameConfig")
+		return
 	if int(Economy.calc_level_milestone_bonus(5)) != 75:
 		_fail("level 5 milestone bonus should be 75")
 		return

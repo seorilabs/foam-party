@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "get_level_mistakes_for_test", "get_perfect_wash_bonus_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "get_level_mistakes_for_test", "get_perfect_wash_bonus_for_test", "get_water_boost_remaining_for_test", "get_water_boost_cost_for_test", "get_tool_radius_for_test", "get_tool_power_multiplier_for_test", "activate_water_boost", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -401,6 +401,8 @@ func _run_smoke() -> void:
 		return
 	if int(root_node.call("get_coins_for_test")) != 10:
 		_fail("failed foam bomb must not change coins")
+		return
+	if not _test_booster_picker_and_water_boost(root_node):
 		return
 	if not _test_native_ad_contract():
 		return
@@ -804,6 +806,116 @@ func _run_smoke() -> void:
 	root_node.free()
 	await process_frame
 	quit(0)
+
+
+func _test_booster_picker_and_water_boost(root_node: Node) -> bool:
+	var persistent_hud_before := _capture_persistent_hud_state(root_node)
+	var original_level := int(root_node.call("get_active_level_for_test"))
+	var original_coins := int(root_node.call("get_coins_for_test"))
+	var original_tool := String(root_node.get("selected_tool"))
+	var boost_cost := int(root_node.call("get_water_boost_cost_for_test"))
+	if boost_cost != 60:
+		_fail("water boost cost must come from the 60-coin GameConfig constant")
+		return false
+
+	# AC-2: compare the same deterministic mud patch before and after purchase so
+	# both the enlarged cursor reach and the real WashRules power path are covered.
+	root_node.call("reset_game", 1, "water_boost_baseline_smoke")
+	var baseline_radius := float(root_node.call("get_tool_radius_for_test", "water"))
+	var baseline_power := float(root_node.call("get_tool_power_multiplier_for_test", "water"))
+	var mud_index := int(root_node.call("get_patch_index_by_kind_for_test", "mud"))
+	var baseline_health := float(root_node.call("get_patch_health_for_test", mud_index))
+	var baseline_after := float(root_node.call("apply_tool_to_patch_for_test", "water", mud_index, 0.3))
+	var baseline_damage := baseline_health - baseline_after
+	if baseline_damage <= 0.0:
+		_fail("baseline water path must clean the deterministic mud fixture")
+		return false
+
+	root_node.call("reset_game", 1, "water_boost_picker_smoke")
+	root_node.set("coins", boost_cost)
+	root_node.set("level_time", 5.0)
+	root_node.set("is_washing", true)
+	root_node.call("_handle_tap", root_node.call("_get_booster_rect").get_center())
+	if not bool(root_node.get("show_booster_panel")) or bool(root_node.get("is_washing")):
+		_fail("the existing booster entry must open a modal picker and stop washing")
+		return false
+	var panel: Rect2 = root_node.call("_booster_panel_rect")
+	var foam_card: Rect2 = root_node.call("_booster_card_rect", panel, 0)
+	var water_card: Rect2 = root_node.call("_booster_card_rect", panel, 1)
+	if not panel.encloses(foam_card) or not panel.encloses(water_card) or foam_card.intersects(water_card):
+		_fail("both booster cards must fit as separate choices inside the modal")
+		return false
+	root_node.call("_process", 1.0)
+	if absf(float(root_node.call("get_level_time_for_test")) - 5.0) > 0.001:
+		_fail("the booster modal must pause the active level clock")
+		return false
+
+	root_node.call("_handle_tap", water_card.get_center())
+	var boost_remaining := float(root_node.call("get_water_boost_remaining_for_test"))
+	if bool(root_node.get("show_booster_panel")) \
+			or int(root_node.call("get_coins_for_test")) != 0 \
+			or String(root_node.get("selected_tool")) != "water" \
+			or boost_remaining < 9.99:
+		_fail("an affordable water boost must deduct once, activate, select water, and close the modal")
+		return false
+	var boosted_radius := float(root_node.call("get_tool_radius_for_test", "water"))
+	var boosted_power := float(root_node.call("get_tool_power_multiplier_for_test", "water"))
+	if boosted_radius < baseline_radius * 1.49 or boosted_power < baseline_power * 1.49:
+		_fail("active water boost must visibly increase both reach and power by 1.5x")
+		return false
+	mud_index = int(root_node.call("get_patch_index_by_kind_for_test", "mud"))
+	var boosted_health := float(root_node.call("get_patch_health_for_test", mud_index))
+	var boosted_after := float(root_node.call("apply_tool_to_patch_for_test", "water", mud_index, 0.3))
+	var boosted_damage := boosted_health - boosted_after
+	if boosted_damage < baseline_damage * 1.25:
+		_fail("water boost power must reach the live mud cleaning path: %.3f -> %.3f" % [baseline_damage, boosted_damage])
+		return false
+
+	# While active, another purchase is rejected without spending, and reopening
+	# the modal freezes the boost countdown until gameplay resumes.
+	root_node.set("coins", 100)
+	if bool(root_node.call("activate_water_boost")) or int(root_node.call("get_coins_for_test")) != 100:
+		_fail("an active water boost must reject duplicate spending")
+		return false
+	root_node.call("_handle_tap", root_node.call("_get_booster_rect").get_center())
+	var paused_remaining := float(root_node.call("get_water_boost_remaining_for_test"))
+	root_node.call("_process", 1.0)
+	if absf(float(root_node.call("get_water_boost_remaining_for_test")) - paused_remaining) > 0.001:
+		_fail("water boost duration must freeze while its modal is open")
+		return false
+	root_node.call("_handle_tap", root_node.call("_booster_close_rect", panel).get_center())
+	root_node.call("_process", 1.0)
+	if float(root_node.call("get_water_boost_remaining_for_test")) >= paused_remaining:
+		_fail("water boost duration must count down during active gameplay")
+		return false
+
+	# AC-3: insufficient coins cannot activate or mutate the balance.
+	root_node.call("reset_game", 1, "water_boost_insufficient_smoke")
+	root_node.set("coins", boost_cost - 1)
+	if bool(root_node.call("activate_water_boost")) \
+			or int(root_node.call("get_coins_for_test")) != boost_cost - 1 \
+			or float(root_node.call("get_water_boost_remaining_for_test")) > 0.0:
+		_fail("insufficient water boost purchase must preserve coins and stay inactive")
+		return false
+
+	# AC-1 and AC-4: drawing stays in the existing gameplay entry plus a modal,
+	# and all pricing/tuning references the GameConfig-backed aliases.
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not source.contains("_draw_booster_button()") \
+			or not source.contains("_draw_booster_panel()") \
+			or source.contains("_draw_bomb_button()") \
+			or not source.contains("const WATER_BOOST_COST := GameConfig.WATER_BOOST_COST"):
+		_fail("booster UI and tuning must use the reused entry, modal picker, and GameConfig seam")
+		return false
+	if _capture_persistent_hud_state(root_node) != persistent_hud_before:
+		_fail("booster picker must not add a persistent Control or move top HUD residency")
+		return false
+
+	root_node.call("reset_game", original_level, "water_boost_smoke_cleanup")
+	root_node.set("coins", original_coins)
+	root_node.set("selected_tool", original_tool)
+	root_node.set("show_booster_panel", false)
+	return true
 
 
 func _test_perfect_wash_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
@@ -1809,8 +1921,8 @@ func _test_non_color_accessibility_cues(root_node: Node) -> bool:
 		return false
 
 	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
-	if main_source.count("_draw_unaffordable_lock(") < 4:
-		_fail("foam bomb, upgrade, and skin purchase surfaces must all draw the shared lock glyph")
+	if main_source.count("_draw_unaffordable_lock(") < 5:
+		_fail("booster cards, upgrade, and skin purchase surfaces must all draw the shared lock glyph")
 		return false
 	if not main_source.contains("_draw_patience_tier_pattern(bar, fill_rect, patience_zone)") \
 			or not main_source.contains("_draw_patience_tier_pattern(bar, Rect2(bar.position, Vector2.ZERO), patience_zone)"):
@@ -1819,7 +1931,8 @@ func _test_non_color_accessibility_cues(root_node: Node) -> bool:
 
 	# AC-3: every cue receives the rect of its existing purchase surface or gauge;
 	# no separate accessibility control is needed in the persistent HUD.
-	if not main_source.contains("_draw_unaffordable_lock(rect, ad_ready or can_afford") \
+	if not main_source.contains("_draw_unaffordable_lock(foam_card, foam_available") \
+			or not main_source.contains("_draw_unaffordable_lock(water_card, water_available") \
 			or main_source.count("_draw_unaffordable_lock(buy_rect, affordable") != 2 \
 			or not main_source.contains("_draw_patience_tier_pattern(bar, fill_rect"):
 		_fail("non-color accessibility cues must stay inside existing surface rects")

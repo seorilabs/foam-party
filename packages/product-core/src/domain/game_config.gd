@@ -128,6 +128,13 @@ const SPONGE_MOTION_PROFILE := {
 	"drift_limit": 7.0,
 }
 const BOMB_COST := 40
+# Ten seconds is long enough for one focused rinse pass without becoming a
+# permanent upgrade. The 1.5x radius and power share one readable tuning ratio,
+# while the higher coin price keeps the instant full-board bomb distinct.
+const WATER_BOOST_COST := 60
+const WATER_BOOST_DURATION := 10.0
+const WATER_BOOST_RADIUS_MULT := 1.5
+const WATER_BOOST_POWER_MULT := 1.5
 # Rewarded ad grants at most this many free foam bombs per level; beyond the cap
 # the bomb falls back to the coin price so ad inventory is not farmed endlessly.
 const FREE_AD_BOMB_PER_LEVEL := 3

@@ -135,10 +135,24 @@ func _run() -> void:
 		return
 	node.call("_dismiss_tutorial")
 	node.set("coins", 0)
+	node.call("_handle_tap", node.call("_get_booster_rect").get_center())
 	await _settle(3)
-	if not await _capture(out_dir.path_join("shot_foam_bomb_locked_cue.png")):
+	if not await _capture(out_dir.path_join("shot_booster_picker_locked.png")):
 		quit(1)
 		return
+	node.call("_handle_tap", node.call("_booster_close_rect", node.call("_booster_panel_rect")).get_center())
+	node.set("coins", 120)
+	node.call("_handle_tap", node.call("_get_booster_rect").get_center())
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_booster_picker.png")):
+		quit(1)
+		return
+	node.call("_handle_tap", node.call("_booster_card_rect", node.call("_booster_panel_rect"), 1).get_center())
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_water_boost_active.png")):
+		quit(1)
+		return
+	node.call("reset_game", 1, "booster_screenshot_cleanup")
 	node.set("coins", 120)
 
 	await _settle(10)

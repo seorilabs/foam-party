@@ -91,10 +91,18 @@ const STRINGS := {
 	"TUT_WATER": ["흙탕물과 비누를 씻어요", "Rinse mud & soap"],
 	"TUT_SOAP": ["기름때와 벌레 자국을 불려요", "Loosen oil & bug marks"],
 	"TUT_SPONGE": ["불린 얼룩을 닦아요", "Scrub loosened stains"],
-	"TUT_TIP": ["콤보를 이어가면 별 3개! 거품 폭탄: %d 코인", "Chain combos for 3 stars! Foam bomb: %d coins"],
+	"TUT_TIP": ["부스터: 거품 %d · 고압수 %d 코인", "Boosters: foam %d · jet %d coins"],
 	"TUT_START": ["탭하여 시작!", "Tap to start!"],
-	# foam bomb
-	"BOMB_LABEL": ["거품", "Foam"],
+	# booster picker
+	"BOOSTER_LABEL": ["부스터", "Boosters"],
+	"BOOSTER_SELECT": ["2가지 선택", "Choose 1 of 2"],
+	"BOOSTER_TITLE": ["부스터 선택", "Choose a Booster"],
+	"BOOSTER_FOAM": ["거품 폭탄", "Foam Bomb"],
+	"BOOSTER_FOAM_DESC": ["전체 오염 불림", "Loosen all dirt"],
+	"BOOSTER_WATER": ["고압수 부스트", "Jet Boost"],
+	"BOOSTER_WATER_DESC": ["%d초 반경·세기 UP", "%ds reach and power"],
+	"WATER_BOOST_SHORT": ["고압수 UP", "Jet Boost"],
+	"BOOSTER_ACTIVE": ["%d초", "%ds"],
 	"BOMB_FREE": ["무료", "Free"],
 	# level-end double-coins rewarded ad
 	"DOUBLE_COINS": ["광고 보고 코인 2배", "Watch ad — 2× coins"],
