@@ -125,6 +125,14 @@ const OIL_SHEEN_MAX_ALPHA := 0.46
 const BODY_FOAM_SOAP_RATE := 0.36
 const BODY_FOAM_WATER_RATE := 0.72
 const BODY_FOAM_RUNOFF_DECAY := 1.15
+const SURFACE_DROPLET_CAP := 40
+const SURFACE_DROPLET_SPAWN_INTERVAL := 0.075
+const SURFACE_DROPLET_MIN_LIFETIME := 2.4
+const SURFACE_DROPLET_MAX_LIFETIME := 4.0
+# Single presentation hooks for the reduced-motion / effect-intensity settings
+# planned in #75. Age and cleanup stay independent from these visual scales.
+const SURFACE_DROPLET_INTENSITY_SCALE := 1.0
+const SURFACE_DROPLET_MOTION_SCALE := 1.0
 # Normalized, deliberately interleaved spots keep partial coverage distributed
 # across every silhouette instead of painting one scanline at a time.
 const BODY_FOAM_SPOT_UVS := [
@@ -178,6 +186,8 @@ const GLEAM_DURATION := 0.72
 const CLEAN_SHINE_INTENSITY_SCALE := 1.0
 var body_foam_coverage := 0.0
 var body_foam_runoff := 0.0
+var surface_droplets: Array[Dictionary] = []
+var _surface_droplet_spawn_elapsed := 0.0
 var _foam_bomb_burst_count := 0
 var _water_boost_remaining := 0.0
 var _progress_milestone_hit := 0
@@ -893,6 +903,7 @@ func _process(delta: float) -> void:
 	_update_wash_trail(delta)
 	_update_dirt_motion(delta)
 	_update_particles(delta)
+	_update_surface_droplets(delta)
 	body_foam_runoff = maxf(0.0, body_foam_runoff - delta * BODY_FOAM_RUNOFF_DECAY)
 	_update_clean_progress()
 	_update_stalled_dirt_highlight(delta)
@@ -1211,6 +1222,8 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_pending_next_level = -1
 	body_foam_coverage = 0.0
 	body_foam_runoff = 0.0
+	surface_droplets.clear()
+	_surface_droplet_spawn_elapsed = 0.0
 	_foam_bomb_burst_count = 0
 	_water_boost_remaining = 0.0
 	show_booster_panel = false
@@ -1640,6 +1653,40 @@ func get_water_effect_particle_cap_for_test() -> int:
 	return WATER_EFFECT_PARTICLE_CAP
 
 
+func get_surface_droplet_count_for_test() -> int:
+	return surface_droplets.size()
+
+
+func get_surface_droplet_cap_for_test() -> int:
+	return SURFACE_DROPLET_CAP
+
+
+func get_surface_droplet_max_lifetime_for_test() -> float:
+	return SURFACE_DROPLET_MAX_LIFETIME
+
+
+func are_surface_droplets_inside_car_for_test() -> bool:
+	var silhouette: PackedVector2Array = car_shapes[car_type]["silhouette"]
+	for droplet in surface_droplets:
+		if not _surface_droplet_fits_silhouette(
+			droplet["position"], float(droplet["radius"]), silhouette
+		):
+			return false
+	return true
+
+
+func spawn_surface_droplet_for_test(tool_id: String, design_point: Vector2) -> bool:
+	var previous_tool := selected_tool
+	selected_tool = tool_id
+	var spawned := _spawn_surface_droplet_at(design_point, SURFACE_DROPLET_SPAWN_INTERVAL, true)
+	selected_tool = previous_tool
+	return spawned
+
+
+func update_surface_droplets_for_test(delta: float) -> void:
+	_update_surface_droplets(delta)
+
+
 func get_language_preference_for_test() -> String:
 	return language_preference
 
@@ -1955,6 +2002,10 @@ func _gameplay_point(point: Vector2) -> Vector2:
 
 func _gameplay_length(value: float) -> float:
 	return value * GAMEPLAY_SCALE
+
+
+func _gameplay_local_point(point: Vector2) -> Vector2:
+	return GAMEPLAY_PIVOT + (point - GAMEPLAY_OFFSET - GAMEPLAY_PIVOT) / GAMEPLAY_SCALE
 
 
 func _handle_key(keycode: Key) -> void:
@@ -2517,6 +2568,7 @@ func _spawn_candidate_fits_silhouette(candidate: Vector2, silhouette: PackedVect
 
 
 func _apply_tool_at(point: Vector2, delta: float) -> void:
+	_spawn_surface_droplet_at(point, delta)
 	var tool_radius := _tool_radius(selected_tool)
 	var applied := false
 	var focus_patch: DirtPatch = null
@@ -3141,6 +3193,79 @@ func _update_particles(delta: float) -> void:
 			particles.remove_at(index)
 
 
+func _spawn_surface_droplet_at(design_point: Vector2, delta: float, force: bool = false) -> bool:
+	if selected_tool != TOOL_WATER or SURFACE_DROPLET_INTENSITY_SCALE <= 0.0:
+		return false
+	var local_point := _gameplay_local_point(design_point)
+	var silhouette: PackedVector2Array = car_shapes[car_type]["silhouette"]
+	if not Geometry2D.is_point_in_polygon(local_point, silhouette):
+		return false
+	_surface_droplet_spawn_elapsed += maxf(delta, 0.0)
+	if not force and _surface_droplet_spawn_elapsed < SURFACE_DROPLET_SPAWN_INTERVAL:
+		return false
+	_surface_droplet_spawn_elapsed = 0.0
+
+	var radius := rng.randf_range(2.4, 5.0)
+	var position := local_point + Vector2(rng.randf_range(-5.0, 5.0), rng.randf_range(-4.0, 4.0))
+	if not _surface_droplet_fits_silhouette(position, radius, silhouette):
+		position = local_point
+	if not _surface_droplet_fits_silhouette(position, radius, silhouette):
+		return false
+	while surface_droplets.size() >= SURFACE_DROPLET_CAP:
+		surface_droplets.remove_at(0)
+	var lifetime := rng.randf_range(SURFACE_DROPLET_MIN_LIFETIME, SURFACE_DROPLET_MAX_LIFETIME)
+	surface_droplets.append({
+		"position": position,
+		"radius": radius,
+		"age": 0.0,
+		"lifetime": lifetime,
+		"slide_start": lifetime * rng.randf_range(0.56, 0.68),
+		"slide_speed": rng.randf_range(8.0, 15.0),
+		"trail_length": 0.0,
+		"phase": rng.randf_range(0.0, TAU),
+	})
+	queue_redraw()
+	return true
+
+
+func _update_surface_droplets(delta: float) -> void:
+	var safe_delta := maxf(delta, 0.0)
+	var silhouette: PackedVector2Array = car_shapes[car_type]["silhouette"]
+	for index in range(surface_droplets.size() - 1, -1, -1):
+		var droplet: Dictionary = surface_droplets[index]
+		var age := float(droplet["age"]) + safe_delta
+		var lifetime := float(droplet["lifetime"])
+		if age >= lifetime:
+			surface_droplets.remove_at(index)
+			continue
+		droplet["age"] = age
+		var slide_start := float(droplet["slide_start"])
+		if age < slide_start or SURFACE_DROPLET_MOTION_SCALE <= 0.0:
+			continue
+		var slide_progress := clampf((age - slide_start) / maxf(lifetime - slide_start, 0.001), 0.0, 1.0)
+		var position: Vector2 = droplet["position"]
+		var next_position := position + Vector2(
+			sin(float(droplet["phase"]) + age * 3.0) * safe_delta * 0.7,
+			float(droplet["slide_speed"]) * (0.45 + slide_progress * 0.55) * safe_delta * SURFACE_DROPLET_MOTION_SCALE
+		)
+		var radius := float(droplet["radius"])
+		if _surface_droplet_fits_silhouette(next_position, radius, silhouette):
+			droplet["position"] = next_position
+			droplet["trail_length"] = minf(20.0, slide_progress * 20.0 * SURFACE_DROPLET_MOTION_SCALE)
+
+
+func _surface_droplet_fits_silhouette(
+		position: Vector2, radius: float, silhouette: PackedVector2Array
+	) -> bool:
+	if not Geometry2D.is_point_in_polygon(position, silhouette):
+		return false
+	var margin := radius * 1.15
+	for direction in [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]:
+		if not Geometry2D.is_point_in_polygon(position + direction * margin, silhouette):
+			return false
+	return true
+
+
 func _update_clean_progress() -> void:
 	var dirt_left := 0.0
 	for raw_patch in dirt_patches:
@@ -3625,6 +3750,7 @@ func _draw_car() -> void:
 	draw_rect(plate, outline, false, 2.5)
 	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), license_plate_text, HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
 	_draw_body_foam(silhouette)
+	_draw_surface_droplets(silhouette)
 
 
 func _wheel_specs() -> Array[Dictionary]:
@@ -3689,6 +3815,29 @@ func _draw_body_foam_runoff(silhouette: PackedVector2Array, amount: float) -> vo
 		var color := Color(0.88, 0.98, 1.0, amount * (0.30 + 0.06 * float(index % 3)))
 		draw_line(start, end, color, 2.8 + amount * 2.2)
 		draw_circle(end, 2.8 + amount * 2.0, Color(1.0, 1.0, 1.0, color.a * 0.88))
+
+
+func _draw_surface_droplets(silhouette: PackedVector2Array) -> void:
+	for droplet in surface_droplets:
+		var position: Vector2 = droplet["position"]
+		var radius := float(droplet["radius"])
+		if not _surface_droplet_fits_silhouette(position, radius, silhouette):
+			continue
+		var age := float(droplet["age"])
+		var lifetime := float(droplet["lifetime"])
+		var life := clampf(1.0 - age / maxf(lifetime, 0.001), 0.0, 1.0)
+		var fade := minf(1.0, life * 4.0) * SURFACE_DROPLET_INTENSITY_SCALE
+		var trail_length := float(droplet["trail_length"])
+		var trail_start := position - Vector2(0.0, trail_length)
+		if trail_length > 1.0 and Geometry2D.is_point_in_polygon(trail_start, silhouette):
+			draw_line(trail_start, position, Color(0.55, 0.88, 1.0, 0.24 * fade), 1.2)
+		draw_circle(position, radius + 0.8, Color(0.16, 0.56, 0.78, 0.28 * fade))
+		draw_circle(position, radius, Color(0.72, 0.93, 1.0, 0.48 * fade))
+		draw_circle(
+			position + Vector2(-radius * 0.30, -radius * 0.34),
+			maxf(0.9, radius * 0.27),
+			Color(1.0, 1.0, 1.0, 0.88 * fade)
+		)
 
 
 func _body_foam_spots(silhouette: PackedVector2Array) -> Array:
@@ -4246,6 +4395,8 @@ func _draw_runoff_streaks(center: Vector2, radius: float, wetness: float, runoff
 func _draw_wet_gloss(center: Vector2, radius: float, wetness: float) -> void:
 	var alpha: float = clamp(wetness, 0.0, 1.0) * 0.26
 	draw_arc(center + Vector2(-radius * 0.18, -radius * 0.16), radius * 0.7, -2.4, -0.45, 18, Color(1.0, 1.0, 1.0, alpha), 3.0)
+	draw_arc(center + Vector2(radius * 0.24, radius * 0.12), radius * 0.36, -2.65, -1.15, 10, Color(0.84, 0.96, 1.0, alpha * 0.78), 1.7)
+	draw_circle(center + Vector2(-radius * 0.28, -radius * 0.32), maxf(1.2, radius * 0.075), Color(1.0, 1.0, 1.0, alpha * 0.9))
 
 
 func _draw_soap_foam(center: Vector2, radius: float, amount: float) -> void:

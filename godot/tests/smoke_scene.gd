@@ -531,6 +531,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_water_impact_presentation_contract(root_node):
 		return
+	if not await _test_surface_droplet_contract(root_node):
+		return
 	if not _test_particle_budget_contract(root_node):
 		return
 	if not _test_body_foam_coverage_contract(root_node):
@@ -3012,6 +3014,64 @@ func _test_water_impact_presentation_contract(root_node: Node) -> bool:
 
 	particles.clear()
 	root_node.set("combo_count", 0)
+	return true
+
+
+func _test_surface_droplet_contract(root_node: Node) -> bool:
+	root_node.call("reset_game", 1, "surface_droplet_smoke")
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	var car_surface_point: Vector2 = root_node.call("_gameplay_point", Vector2(195.0, 520.0))
+	for tool_id in ["air", "soap", "sponge"]:
+		root_node.set("selected_tool", tool_id)
+		root_node.call("_apply_tool_at", car_surface_point, 0.12)
+	if int(root_node.call("get_surface_droplet_count_for_test")) != 0:
+		_fail("air, soap, and sponge must not create persistent surface droplets")
+		return false
+
+	root_node.set("selected_tool", "water")
+	root_node.call("_apply_tool_at", car_surface_point, 0.12)
+	if int(root_node.call("get_surface_droplet_count_for_test")) <= 0:
+		_fail("water drag on the car body must create a persistent surface droplet")
+		return false
+	if not bool(root_node.call("are_surface_droplets_inside_car_for_test")):
+		_fail("surface droplets must stay inside the active car silhouette")
+		return false
+	root_node.queue_redraw()
+	await process_frame
+
+	var droplet_cap := int(root_node.call("get_surface_droplet_cap_for_test"))
+	for index in range(droplet_cap * 2):
+		if not bool(root_node.call("spawn_surface_droplet_for_test", "water", car_surface_point)):
+			_fail("water surface droplet fixture failed inside the car silhouette")
+			return false
+	if int(root_node.call("get_surface_droplet_count_for_test")) != droplet_cap:
+		_fail("surface droplets must evict oldest entries at the explicit cap")
+		return false
+	if not bool(root_node.call("are_surface_droplets_inside_car_for_test")):
+		_fail("capped surface droplets must all remain inside the car silhouette")
+		return false
+	root_node.queue_redraw()
+	await process_frame
+
+	var max_lifetime := float(root_node.call("get_surface_droplet_max_lifetime_for_test"))
+	root_node.call("update_surface_droplets_for_test", max_lifetime + 0.01)
+	if int(root_node.call("get_surface_droplet_count_for_test")) != 0:
+		_fail("released surface droplets must disappear within four seconds")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children \
+			or root_node.call("_get_status_rect") != baseline_hud_rects["status"] \
+			or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] \
+			or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] \
+			or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("surface droplets must stay in the car render layer without changing HUD residency")
+		return false
+	root_node.call("reset_game", 1, "surface_droplet_smoke_cleanup")
 	return true
 
 
