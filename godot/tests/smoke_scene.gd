@@ -397,6 +397,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_oil_sheen_contract(root_node):
 		return
+	if not _test_soap_foam_visual_contract(root_node):
+		return
 	if not _test_sap_dirt_contract(root_node):
 		return
 	root_node.call("reset_game", 1, "dirt_density_smoke_cleanup")
@@ -4137,6 +4139,53 @@ func _test_oil_sheen_contract(root_node: Node) -> bool:
 		return false
 	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
 		_fail("oil sheen must not add persistent HUD controls")
+		return false
+	return true
+
+
+func _test_soap_foam_visual_contract(root_node: Node) -> bool:
+	var empty_layout: Array[Dictionary] = root_node.call("get_soap_foam_layout_for_test", 0.0)
+	var partial_layout: Array[Dictionary] = root_node.call("get_soap_foam_layout_for_test", 0.3)
+	var full_layout: Array[Dictionary] = root_node.call("get_soap_foam_layout_for_test", 1.0)
+	if not empty_layout.is_empty():
+		_fail("zero soap must not draw persistent foam")
+		return false
+	if partial_layout.is_empty() or full_layout.size() <= partial_layout.size():
+		_fail("soap amount must increase persistent foam density")
+		return false
+	var roles := {}
+	var radius_buckets := {}
+	var hue_buckets := {}
+	var alpha_buckets := {}
+	var min_radius := 100000.0
+	var max_radius := 0.0
+	var partial_area := 0.0
+	var full_area := 0.0
+	for bubble in partial_layout:
+		var partial_radius: float = bubble["radius"]
+		partial_area += PI * partial_radius * partial_radius
+	for bubble in full_layout:
+		var bubble_radius: float = bubble["radius"]
+		var fill: Color = bubble["fill"]
+		var highlight_offset: Vector2 = bubble["highlight_offset"]
+		roles[String(bubble["role"])] = true
+		radius_buckets[roundi(bubble_radius * 10.0)] = true
+		hue_buckets[roundi(fill.h * 100.0)] = true
+		alpha_buckets[roundi(fill.a * 100.0)] = true
+		min_radius = minf(min_radius, bubble_radius)
+		max_radius = maxf(max_radius, bubble_radius)
+		full_area += PI * bubble_radius * bubble_radius
+		if highlight_offset.x >= 0.0 or highlight_offset.y >= 0.0 or float(bubble["highlight_radius"]) <= 0.0:
+			_fail("every foam bubble needs an upper-left highlight")
+			return false
+	if not roles.has("cluster") or not roles.has("satellite") or radius_buckets.size() < 4 or max_radius < min_radius * 2.0:
+		_fail("foam needs large clusters plus visibly smaller satellite bubbles")
+		return false
+	if hue_buckets.size() < 4 or alpha_buckets.size() < 3:
+		_fail("foam bubbles need subtle per-bubble hue and alpha variation")
+		return false
+	if full_area <= partial_area:
+		_fail("soap amount must increase foam coverage as well as count")
 		return false
 	return true
 

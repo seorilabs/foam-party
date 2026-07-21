@@ -333,6 +333,25 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_oil_sheen_faded.png")):
 		quit(1)
 		return
+	node.call("reset_game", 1, "patch_soap_foam_screenshot")
+	var soap_patch: Variant = _isolate_oil_patch(node, 1.0)
+	if soap_patch == null:
+		push_error("patch soap foam screenshot setup failed")
+		quit(1)
+		return
+	soap_patch.set("soap", 0.3)
+	soap_patch.set("state", "soaped")
+	node.queue_redraw()
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_patch_soap_foam_partial.png")):
+		quit(1)
+		return
+	soap_patch.set("soap", 1.0)
+	node.queue_redraw()
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_patch_soap_foam_full.png")):
+		quit(1)
+		return
 	node.call("reset_game", 1, "oil_sheen_screenshot_cleanup")
 	var sap_patch: Variant = _isolate_sap_patch(node)
 	if sap_patch == null:
