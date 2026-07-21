@@ -553,6 +553,13 @@ func _run() -> void:
 			quit(1)
 			return
 
+	for level in [1, 2, 3]:
+		node.call("reset_game", level, "dirt_layout_screenshot")
+		await _settle(10)
+		if not await _capture(out_dir.path_join("shot_dirt_layout_level_%d.png" % level)):
+			quit(1)
+			return
+
 	for level in [3, 6, 10]:
 		node.call("reset_game", level, "dirt_density_screenshot")
 		await _settle(10)

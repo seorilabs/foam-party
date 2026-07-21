@@ -971,9 +971,20 @@ func _test_dirt_spawn_plan(DirtSpawnPlan: GDScript, GameConfig: GDScript) -> boo
 			_fail("dense spawn radius scale must not grow with patch count")
 			return false
 		previous_radius_scale = radius_scale
-	var candidates: Array[Vector2] = DirtSpawnPlan.normalized_candidates()
+	var candidates: Array[Vector2] = DirtSpawnPlan.normalized_candidates(6401)
 	if candidates.size() != DirtSpawnPlan.CANDIDATE_COLUMNS * DirtSpawnPlan.CANDIDATE_ROWS or candidates.size() < DirtSpawnPlan.MAX_PATCH_COUNT:
 		_fail("normalized spawn candidates must exceed the density cap")
+		return false
+	if candidates != DirtSpawnPlan.normalized_candidates(6401):
+		_fail("spawn candidates must reproduce exactly for the same seed")
+		return false
+	var alternate_candidates: Array[Vector2] = DirtSpawnPlan.normalized_candidates(6402)
+	var moved_candidates := 0
+	for index in range(candidates.size()):
+		if candidates[index].distance_to(alternate_candidates[index]) > 0.001:
+			moved_candidates += 1
+	if moved_candidates < candidates.size() * 3 / 4:
+		_fail("different spawn seeds must move most procedural candidates")
 		return false
 	for candidate in candidates:
 		if candidate.x <= 0.0 or candidate.x >= 1.0 or candidate.y <= 0.0 or candidate.y >= 1.0:
@@ -1004,6 +1015,9 @@ func _test_dirt_spawn_plan(DirtSpawnPlan: GDScript, GameConfig: GDScript) -> boo
 		return false
 	if DirtSpawnPlan.BASE_PATCH_COUNT <= 0 or DirtSpawnPlan.PATCHES_PER_LEVEL <= 0 or DirtSpawnPlan.MAX_PATCH_COUNT < 38 or DirtSpawnPlan.MIN_CENTER_DISTANCE <= 0.0 or DirtSpawnPlan.DENSE_RADIUS_MIN_SCALE <= 0.0:
 		_fail("dirt density tuning constants must remain named and positive")
+		return false
+	if DirtSpawnPlan.MIN_RADIUS_SUM_SPACING_RATIO < 0.7 or DirtSpawnPlan.MIN_RADIUS_SUM_SPACING_RATIO > 1.0:
+		_fail("dirt radius-sum spacing ratio must prevent unreadable clumps")
 		return false
 	return true
 

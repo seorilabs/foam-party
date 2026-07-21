@@ -2314,11 +2314,12 @@ func _test_combo_protection_contract(root_node: Node) -> bool:
 
 
 func _test_dirt_spawn_density_contract(root_node: Node) -> bool:
-	for method_name in ["get_patch_centers_for_test", "get_dirt_spawn_pool_size_for_test", "get_dirt_spawn_min_center_distance_for_test"]:
+	for method_name in ["get_patch_centers_for_test", "get_dirt_spawn_pool_size_for_test", "get_dirt_spawn_min_center_distance_for_test", "get_dirt_spawn_radius_sum_ratio_for_test", "get_initial_dirt_snapshot_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("dirt density helper API missing: " + method_name)
 			return false
 	var expected_counts := {1: 20, 2: 22, 3: 24, 4: 26, 5: 28, 6: 30, 10: 38, 30: 40}
+	var early_layouts := {}
 	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
 	var baseline_hud_rects := {
 		"status": root_node.call("_get_status_rect"),
@@ -2338,6 +2339,14 @@ func _test_dirt_spawn_density_contract(root_node: Node) -> bool:
 		var centers: Array[Vector2] = root_node.call("get_patch_centers_for_test")
 		var wheel_indices: Array[int] = root_node.call("get_wheel_dirt_indices_for_test")
 		var minimum_distance: float = root_node.call("get_dirt_spawn_min_center_distance_for_test")
+		var radius_sum_ratio: float = root_node.call("get_dirt_spawn_radius_sum_ratio_for_test")
+		var snapshot: Array[Dictionary] = root_node.call("get_initial_dirt_snapshot_for_test")
+		if level in [1, 2, 3]:
+			early_layouts[level] = snapshot.duplicate(true)
+			root_node.call("reset_game", level, "dirt_layout_retry_smoke")
+			if root_node.call("get_initial_dirt_snapshot_for_test") != snapshot:
+				_fail("level %d dirt layout must reproduce exactly for the same seed" % level)
+				return false
 		for first_index in range(centers.size()):
 			if not bool(root_node.call("_point_in_wash_area", centers[first_index])):
 				_fail("level %d spawned dirt outside the washable area" % level)
@@ -2348,6 +2357,23 @@ func _test_dirt_spawn_density_contract(root_node: Node) -> bool:
 				if centers[first_index].distance_to(centers[second_index]) < minimum_distance - 0.01:
 					_fail("level %d dirt centers violated the overlap guard" % level)
 					return false
+				var first_patch: Dictionary = snapshot[first_index]
+				var second_patch: Dictionary = snapshot[second_index]
+				var required_distance := (float(first_patch["radius"]) + float(second_patch["radius"])) * radius_sum_ratio
+				if Vector2(first_patch["position"]).distance_to(Vector2(second_patch["position"])) < required_distance - 0.01:
+					_fail("level %d dirt radii violated the radius-sum spacing guard" % level)
+					return false
+
+	for first_level in [1, 2]:
+		var first_layout: Array = early_layouts[first_level]
+		var second_layout: Array = early_layouts[first_level + 1]
+		var compared_count := mini(first_layout.size(), second_layout.size())
+		var total_delta := 0.0
+		for index in range(compared_count):
+			total_delta += Vector2(first_layout[index]["position"]).distance_to(Vector2(second_layout[index]["position"]))
+		if compared_count == 0 or total_delta / float(compared_count) < 18.0:
+			_fail("levels %d and %d must have meaningfully different dirt layouts" % [first_level, first_level + 1])
+			return false
 
 	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
 		_fail("dirt density must not add persistent HUD controls")
