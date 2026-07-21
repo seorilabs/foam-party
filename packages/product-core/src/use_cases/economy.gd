@@ -14,6 +14,12 @@ static func calc_coin_reward(stars: int, best_combo: int) -> int:
 	return 16 + stars * 8 + min(best_combo, 10) * 2
 
 
+static func perfect_wash_bonus(stars: int) -> int:
+	if stars <= 0:
+		return 0
+	return 5 + clampi(stars, 1, 3) * 5
+
+
 static func calc_level_milestone_bonus(level: int) -> int:
 	if level <= 0 or level % 5 != 0:
 		return 0

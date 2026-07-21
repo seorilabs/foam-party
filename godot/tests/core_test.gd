@@ -127,6 +127,13 @@ func _run_core_tests() -> void:
 	if int(Economy.calc_coin_reward(3, 10)) != 60 or int(Economy.calc_coin_reward(3, 99)) != 60:
 		_fail("3-star reward should cap at 60 coins after combo 10")
 		return
+	if int(Economy.perfect_wash_bonus(0)) != 0 \
+			or int(Economy.perfect_wash_bonus(1)) != 10 \
+			or int(Economy.perfect_wash_bonus(2)) != 15 \
+			or int(Economy.perfect_wash_bonus(3)) != 20 \
+			or int(Economy.perfect_wash_bonus(99)) != 20:
+		_fail("perfect wash bonus must scale 10/15/20 and cap at three stars")
+		return
 	if int(Economy.calc_level_milestone_bonus(5)) != 75:
 		_fail("level 5 milestone bonus should be 75")
 		return

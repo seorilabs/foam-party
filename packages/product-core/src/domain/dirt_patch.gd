@@ -19,6 +19,7 @@ var state: String = "stuck"
 var resist_time: float = 0.0
 var hint_time: float = 0.0
 var hint_tool: String = ""
+var mistake_recorded: bool = false
 var shake_x: float = 0.0
 var is_gold_spot: bool = false
 

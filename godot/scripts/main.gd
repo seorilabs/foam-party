@@ -207,6 +207,8 @@ var coins := 0
 var total_stars := 0
 var coin_reward := 0
 var _level_milestone_bonus := 0
+var level_mistakes := 0
+var _perfect_wash_bonus := 0
 # A: free foam bombs granted via rewarded ad this level (capped by
 # GameConfig.FREE_AD_BOMB_PER_LEVEL). B: _double_claimed is set once the level-end
 # 2x-coins ad has been watched to completion (one grant per level).
@@ -1125,6 +1127,8 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_progress_milestone_text = ""
 	_progress_milestone_color = Color.WHITE
 	_level_milestone_bonus = 0
+	level_mistakes = 0
+	_perfect_wash_bonus = 0
 	_stop_tool_loop()
 	particles.clear()
 	_set_car_palette()
@@ -1304,6 +1308,14 @@ func get_best_combo_for_test() -> int:
 
 func get_level_time_for_test() -> float:
 	return level_time
+
+
+func get_level_mistakes_for_test() -> int:
+	return level_mistakes
+
+
+func get_perfect_wash_bonus_for_test() -> int:
+	return _perfect_wash_bonus
 
 
 func calc_stars_for_test() -> int:
@@ -2324,6 +2336,9 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 			var hint_was_inactive := patch.hint_time <= 0.0
 			patch.hint_time = max(patch.hint_time, 1.4)
 			if hint_was_inactive:
+				if not patch.mistake_recorded:
+					patch.mistake_recorded = true
+					level_mistakes += 1
 				audio.play_hint()
 	else:
 		patch.resist_time = 0.0
@@ -2868,6 +2883,8 @@ func _update_clean_progress() -> void:
 		earned_stars = _calc_stars()
 		_customer_completion_time = float(Time.get_ticks_msec()) / 1000.0
 		coin_reward = _calc_coin_reward(earned_stars)
+		_perfect_wash_bonus = Economy.perfect_wash_bonus(earned_stars) if level_mistakes == 0 else 0
+		coin_reward += _perfect_wash_bonus
 		_level_milestone_bonus = _calc_level_milestone_bonus(active_level_index)
 		coin_reward += _level_milestone_bonus
 		coins += coin_reward
@@ -5125,6 +5142,13 @@ func _draw_completion_panel() -> void:
 		draw_style_box(_style("milestone_chip", chip_color, 15.0), milestone_chip)
 		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), tr("MILESTONE_CHIP") % [active_level_index, _level_milestone_bonus], HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x, 13, Color("#fff0ff"))
 
+	if level_mistakes == 0 and _perfect_wash_bonus > 0:
+		var perfect_chip := _perfect_chip_rect(panel)
+		var perfect_color := Color("#1fba82").lerp(Color("#f0b92f"), 0.42 + 0.18 * sin(time_now * 3.4))
+		draw_style_box(_style("milestone_chip", perfect_color, 15.0), perfect_chip)
+		var perfect_font_size := 11 if _level_milestone_bonus > 0 else 13
+		draw_string(font, Vector2(perfect_chip.position.x, perfect_chip.position.y + 21.0), tr("PERFECT_CHIP") % _perfect_wash_bonus, HORIZONTAL_ALIGNMENT_CENTER, perfect_chip.size.x, perfect_font_size, Color("#fffdf2"))
+
 	# B: level-end "watch ad → double coins" CTA. Active (green + play triangle)
 	# until claimed; after a watched ad it flips to a claimed/disabled state so the
 	# row stays put and can't be tapped twice.
@@ -5163,6 +5187,12 @@ func _draw_completion_panel() -> void:
 
 func _completion_panel_rect() -> Rect2:
 	return Rect2(38.0, 198.0, 314.0, 232.0 + _completion_extra())
+
+
+func _perfect_chip_rect(panel: Rect2) -> Rect2:
+	if _level_milestone_bonus > 0:
+		return Rect2(panel.position.x + 122.0, panel.position.y - 14.0, 80.0, 30.0)
+	return Rect2(panel.position.x + 10.0, panel.position.y - 14.0, 106.0, 30.0)
 
 
 func _completion_customer_rect(panel: Rect2) -> Rect2:

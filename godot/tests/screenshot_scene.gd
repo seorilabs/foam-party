@@ -364,6 +364,9 @@ func _run() -> void:
 	node.set("combo_timer", 0.0)
 	node.set("combo_grace_active", false)
 
+	node.call("reset_game", 1, "perfect_wash_screenshot")
+	node.set("level_time", 30.0)
+	node.set("best_combo", 4)
 	for patch in node.get("dirt_patches"):
 		patch.set("health", 0.0)
 	await _settle(12)
@@ -381,6 +384,7 @@ func _run() -> void:
 	node.call("reset_game", node.get("level_index"))
 	node.get("best_times")[int(node.get("level_index"))] = 30.0
 	node.set("level_time", 95.0)
+	node.set("level_mistakes", 1)
 	for patch in node.get("dirt_patches"):
 		patch.set("health", 0.0)
 	await _settle(12)
