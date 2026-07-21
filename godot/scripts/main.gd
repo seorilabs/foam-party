@@ -225,6 +225,7 @@ var _completion_reveal_time := -10.0
 var _last_grade_tracker_text := ""
 var best_times: Dictionary = {}
 var best_stars: Dictionary = {}
+var milestone_rewards_claimed: Dictionary = {}
 var is_new_record := false
 var record_pop_time := -10.0
 var _tool_select_time := -10.0
@@ -236,6 +237,9 @@ var coins := 0
 var total_stars := 0
 var coin_reward := 0
 var customer_tip_reward := 0
+var _base_completion_reward := 0
+var _completion_reward_reduced := false
+var _completion_star_improvement := 0
 var _level_milestone_bonus := 0
 var level_mistakes := 0
 var _perfect_wash_bonus := 0
@@ -413,7 +417,8 @@ func _load_progress() -> void:
 	if main_save_ok:
 		level_index = max(1, int(config.get_value("game", "level", 1)))
 		coins = max(0, int(config.get_value("game", "coins", 0)))
-		total_stars = max(0, int(config.get_value("game", "total_stars", 0)))
+		var legacy_total_stars: int = max(0, int(config.get_value("game", "total_stars", 0)))
+		total_stars = legacy_total_stars
 		sound_enabled = bool(config.get_value("settings", "sound", true))
 		_load_language_preference(config)
 		tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
@@ -431,6 +436,15 @@ func _load_progress() -> void:
 			best_stars = {}
 			for key in (stored_best_stars as Dictionary):
 				best_stars[int(key)] = clampi(int(stored_best_stars[key]), 0, 3)
+		var migrated_best_stars := StageSelection.migrate_best_stars(
+			best_stars, legacy_total_stars, level_index
+		)
+		var migrated_total_stars := StageSelection.total_best_stars(migrated_best_stars)
+		if migrated_best_stars != best_stars or migrated_total_stars != legacy_total_stars:
+			_main_save_dirty = true
+		best_stars = migrated_best_stars
+		total_stars = migrated_total_stars
+		_load_milestone_reward_history(config)
 		main_claimed_date = String(config.get_value("daily", "claimed_date", ""))
 		_load_achievement_progress(config)
 	_apply_language_preference()
@@ -487,6 +501,25 @@ func _load_progress() -> void:
 	daily_mission_date = saved_date
 	if main_save_ok and daily_mission_claimed and main_claimed_date != today:
 		_grant_daily_mission_coins()
+		_main_save_dirty = true
+
+
+func _load_milestone_reward_history(config: ConfigFile) -> void:
+	milestone_rewards_claimed = {}
+	if config.has_section_key("game", "milestone_rewards_claimed"):
+		var raw_history: Variant = config.get_value("game", "milestone_rewards_claimed", {})
+		if raw_history is Dictionary:
+			for raw_level in (raw_history as Dictionary):
+				var level := int(raw_level)
+				if level > 0 and level % 5 == 0 and bool(raw_history[raw_level]):
+					milestone_rewards_claimed[level] = true
+		return
+	# Legacy saves had no claim ledger. Any milestone below the highest unlocked
+	# level, or one with an explicit best-star record, has already paid once.
+	for level in range(5, maxi(level_index, 1) + 1, 5):
+		if level < level_index or int(best_stars.get(level, 0)) > 0:
+			milestone_rewards_claimed[level] = true
+	if not milestone_rewards_claimed.is_empty():
 		_main_save_dirty = true
 
 
@@ -597,6 +630,7 @@ func _save_progress() -> Error:
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
 	config.set_value("game", "best_times", best_times)
 	config.set_value("game", "best_stars", best_stars)
+	config.set_value("game", "milestone_rewards_claimed", milestone_rewards_claimed)
 	config.set_value("daily", "claimed_date", daily_mission_date if daily_mission_claimed else "")
 	_store_upgrade_progress(config)
 	_store_nozzle_skin_customization(config)
@@ -1279,6 +1313,9 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_progress_milestone_time = -1.0
 	_progress_milestone_text = ""
 	_progress_milestone_color = Color.WHITE
+	_base_completion_reward = 0
+	_completion_reward_reduced = false
+	_completion_star_improvement = 0
 	_level_milestone_bonus = 0
 	customer_tip_reward = 0
 	level_mistakes = 0
@@ -1730,6 +1767,22 @@ func get_oil_sheen_saturation_for_test(strength: float) -> float:
 
 func calc_coin_reward_for_test() -> int:
 	return _calc_coin_reward(_calc_stars())
+
+
+func get_completion_base_reward_for_test() -> int:
+	return _base_completion_reward
+
+
+func is_completion_reward_reduced_for_test() -> bool:
+	return _completion_reward_reduced
+
+
+func get_completion_star_improvement_for_test() -> int:
+	return _completion_star_improvement
+
+
+func is_milestone_reward_claimed_for_test(level: int) -> bool:
+	return bool(milestone_rewards_claimed.get(level, false))
 
 
 func get_best_time_for_test(level: int) -> float:
@@ -2460,7 +2513,9 @@ func _calc_coin_reward(stars: int) -> int:
 
 
 func _calc_level_milestone_bonus(level: int) -> int:
-	return Economy.calc_level_milestone_bonus(level)
+	return Economy.calc_level_milestone_bonus(
+		level, bool(milestone_rewards_claimed.get(level, false))
+	)
 
 
 func _set_car_palette() -> void:
@@ -3319,19 +3374,35 @@ func _update_clean_progress() -> void:
 		earned_stars = _calc_stars()
 		_customer_completion_time = float(Time.get_ticks_msec()) / 1000.0
 		_completion_reveal_time = _customer_completion_time
-		coin_reward = _calc_coin_reward(earned_stars)
-		customer_tip_reward = Economy.calc_customer_tip(_current_customer_patience())
+		var had_previous_clear := best_stars.has(active_level_index)
+		var previous_best_stars := int(best_stars.get(active_level_index, 0))
+		var reward_result := Economy.calc_completion_base_reward(
+			earned_stars, best_combo, previous_best_stars, had_previous_clear
+		)
+		_base_completion_reward = int(reward_result["coins"])
+		_completion_reward_reduced = bool(reward_result["reduced"])
+		_completion_star_improvement = int(reward_result["star_improvement"])
+		var completion_payout_ratio := Economy.REWASH_PAYOUT_RATIO \
+			if _completion_reward_reduced else 1.0
+		coin_reward = _base_completion_reward
+		customer_tip_reward = Economy.calc_customer_tip(
+			_current_customer_patience(), completion_payout_ratio
+		)
 		coin_reward += customer_tip_reward
-		_perfect_wash_bonus = Economy.perfect_wash_bonus(earned_stars) if level_mistakes == 0 else 0
+		var full_perfect_bonus := Economy.perfect_wash_bonus(earned_stars) \
+			if level_mistakes == 0 else 0
+		_perfect_wash_bonus = floori(float(full_perfect_bonus) * completion_payout_ratio)
 		coin_reward += _perfect_wash_bonus
 		_level_milestone_bonus = _calc_level_milestone_bonus(active_level_index)
+		if _level_milestone_bonus > 0:
+			milestone_rewards_claimed[active_level_index] = true
 		coin_reward += _level_milestone_bonus
 		coins += coin_reward
-		total_stars += earned_stars
+		_register_best_time()
+		total_stars = StageSelection.total_best_stars(best_stars)
 		# B: latch whether to offer the level-end "double coins" rewarded ad, so the
 		# completion panel reserves a stable button row for the life of this screen.
 		_double_offer_shown = ads != null and ads.is_rewarded_ready("level_reward_2x")
-		_register_best_time()
 		_emit_analytics(ContentEvents.level_complete(
 			active_level_index, earned_stars, int(level_time), best_combo, coin_reward, is_new_record
 		))
@@ -5706,7 +5777,14 @@ func _draw_completion_panel() -> void:
 	if not _draw_tex_centered("coin", reward_chip.position + Vector2(16.0, 15.0), 24.0):
 		draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#fff3cf"))
 		draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#9a7400"), false, 1.5)
-	draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 21.0), "+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 15, Color("#6b5200"))  # numeric only, locale-neutral
+	if _completion_reward_reduced:
+		draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 14.0),
+			"+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 12, Color("#6b5200"))
+		draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 26.0),
+			tr("REWASH_REWARD"), HORIZONTAL_ALIGNMENT_LEFT, 64.0, 8, Color("#6b5200"))
+	else:
+		draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 21.0),
+			"+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 15, Color("#6b5200"))
 
 	var tip_chip := _customer_tip_chip_rect(panel)
 	draw_style_box(_style("tip_chip", Color("#f7d8ff"), 14.0), tip_chip)

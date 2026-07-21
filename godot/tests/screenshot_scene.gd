@@ -462,6 +462,9 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_complete_record.png")):
 		quit(1)
 		return
+	if not await _capture(out_dir.path_join("shot_complete_rewash_reduced.png")):
+		quit(1)
+		return
 
 	for level in [2, 3, 4, 5]:
 		node.call("reset_game", level)

@@ -46,3 +46,37 @@ static func record_best_stars(best_stars: Dictionary, level: int, stars: int) ->
 	var updated := best_stars.duplicate(true)
 	updated[safe_level] = maxi(int(updated.get(safe_level, 0)), clampi(stars, 0, 3))
 	return updated
+
+
+static func total_best_stars(best_stars: Dictionary) -> int:
+	var total := 0
+	for raw_level in best_stars:
+		total += clampi(int(best_stars[raw_level]), 0, 3)
+	return total
+
+
+static func migrate_best_stars(
+	raw_best_stars: Dictionary,
+	legacy_total_stars: int,
+	unlocked_level: int
+) -> Dictionary:
+	var normalized: Dictionary = {}
+	for raw_level in raw_best_stars:
+		var level := int(raw_level)
+		var stars := clampi(int(raw_best_stars[raw_level]), 0, 3)
+		if level > 0 and stars > 0:
+			normalized[level] = stars
+	if not normalized.is_empty() or legacy_total_stars <= 0:
+		return normalized
+
+	# Legacy saves had only an inflation-prone total. Reconstruct bounded records
+	# across unlocked stages so the displayed total can immediately become the
+	# sum of per-level bests without inventing records for locked future stages.
+	var remaining := mini(maxi(legacy_total_stars, 0), maxi(unlocked_level, 1) * 3)
+	for level in range(1, maxi(unlocked_level, 1) + 1):
+		if remaining <= 0:
+			break
+		var stars := mini(remaining, 3)
+		normalized[level] = stars
+		remaining -= stars
+	return normalized

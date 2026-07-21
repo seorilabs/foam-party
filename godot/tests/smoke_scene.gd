@@ -284,6 +284,15 @@ func _run_smoke() -> void:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
+	for method_name in [
+		"get_completion_base_reward_for_test",
+		"is_completion_reward_reduced_for_test",
+		"get_completion_star_improvement_for_test",
+		"is_milestone_reward_claimed_for_test",
+	]:
+		if not root_node.has_method(method_name):
+			_fail("rewash reward test helper API missing: " + method_name)
+			return
 
 	var patch_count: int = root_node.call("get_patch_count_for_test")
 	if patch_count < 20:
@@ -512,6 +521,8 @@ func _run_smoke() -> void:
 		_fail("expected 50 coins for 3-star clear")
 		return
 	if not _test_perfect_wash_contract(root_node, analytics_recorder):
+		return
+	if not _test_rewash_reward_contract(root_node):
 		return
 	if not _test_daily_mission_reward_contract(root_node, analytics_recorder):
 		return
@@ -1185,6 +1196,8 @@ func _test_perfect_wash_contract(root_node: Node, analytics_recorder: AnalyticsR
 	root_node.call("configure_daily_mission_for_test", "road_grime")
 	analytics_recorder.events.clear()
 	root_node.set("coins", 0)
+	root_node.set("best_stars", {})
+	root_node.set("total_stars", 0)
 	root_node.set("level_time", 30.0)
 	root_node.set("best_combo", 4)
 	for patch in root_node.get("dirt_patches"):
@@ -1200,6 +1213,8 @@ func _test_perfect_wash_contract(root_node: Node, analytics_recorder: AnalyticsR
 	root_node.call("reset_game", 1, "imperfect_wash_reward_smoke")
 	root_node.call("configure_daily_mission_for_test", "road_grime")
 	root_node.set("coins", 0)
+	root_node.set("best_stars", {})
+	root_node.set("total_stars", 0)
 	root_node.set("level_time", 30.0)
 	root_node.set("best_combo", 4)
 	leaf_index = int(root_node.call("get_patch_index_by_kind_for_test", "leaf"))
@@ -1248,6 +1263,157 @@ func _test_perfect_wash_contract(root_node: Node, analytics_recorder: AnalyticsR
 		_fail("perfect-wash reward must not add a persistent Control or move HUD residency")
 		return false
 	return true
+
+
+func _test_rewash_reward_contract(root_node: Node) -> bool:
+	var original_state := {
+		"active_level": root_node.call("get_active_level_for_test"),
+		"level_index": root_node.get("level_index"),
+		"game_state": root_node.get("game_state"),
+		"coins": root_node.get("coins"),
+		"total_stars": root_node.get("total_stars"),
+		"best_times": root_node.get("best_times").duplicate(true),
+		"best_stars": root_node.get("best_stars").duplicate(true),
+		"milestones": root_node.get("milestone_rewards_claimed").duplicate(true),
+		"achievement_counters": root_node.call("get_achievement_counters_for_test"),
+		"achievement_claimed": root_node.call("get_achievement_claimed_for_test"),
+		"main_save_dirty": root_node.get("_main_save_dirty"),
+		"double_offer": root_node.get("_double_offer_shown"),
+	}
+	var original_daily := {
+		"type": root_node.get("daily_mission_type"),
+		"label": root_node.get("daily_mission_label"),
+		"target": root_node.get("daily_mission_target"),
+		"requirement": root_node.get("daily_mission_requirement"),
+		"reward": root_node.get("daily_mission_reward"),
+		"progress": root_node.get("daily_mission_progress"),
+		"claimed": root_node.get("daily_mission_claimed"),
+		"date": root_node.get("daily_mission_date"),
+	}
+	var saturated_counters := {
+		"washes_completed": 999,
+		"dirt_removed": 999,
+		"leaf_removed": 999,
+		"stars_collected": 999,
+		"combo_peak": 999,
+	}
+	var saturated_claims := {}
+	for definition in root_node.call("get_achievement_definitions_for_test"):
+		saturated_claims[String(definition["id"])] = true
+	root_node.call("set_achievement_state_for_test", saturated_counters, saturated_claims)
+	root_node.call("configure_daily_mission_for_test", "road_grime")
+	root_node.set("best_times", {})
+	root_node.set("best_stars", {})
+	root_node.set("milestone_rewards_claimed", {})
+	root_node.set("total_stars", 0)
+	root_node.set("coins", 0)
+
+	_complete_rewash_fixture(root_node, 1, 60.0, 5)
+	var first_clear_coins := int(root_node.get("coins"))
+	if int(root_node.call("get_completion_base_reward_for_test")) != 50 \
+			or bool(root_node.call("is_completion_reward_reduced_for_test")) \
+			or int(root_node.call("get_best_stars_for_test", 1)) != 3 \
+			or int(root_node.get("total_stars")) != 3:
+		_fail("first clear must grant the full base reward and record only its level best stars")
+		return false
+
+	_complete_rewash_fixture(root_node, 1, 60.0, 5)
+	var same_star_rewash_coins := int(root_node.get("coins")) - first_clear_coins
+	if int(root_node.call("get_completion_base_reward_for_test")) != 25 \
+			or not bool(root_node.call("is_completion_reward_reduced_for_test")) \
+			or same_star_rewash_coins >= first_clear_coins \
+			or int(root_node.get("total_stars")) != 3:
+		_fail("same-star rewashing must halve its base payout without increasing total stars")
+		return false
+
+	root_node.set("best_times", {})
+	root_node.set("best_stars", {1: 1})
+	root_node.set("total_stars", 1)
+	root_node.set("coins", 0)
+	_complete_rewash_fixture(root_node, 1, 60.0, 5)
+	if int(root_node.call("get_completion_base_reward_for_test")) != 33 \
+			or int(root_node.call("get_completion_star_improvement_for_test")) != 2 \
+			or int(root_node.call("get_best_stars_for_test", 1)) != 3 \
+			or int(root_node.get("total_stars")) != 3:
+		_fail("rewash star improvement must pay both new stars in full and refresh the best sum")
+		return false
+
+	root_node.set("best_times", {})
+	root_node.set("best_stars", {})
+	root_node.set("milestone_rewards_claimed", {})
+	root_node.set("total_stars", 0)
+	root_node.set("coins", 0)
+	_complete_rewash_fixture(root_node, 5, 60.0, 5)
+	if int(root_node.get("_level_milestone_bonus")) != 75 \
+			or not bool(root_node.call("is_milestone_reward_claimed_for_test", 5)):
+		_fail("level 5 must grant and remember its milestone reward on first clear")
+		return false
+	_complete_rewash_fixture(root_node, 5, 60.0, 5)
+	if int(root_node.get("_level_milestone_bonus")) != 0:
+		_fail("a claimed level milestone must not pay on rewashing")
+		return false
+	root_node.set("best_times", {})
+	root_node.set("best_stars", {})
+	root_node.set("milestone_rewards_claimed", {})
+	root_node.set("total_stars", 0)
+	root_node.set("coins", 0)
+	_complete_rewash_fixture(root_node, 10, 60.0, 7)
+	if int(root_node.get("_level_milestone_bonus")) != 100 \
+			or not bool(root_node.call("is_milestone_reward_claimed_for_test", 10)):
+		_fail("level 10 must grant and remember its milestone reward on first clear")
+		return false
+	_complete_rewash_fixture(root_node, 10, 60.0, 7)
+	if int(root_node.get("_level_milestone_bonus")) != 0:
+		_fail("the level 10 milestone must not pay on rewashing")
+		return false
+
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_source.contains('config.get_value("game", "best_stars"') \
+			or not main_source.contains('config.set_value("game", "best_stars"') \
+			or not main_source.contains('config.get_value("game", "milestone_rewards_claimed"') \
+			or not main_source.contains('config.set_value("game", "milestone_rewards_claimed"'):
+		_fail("best stars and milestone claims must both load and save")
+		return false
+	var history_config := ConfigFile.new()
+	history_config.set_value("game", "milestone_rewards_claimed", {5: true, 10: true})
+	root_node.call("_load_milestone_reward_history", history_config)
+	if not bool(root_node.call("is_milestone_reward_claimed_for_test", 5)) \
+			or not bool(root_node.call("is_milestone_reward_claimed_for_test", 10)):
+		_fail("saved milestone claims must restore for every claimed level")
+		return false
+	var completion_start := main_source.find("func _draw_completion_panel() -> void:")
+	var completion_end := main_source.find("\nfunc _draw_completion_reveal_cards", completion_start)
+	var completion_body := main_source.substr(completion_start, completion_end - completion_start)
+	if not completion_body.contains('_completion_reward_reduced') \
+			or not completion_body.contains('tr("REWASH_REWARD")'):
+		_fail("the completion reward chip must label the reduced rewashing payout")
+		return false
+
+	root_node.call("reset_game", int(original_state["active_level"]), "rewash_reward_smoke_cleanup")
+	root_node.set("level_index", original_state["level_index"])
+	root_node.set("game_state", original_state["game_state"])
+	root_node.set("coins", original_state["coins"])
+	root_node.set("total_stars", original_state["total_stars"])
+	root_node.set("best_times", original_state["best_times"])
+	root_node.set("best_stars", original_state["best_stars"])
+	root_node.set("milestone_rewards_claimed", original_state["milestones"])
+	root_node.call("set_achievement_state_for_test",
+		original_state["achievement_counters"], original_state["achievement_claimed"])
+	root_node.set("_main_save_dirty", original_state["main_save_dirty"])
+	root_node.set("_double_offer_shown", original_state["double_offer"])
+	for key in original_daily:
+		root_node.set("daily_mission_" + key, original_daily[key])
+	return true
+
+
+func _complete_rewash_fixture(root_node: Node, level: int, elapsed: float, combo: int) -> void:
+	root_node.call("reset_game", level, "rewash_reward_smoke")
+	root_node.set("level_time", elapsed)
+	root_node.set("best_combo", combo)
+	root_node.set("level_mistakes", 1)
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
 
 
 func _test_daily_mission_reward_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
@@ -2355,6 +2521,7 @@ func _test_customer_tip_contract(root_node: Node) -> bool:
 	root_node.set("daily_mission_claimed", true)
 	root_node.call("set_achievement_state_for_test", {}, {})
 	root_node.set("coins", 0)
+	root_node.set("best_stars", {})
 	root_node.set("total_stars", 0)
 	root_node.set("level_time", 30.0)
 	root_node.set("best_combo", 4)
@@ -2374,6 +2541,7 @@ func _test_customer_tip_contract(root_node: Node) -> bool:
 	root_node.set("daily_mission_claimed", true)
 	root_node.call("set_achievement_state_for_test", {}, {})
 	root_node.set("coins", 0)
+	root_node.set("best_stars", {})
 	root_node.set("total_stars", 0)
 	root_node.set("level_time", 500.0)
 	root_node.set("best_combo", 4)
