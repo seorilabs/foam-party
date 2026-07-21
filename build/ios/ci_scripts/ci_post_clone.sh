@@ -46,6 +46,11 @@ GODOT_VERSION="${GODOT_VERSION}" GODOT_STATUS="${GODOT_STATUS}" \
 echo "▸ Godot 프로젝트 import"
 godot --headless --path godot --import --quit-after 1
 
+echo "▸ 네이티브 AdMob ID 설정(ADMOB_* 환경 변수 오버라이드 또는 native_ads.json 기본값)"
+# .gdip 의 GADApplicationIdentifier 와 광고 유닛 ID 를 export 전에 확정한다. 이 단계를
+# 생략하면 커밋된 테스트 ID 가 그대로 아카이브된다. tools/build_ios_app_store.sh 와 동일.
+python3 "${REPO}/tools/configure_native_ads.py"
+
 echo "▸ iOS Xcode 프로젝트 export → build/ios/foam-party.xcodeproj"
 mkdir -p build/ios
 godot --headless --path godot --export-release iOS "${REPO}/build/ios/foam-party.xcodeproj"
@@ -53,6 +58,14 @@ godot --headless --path godot --export-release iOS "${REPO}/build/ios/foam-party
   echo "  Xcode 프로젝트가 생성되지 않음: build/ios/foam-party.xcodeproj" >&2
   exit 1
 }
+
+echo "▸ AdMob SPM 로컬 패키지를 Xcode 프로젝트에 링크"
+# AdMob export 플러그인은 pbxproj 패치를 call_deferred 로 예약하는데, headless CLI
+# export 는 deferred 콜을 처리하기 전에 종료하므로 패치가 실행되지 않는다. 그러면
+# PoingGodotAdMobDeps(→ GoogleMobileAds/UMP) 가 링크되지 않아 GAD*/UMP* Undefined
+# symbol 로 링크가 실패한다. Package.swift/PoingGodotAdMobDeps 는 export 시 동기로
+# 생성되므로, export 후 pbxproj 만 결정론적으로 패치한다(로컬 빌드 경로와 동일).
+python3 "${REPO}/tools/patch_ios_admob_project.py" "${REPO}/build/ios/foam-party.xcodeproj/project.pbxproj"
 
 echo "▸ 생성된 scheme 확인"
 xcodebuild -list -project "${REPO}/build/ios/foam-party.xcodeproj" || true
