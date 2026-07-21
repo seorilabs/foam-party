@@ -18,6 +18,7 @@ func _run_core_tests() -> void:
 	var CustomerPatience: GDScript = load("res://core/use_cases/customer_patience.gd")
 	var StalledDirtHighlight: GDScript = load("res://core/use_cases/stalled_dirt_highlight.gd")
 	var DailyMission: GDScript = load("res://core/use_cases/daily_mission.gd")
+	var AchievementProgress: GDScript = load("res://core/use_cases/achievement_progress.gd")
 	var BestTime: GDScript = load("res://core/use_cases/best_time.gd")
 	var StageSelection: GDScript = load("res://core/use_cases/stage_selection.gd")
 	var DirtSpawnPlan: GDScript = load("res://core/use_cases/dirt_spawn_plan.gd")
@@ -27,8 +28,10 @@ func _run_core_tests() -> void:
 	var DirtPatch: GDScript = load("res://core/domain/dirt_patch.gd")
 	var GameConfig: GDScript = load("res://core/domain/game_config.gd")
 	var I18n: GDScript = load("res://scripts/services/i18n.gd")
-	if Scoring == null or Economy == null or Coaching == null or ComboProtection == null or CustomerPresentation == null or CustomerPatience == null or StalledDirtHighlight == null or DailyMission == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or CarPaintCatalog == null or DirtPatch == null or GameConfig == null or I18n == null:
+	if Scoring == null or Economy == null or Coaching == null or ComboProtection == null or CustomerPresentation == null or CustomerPatience == null or StalledDirtHighlight == null or DailyMission == null or AchievementProgress == null or BestTime == null or StageSelection == null or DirtSpawnPlan == null or GoldSpot == null or LicensePlate == null or CarPaintCatalog == null or DirtPatch == null or GameConfig == null or I18n == null:
 		_fail("core scripts failed to load through res://core symlink")
+		return
+	if not _test_achievement_progress_rule(AchievementProgress):
 		return
 	if not _test_combo_protection_rule(ComboProtection, GameConfig):
 		return
@@ -502,6 +505,62 @@ func _run_core_tests() -> void:
 
 	print("CORE TESTS PASSED")
 	quit(0)
+
+
+func _test_achievement_progress_rule(AchievementProgress: GDScript) -> bool:
+	var definitions: Array[Dictionary] = AchievementProgress.definitions()
+	if definitions.size() != 5:
+		_fail("achievement catalog must expose exactly five launch achievements")
+		return false
+	var ids := {}
+	var counters_seen := {}
+	for definition in definitions:
+		var achievement_id := String(definition["id"])
+		var counter_key := String(definition["counter"])
+		if ids.has(achievement_id) or counters_seen.has(counter_key) \
+				or int(definition["target"]) <= 0 or int(definition["reward"]) <= 0:
+			_fail("achievement definitions need unique ids/counters and positive targets/rewards")
+			return false
+		ids[achievement_id] = true
+		counters_seen[counter_key] = true
+
+	var counters: Dictionary = AchievementProgress.default_counters()
+	var claimed := {}
+	var dirt_definition: Dictionary = definitions[1]
+	var result: Dictionary = AchievementProgress.apply_value(
+		counters, claimed, String(dirt_definition["counter"]), int(dirt_definition["target"]) - 1
+	)
+	if int(result["reward"]) != 0 or not (result["newly_completed"] as Array).is_empty():
+		_fail("achievement must stay pending below its local counter threshold")
+		return false
+	result = AchievementProgress.apply_value(
+		result["counters"], result["claimed"],
+		String(dirt_definition["counter"]), int(dirt_definition["target"])
+	)
+	if int(result["reward"]) != int(dirt_definition["reward"]) \
+			or not bool((result["claimed"] as Dictionary).get(String(dirt_definition["id"]), false)):
+		_fail("reaching an achievement threshold must complete and grant once")
+		return false
+	var once_reward := int(result["reward"])
+	result = AchievementProgress.apply_value(
+		result["counters"], result["claimed"],
+		String(dirt_definition["counter"]), int(dirt_definition["target"]) + 50
+	)
+	if int(result["reward"]) != 0 or once_reward <= 0:
+		_fail("a completed achievement must never grant its reward twice")
+		return false
+
+	var normalized: Dictionary = AchievementProgress.normalize_counters({
+		AchievementProgress.COUNTER_WASHES: -4,
+		AchievementProgress.COUNTER_COMBO: 12,
+		"external_ga4_value": 999,
+	})
+	if int(normalized[AchievementProgress.COUNTER_WASHES]) != 0 \
+			or int(normalized[AchievementProgress.COUNTER_COMBO]) != 12 \
+			or normalized.has("external_ga4_value"):
+		_fail("saved achievement counters must clamp local values and discard unknown keys")
+		return false
+	return true
 
 
 func _test_tool_specific_upgrade_curves(Economy: GDScript, GameConfig: GDScript) -> bool:

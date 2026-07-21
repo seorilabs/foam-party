@@ -109,6 +109,126 @@ func _test_native_ad_contract() -> bool:
 	return true
 
 
+func _test_achievement_contract(root_node: Node) -> bool:
+	var definitions: Array[Dictionary] = root_node.call("get_achievement_definitions_for_test")
+	if definitions.size() != 5:
+		_fail("achievement sheet must expose five local lifetime goals")
+		return false
+	var original_state := {
+		"counters": root_node.call("get_achievement_counters_for_test"),
+		"claimed": root_node.call("get_achievement_claimed_for_test"),
+		"coins": root_node.get("coins"),
+		"game_state": root_node.get("game_state"),
+		"main_save_dirty": root_node.get("_main_save_dirty"),
+	}
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	root_node.call("set_achievement_state_for_test", {}, {})
+	root_node.set("coins", 0)
+	var expected_coins := 0
+	for definition in definitions:
+		var counter_key := String(definition["counter"])
+		var achievement_id := String(definition["id"])
+		var target := int(definition["target"])
+		var reward := int(definition["reward"])
+		if int(root_node.call("record_achievement_progress_for_test", counter_key, target - 1)) != 0:
+			_fail("achievement reward must stay locked below target: " + achievement_id)
+			return false
+		if bool((root_node.call("get_achievement_claimed_for_test") as Dictionary).get(achievement_id, false)):
+			_fail("achievement completed below target: " + achievement_id)
+			return false
+		if int(root_node.call("record_achievement_progress_for_test", counter_key, target)) != reward:
+			_fail("achievement threshold reward mismatch: " + achievement_id)
+			return false
+		expected_coins += reward
+		if int(root_node.get("coins")) != expected_coins:
+			_fail("achievement reward must add exactly once: " + achievement_id)
+			return false
+		if int(root_node.call("record_achievement_progress_for_test", counter_key, target + 100)) != 0 \
+				or int(root_node.get("coins")) != expected_coins:
+			_fail("completed achievement paid twice: " + achievement_id)
+			return false
+	var completed_counters: Dictionary = root_node.call("get_achievement_counters_for_test")
+	var completed_claimed: Dictionary = root_node.call("get_achievement_claimed_for_test")
+	var saved_achievements := ConfigFile.new()
+	root_node.call("_store_achievement_progress", saved_achievements)
+	root_node.call("set_achievement_state_for_test", {}, {})
+	root_node.call("_load_achievement_progress", saved_achievements)
+	if root_node.call("get_achievement_counters_for_test") != completed_counters \
+			or root_node.call("get_achievement_claimed_for_test") != completed_claimed \
+			or int(root_node.get("coins")) != expected_coins:
+		_fail("achievement counters, claims, and paid coins must round-trip without regrant")
+		return false
+
+	var achievement_button: Rect2 = root_node.call("_get_achievement_btn_rect")
+	for other_button in [
+		root_node.call("_get_start_rect"),
+		root_node.call("_get_upgrade_btn_rect"),
+		root_node.call("_get_skin_btn_rect"),
+		root_node.call("_get_stage_btn_rect"),
+	]:
+		if achievement_button.intersects(other_button):
+			_fail("achievement title entry must not overlap an existing button")
+			return false
+	root_node.call("_go_home")
+	root_node.call("_handle_tap", achievement_button.get_center())
+	if not bool(root_node.get("show_achievement_panel")) or String(root_node.get("game_state")) != "title":
+		_fail("title achievement button must open a modal sheet")
+		return false
+	var panel: Rect2 = root_node.call("_achievement_panel_rect")
+	var previous_row := Rect2()
+	for row_index in range(definitions.size()):
+		var row: Rect2 = root_node.call("_achievement_row_rect", panel, row_index)
+		if not panel.encloses(row) or (row_index > 0 and previous_row.intersects(row)):
+			_fail("achievement progress rows must fit inside the title sheet")
+			return false
+		previous_row = row
+	root_node.call("_handle_achievement_panel_tap", root_node.call("_achievement_close_rect", panel).get_center())
+	if bool(root_node.get("show_achievement_panel")):
+		_fail("achievement sheet close button must dismiss the modal")
+		return false
+
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var core_source := FileAccess.get_file_as_string("res://core/use_cases/achievement_progress.gd")
+	if not main_source.contains('config.get_value("achievements", "counters"') \
+			or not main_source.contains('config.get_value("achievements", "claimed"') \
+			or not main_source.contains('config.set_value("achievements", "counters"') \
+			or not main_source.contains('config.set_value("achievements", "claimed"'):
+		_fail("achievement counters and one-shot claims must round-trip in the local save")
+		return false
+	for required_hook in [
+		"AchievementProgress.COUNTER_DIRT",
+		"AchievementProgress.COUNTER_LEAF",
+		"AchievementProgress.COUNTER_COMBO",
+		"AchievementProgress.COUNTER_WASHES",
+		"AchievementProgress.COUNTER_STARS",
+	]:
+		if not main_source.contains(required_hook):
+			_fail("local gameplay achievement hook missing: " + required_hook)
+			return false
+	for forbidden_dependency in ["GA4", "Firebase", "AnalyticsPort", "JavaScriptBridge"]:
+		if core_source.contains(forbidden_dependency):
+			_fail("achievement rules must remain local-only: " + forbidden_dependency)
+			return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children \
+			or root_node.call("_get_status_rect") != baseline_hud_rects["status"] \
+			or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] \
+			or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] \
+			or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("achievement sheet must not add or move persistent gameplay HUD")
+		return false
+	root_node.call("set_achievement_state_for_test", original_state["counters"], original_state["claimed"])
+	root_node.set("coins", original_state["coins"])
+	root_node.set("game_state", original_state["game_state"])
+	root_node.set("_main_save_dirty", original_state["main_save_dirty"])
+	return true
+
+
 func _run_smoke() -> void:
 	var scene: PackedScene = load("res://scenes/main.tscn") as PackedScene
 	if scene == null:
@@ -123,7 +243,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "get_level_mistakes_for_test", "get_perfect_wash_bonus_for_test", "get_water_boost_remaining_for_test", "get_water_boost_cost_for_test", "get_tool_radius_for_test", "get_tool_power_multiplier_for_test", "activate_water_boost", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "get_level_mistakes_for_test", "get_perfect_wash_bonus_for_test", "get_water_boost_remaining_for_test", "get_water_boost_cost_for_test", "get_tool_radius_for_test", "get_tool_power_multiplier_for_test", "activate_water_boost", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_achievement_definitions_for_test", "get_achievement_counters_for_test", "get_achievement_claimed_for_test", "set_achievement_state_for_test", "record_achievement_progress_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -204,6 +324,8 @@ func _run_smoke() -> void:
 	if not _test_non_color_accessibility_cues(root_node):
 		return
 	if not await _test_upgrade_panel_residency(root_node):
+		return
+	if not _test_achievement_contract(root_node):
 		return
 	if not _test_scaled_star3_combo_gate_contract(root_node):
 		return

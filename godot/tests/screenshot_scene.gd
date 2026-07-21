@@ -79,6 +79,20 @@ func _run() -> void:
 		quit(1)
 		return
 	node.set("show_stage_panel", false)
+	node.call("set_achievement_state_for_test", {
+		"washes_completed": 10,
+		"dirt_removed": 62,
+		"leaf_removed": 18,
+		"stars_collected": 30,
+		"combo_peak": 7,
+	}, {"wash_rookie": true, "star_collector": true})
+	node.set("show_achievement_panel", true)
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_achievement_panel.png")):
+		quit(1)
+		return
+	node.set("show_achievement_panel", false)
+	node.call("set_achievement_state_for_test", {}, {})
 	node.set("show_upgrade_panel", true)
 	node.set("coins", 0)
 	await _settle(3)
