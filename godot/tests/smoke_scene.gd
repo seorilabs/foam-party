@@ -1352,6 +1352,14 @@ func _test_tool_scoped_skin_ownership(root_node: Node) -> bool:
 			_fail("classic must be free and gold must start locked for %s" % tool)
 			return false
 
+	root_node.set("coins", 149)
+	root_node.call("_try_buy_or_select_skin", "air", 3)
+	if int(root_node.get("coins")) != 149 \
+			or bool(root_node.call("_is_nozzle_skin_owned", "air", "gold")) \
+			or String(root_node.get("skin_air")) != "classic":
+		_fail("denied skin intent must not spend coins, grant ownership, or change selection")
+		return false
+
 	root_node.set("coins", 600)
 	for tool_index in range(tools.size()):
 		var tool := String(tools[tool_index])
@@ -1366,6 +1374,14 @@ func _test_tool_scoped_skin_ownership(root_node: Node) -> bool:
 				return false
 	if int(root_node.get("coins")) != 0:
 		_fail("owning gold for all four tools must cost 600 coins total")
+		return false
+	root_node.call("_try_buy_or_select_skin", "water", 0)
+	if int(root_node.get("coins")) != 0 or String(root_node.get("skin_water")) != "classic":
+		_fail("selecting an owned skin must not charge coins")
+		return false
+	root_node.call("_try_buy_or_select_skin", "water", 3)
+	if int(root_node.get("coins")) != 0 or String(root_node.get("skin_water")) != "gold":
+		_fail("reselecting a purchased skin must not charge coins")
 		return false
 
 	# AC-5: scoped ownership and selections round-trip through the same config
@@ -1415,6 +1431,29 @@ func _test_tool_scoped_skin_ownership(root_node: Node) -> bool:
 	if not main_source.contains("_load_nozzle_skin_customization(config)") \
 			or not main_source.contains("_store_nozzle_skin_customization(config)"):
 		_fail("progress persistence must use tool-scoped nozzle save helpers")
+		return false
+	var purchase_start := main_source.find("func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:")
+	var purchase_end := main_source.find("\nfunc ", purchase_start + 1)
+	var purchase_body := main_source.substr(purchase_start, purchase_end - purchase_start)
+	var buy_guard := purchase_body.find('if action != "buy":')
+	var coin_mutation := purchase_body.find("coins -= cost")
+	if buy_guard < 0 or coin_mutation < buy_guard:
+		_fail("skin coin mutation must stay behind an explicit buy-intent guard")
+		return false
+	if not purchase_body.contains("Economy intent already validates ownership and affordability"):
+		_fail("skin mutation must document the validated Economy intent boundary")
+		return false
+	var select_branch := purchase_body.find('if action == "select":')
+	var select_save_failure := purchase_body.find("if _save_progress() != OK:", select_branch)
+	var select_restore := purchase_body.find("skin_water = prev_sid", select_save_failure)
+	var buy_save_failure := purchase_body.find("if _save_progress() != OK:", buy_guard)
+	var buy_refund := purchase_body.find("coins += cost", buy_save_failure)
+	var buy_ownership_rollback := purchase_body.find("owned_skins.erase(ownership_key)", buy_refund)
+	var buy_selection_restore := purchase_body.find("skin_water = prev_sid", buy_ownership_rollback)
+	if select_branch < 0 or select_save_failure < select_branch or select_restore < select_save_failure \
+			or buy_save_failure < coin_mutation or buy_refund < buy_save_failure \
+			or buy_ownership_rollback < buy_refund or buy_selection_restore < buy_ownership_rollback:
+		_fail("skin select and buy paths must preserve their save-failure rollbacks")
 		return false
 	if not _assert_persistent_hud_unchanged(root_node, persistent_hud_before):
 		return false

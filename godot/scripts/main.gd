@@ -5887,7 +5887,10 @@ func _try_buy_or_select_skin(tool_key: String, skin_idx: int) -> void:
 		_play_ui_select()
 		return
 
-	# action == "buy"
+	# Economy intent already validates ownership and affordability. Only its
+	# explicit buy result may enter the coin/ownership mutation below.
+	if action != "buy":
+		return
 	coins -= cost
 	var ownership_key := Economy.skin_ownership_key(tool_key, sid)
 	owned_skins[ownership_key] = true
