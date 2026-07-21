@@ -1066,9 +1066,17 @@ func _run_smoke() -> void:
 	root_node.set("completed", false)
 	root_node.set("level_time", 9.0)
 	root_node.set("is_washing", true)
+	var pause_audio := root_node.get("audio") as Node
+	if pause_audio == null:
+		_fail("app pause contract requires the audio service")
+		return
+	pause_audio.set("active_tool_sound", "water")
 	root_node.call("_notification", NOTIFICATION_APPLICATION_PAUSED)
 	if not bool(root_node.get("show_pause")) or bool(root_node.get("is_washing")):
 		_fail("app pause must open settings and stop active washing")
+		return
+	if String(pause_audio.get("active_tool_sound")) != "":
+		_fail("app pause must stop the active tool loop")
 		return
 	root_node.call("_process", 0.75)
 	if not is_equal_approx(float(root_node.call("get_level_time_for_test")), 9.0):
