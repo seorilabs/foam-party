@@ -119,6 +119,7 @@ const STRINGS := {
 	"NEW_RECORD": ["신기록! %s", "New Record! %s"],
 	"BEST_RECORD": ["최고 기록 %s", "Best %s"],
 	"MILESTONE_CHIP": ["Lv.%d 이정표! +%d", "Lv.%d milestone! +%d"],
+	"PERFECT_CHIP": ["완벽! +%d", "Perfect! +%d"],
 	"RETRY": ["다시 세차", "Rewash"],
 	"NEXT": ["다음 차 ▶", "Next Car ▶"],
 	# upgrade panel

@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "get_level_mistakes_for_test", "get_perfect_wash_bonus_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -300,6 +300,8 @@ func _run_smoke() -> void:
 	root_node.set("best_combo", 5)
 	if int(root_node.call("calc_coin_reward_for_test")) != 50:
 		_fail("expected 50 coins for 3-star clear")
+		return
+	if not _test_perfect_wash_contract(root_node, analytics_recorder):
 		return
 	if not _test_daily_mission_reward_contract(root_node, analytics_recorder):
 		return
@@ -802,6 +804,126 @@ func _run_smoke() -> void:
 	root_node.free()
 	await process_frame
 	quit(0)
+
+
+func _test_perfect_wash_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
+	var persistent_hud_before := _capture_persistent_hud_state(root_node)
+	var original_state := {
+		"active_level": root_node.call("get_active_level_for_test"),
+		"level_index": root_node.get("level_index"),
+		"coins": root_node.get("coins"),
+		"total_stars": root_node.get("total_stars"),
+		"best_times": root_node.get("best_times").duplicate(true),
+		"best_stars": root_node.get("best_stars").duplicate(true),
+	}
+	var original_daily := {
+		"type": root_node.get("daily_mission_type"),
+		"label": root_node.get("daily_mission_label"),
+		"target": root_node.get("daily_mission_target"),
+		"requirement": root_node.get("daily_mission_requirement"),
+		"reward": root_node.get("daily_mission_reward"),
+		"progress": root_node.get("daily_mission_progress"),
+		"claimed": root_node.get("daily_mission_claimed"),
+		"date": root_node.get("daily_mission_date"),
+	}
+
+	# AC-2 and AC-4: only a sustained wrong-tool coach activation counts, and
+	# each dirt patch contributes at most one mistake until the level resets.
+	root_node.call("reset_game", 1, "perfect_wash_mistake_smoke")
+	if int(root_node.call("get_level_mistakes_for_test")) != 0:
+		_fail("level mistakes must reset to zero")
+		return false
+	var leaf_index := int(root_node.call("get_patch_index_by_kind_for_test", "leaf"))
+	if leaf_index < 0 or String(root_node.call("simulate_patch_hint_for_test", "water", leaf_index, 0.6)) != "air":
+		_fail("sustained wrong-tool use should activate the existing coaching hint")
+		return false
+	if int(root_node.call("get_level_mistakes_for_test")) != 1:
+		_fail("a patch's first coaching hint must record one level mistake")
+		return false
+	root_node.call("simulate_patch_hint_for_test", "water", leaf_index, 0.6)
+	root_node.call("simulate_patch_hint_for_test", "air", leaf_index, 0.1)
+	root_node.call("simulate_patch_hint_for_test", "water", leaf_index, 0.6)
+	if int(root_node.call("get_level_mistakes_for_test")) != 1:
+		_fail("repeated coaching hints on one patch must not add mistakes")
+		return false
+	var second_leaf := int(root_node.call("spawn_patch_for_test", "leaf"))
+	root_node.call("simulate_patch_hint_for_test", "water", second_leaf, 0.6)
+	if int(root_node.call("get_level_mistakes_for_test")) != 2:
+		_fail("a second patch's first coaching hint must add one mistake")
+		return false
+	root_node.call("reset_game", 1, "perfect_wash_reset_smoke")
+	if int(root_node.call("get_level_mistakes_for_test")) != 0:
+		_fail("retrying a level must clear the mistake counter")
+		return false
+
+	# Keep the completion reward comparison isolated from completion-style daily
+	# missions, which can legitimately grant their own coins on the same frame.
+	root_node.call("configure_daily_mission_for_test", "road_grime")
+	analytics_recorder.events.clear()
+	root_node.set("coins", 0)
+	root_node.set("level_time", 30.0)
+	root_node.set("best_combo", 4)
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	var perfect_reward := int(root_node.get("coin_reward"))
+	if int(root_node.get("earned_stars")) != 3 \
+			or int(root_node.call("get_perfect_wash_bonus_for_test")) != 20 \
+			or int(root_node.call("get_coins_for_test")) != perfect_reward:
+		_fail("a zero-mistake three-star clear must grant the 20-coin perfect bonus")
+		return false
+
+	root_node.call("reset_game", 1, "imperfect_wash_reward_smoke")
+	root_node.call("configure_daily_mission_for_test", "road_grime")
+	root_node.set("coins", 0)
+	root_node.set("level_time", 30.0)
+	root_node.set("best_combo", 4)
+	leaf_index = int(root_node.call("get_patch_index_by_kind_for_test", "leaf"))
+	root_node.call("simulate_patch_hint_for_test", "water", leaf_index, 0.6)
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	var imperfect_reward := int(root_node.get("coin_reward"))
+	if int(root_node.call("get_level_mistakes_for_test")) != 1 \
+			or int(root_node.call("get_perfect_wash_bonus_for_test")) != 0 \
+			or perfect_reward - imperfect_reward != 20 \
+			or int(root_node.call("get_coins_for_test")) != imperfect_reward:
+		_fail("any recorded mistake must suppress only the perfect-wash bonus")
+		return false
+
+	# AC-3: the completion-only badge reuses the milestone chip and fits beside
+	# both existing completion chips without adding a resident HUD Control.
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var completion_start := main_source.find("func _draw_completion_panel() -> void:")
+	var completion_end := main_source.find("\nfunc _completion_panel_rect() -> Rect2:", completion_start)
+	var completion_body := main_source.substr(completion_start, completion_end - completion_start)
+	if not completion_body.contains("if level_mistakes == 0 and _perfect_wash_bonus > 0:") \
+			or not completion_body.contains('tr("PERFECT_CHIP")') \
+			or not completion_body.contains('_style("milestone_chip"'):
+		_fail("completion must gate the perfect label and reuse the milestone-chip style")
+		return false
+	root_node.set("_level_milestone_bonus", 75)
+	var panel: Rect2 = root_node.call("_completion_panel_rect")
+	var perfect_chip: Rect2 = root_node.call("_perfect_chip_rect", panel)
+	var milestone_chip := Rect2(panel.position.x + 10.0, panel.position.y - 14.0, 106.0, 30.0)
+	var reward_chip := Rect2(panel.position.x + panel.size.x - 106.0, panel.position.y - 14.0, 96.0, 30.0)
+	if perfect_chip.intersects(milestone_chip) or perfect_chip.intersects(reward_chip):
+		_fail("perfect badge must fit between the milestone and reward chips")
+		return false
+
+	root_node.call("reset_game", int(original_state["active_level"]), "perfect_wash_smoke_cleanup")
+	root_node.set("level_index", original_state["level_index"])
+	root_node.set("coins", original_state["coins"])
+	root_node.set("total_stars", original_state["total_stars"])
+	root_node.set("best_times", original_state["best_times"])
+	root_node.set("best_stars", original_state["best_stars"])
+	for key in original_daily:
+		root_node.set("daily_mission_" + key, original_daily[key])
+	analytics_recorder.events.clear()
+	if _capture_persistent_hud_state(root_node) != persistent_hud_before:
+		_fail("perfect-wash reward must not add a persistent Control or move HUD residency")
+		return false
+	return true
 
 
 func _test_daily_mission_reward_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
