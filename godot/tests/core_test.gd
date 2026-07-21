@@ -44,6 +44,8 @@ func _run_core_tests() -> void:
 		return
 	if not _test_dirt_spawn_plan(DirtSpawnPlan, GameConfig):
 		return
+	if not _test_sap_catalog_and_city_pool(DirtSpawnPlan, GameConfig):
+		return
 	if not _test_gold_spot_rules(GoldSpot, GameConfig):
 		return
 	if not _test_license_plate_rules(LicensePlate):
@@ -711,6 +713,17 @@ func _test_dirt_spawn_plan(DirtSpawnPlan: GDScript, GameConfig: GDScript) -> boo
 		return false
 	if DirtSpawnPlan.BASE_PATCH_COUNT <= 0 or DirtSpawnPlan.PATCHES_PER_LEVEL <= 0 or DirtSpawnPlan.MAX_PATCH_COUNT < 38 or DirtSpawnPlan.MIN_CENTER_DISTANCE <= 0.0 or DirtSpawnPlan.DENSE_RADIUS_MIN_SCALE <= 0.0:
 		_fail("dirt density tuning constants must remain named and positive")
+		return false
+	return true
+
+
+func _test_sap_catalog_and_city_pool(DirtSpawnPlan: GDScript, GameConfig: GDScript) -> bool:
+	if not GameConfig.DIRT_TYPES.has("sap"):
+		_fail("sap must appear in the complete dirt catalog")
+		return false
+	var unlocked_city_pool: Array[String] = DirtSpawnPlan.type_pool_for_level("compact", 5)
+	if not unlocked_city_pool.has("sap"):
+		_fail("sap must appear in the compact city type pool after its level gate")
 		return false
 	return true
 
