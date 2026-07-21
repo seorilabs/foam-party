@@ -426,6 +426,13 @@ func _run() -> void:
 	for patch in node.get("dirt_patches"):
 		patch.set("health", 0.0)
 	await _settle(12)
+	node.call("set_completion_reveal_age_for_test", 0.52)
+	await _settle(1)
+	if not await _capture(out_dir.path_join("shot_completion_reveal_mid.png")):
+		quit(1)
+		return
+	node.call("set_completion_reveal_age_for_test", 1.0)
+	await _settle(1)
 	if not await _capture(out_dir.path_join("shot_complete.png")):
 		quit(1)
 		return
@@ -450,6 +457,8 @@ func _run() -> void:
 	for patch in node.get("dirt_patches"):
 		patch.set("health", 0.0)
 	await _settle(12)
+	node.call("set_completion_reveal_age_for_test", 1.0)
+	await _settle(1)
 	if not await _capture(out_dir.path_join("shot_complete_record.png")):
 		quit(1)
 		return
