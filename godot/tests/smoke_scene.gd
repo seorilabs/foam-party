@@ -1,6 +1,7 @@
 extends SceneTree
 
 const AdService := preload("res://scripts/services/ad_service.gd")
+const GameConfig := preload("res://core/domain/game_config.gd")
 const NativeAds := preload("res://scripts/services/native_ad_config.gd")
 
 
@@ -294,7 +295,15 @@ func _run_smoke() -> void:
 	root_node.set("best_combo", 10)
 
 	if int(root_node.call("calc_coin_reward_for_test")) != 44:
-		_fail("expected 44 coins for 1-star clear with max combo bonus")
+		_fail("expected 44 coins for 1-star clear at combo 10")
+		return
+	root_node.set("best_combo", 15)
+	if int(root_node.call("calc_coin_reward_for_test")) != 54:
+		_fail("expected 54 coins for 1-star clear at the combo 15 reward cap")
+		return
+	root_node.set("best_combo", 20)
+	if int(root_node.call("calc_coin_reward_for_test")) != 54:
+		_fail("1-star reward must stay capped after combo 15")
 		return
 	root_node.set("level_time", 60.0)
 	root_node.set("best_combo", 5)
@@ -377,14 +386,14 @@ func _run_smoke() -> void:
 		_fail("level 2 should respawn dirt patches")
 		return
 
-	root_node.set("coins", 100)
+	root_node.set("coins", 160)
 	var bomb_oil_index: int = root_node.call("get_patch_index_by_kind_for_test", "oil")
 	if bomb_oil_index < 0:
 		_fail("level 2 oil patch missing")
 		return
 	root_node.call("apply_foam_bomb")
-	if int(root_node.call("get_coins_for_test")) != 100 - 40:
-		_fail("foam bomb should cost 40 coins")
+	if int(root_node.call("get_coins_for_test")) != 160 - 80:
+		_fail("foam bomb should cost 80 coins")
 		return
 	if float(root_node.call("get_patch_soap_for_test", bomb_oil_index)) < 0.9:
 		_fail("foam bomb should soap oil patches")
@@ -395,7 +404,7 @@ func _run_smoke() -> void:
 	if ads_node != null and bool(ads_node.call("is_rewarded_ready", "foam_bomb_free")):
 		_fail("no rewarded ad should be ready in headless")
 		return
-	root_node.set("coins", 10)  # below BOMB_COST (40)
+	root_node.set("coins", 10)  # below BOMB_COST (80)
 	if bool(root_node.call("apply_foam_bomb")):
 		_fail("foam bomb must not apply below cost when no ad grants it")
 		return
@@ -1168,8 +1177,8 @@ func _test_daily_mission_style_contract(root_node: Node, analytics_recorder: Ana
 	root_node.call("_mark_patch_removed", combo_patches[7])
 	if int(root_node.get("daily_mission_progress")) != 1 \
 			or not bool(root_node.get("daily_mission_claimed")) \
-			or int(root_node.get("coins")) != coins_before_combo + 90:
-		_fail("combo x8 must claim the combo mission reward exactly at its requirement")
+			or int(root_node.get("coins")) != coins_before_combo + 90 + int(GameConfig.COMBO_BONUS_AMOUNTS[8]):
+		_fail("combo x8 must grant its milestone bonus and claim the mission reward exactly once")
 		return false
 	var coins_after_combo_claim := int(root_node.get("coins"))
 	root_node.call("_mark_patch_removed", combo_patches[8])
