@@ -5,6 +5,7 @@ extends RefCounted
 # the actual coin mutation, save, and rollback.
 
 const GameConfig = preload("res://core/domain/game_config.gd")
+const REWASH_PAYOUT_RATIO := 0.5
 
 
 static func calc_coin_reward(stars: int, best_combo: int) -> int:
@@ -14,6 +15,38 @@ static func calc_coin_reward(stars: int, best_combo: int) -> int:
 		+ stars * GameConfig.COIN_REWARD_PER_STAR
 		+ rewarded_combo * GameConfig.COIN_REWARD_PER_COMBO
 	)
+
+
+static func calc_completion_base_reward(
+	stars: int,
+	best_combo: int,
+	previous_best_stars: int,
+	has_previous_clear: bool
+) -> Dictionary:
+	var safe_stars := clampi(stars, 0, 3)
+	var full_reward := calc_coin_reward(safe_stars, best_combo)
+	var star_improvement := 0
+	if has_previous_clear:
+		star_improvement = maxi(safe_stars - clampi(previous_best_stars, 0, 3), 0)
+	else:
+		star_improvement = safe_stars
+	if not has_previous_clear:
+		return {
+			"coins": full_reward,
+			"full_reward": full_reward,
+			"star_improvement": star_improvement,
+			"reduced": false,
+		}
+	var full_star_improvement := star_improvement * GameConfig.COIN_REWARD_PER_STAR
+	var reduced_repeat_portion := floori(
+		float(full_reward - full_star_improvement) * REWASH_PAYOUT_RATIO
+	)
+	return {
+		"coins": reduced_repeat_portion + full_star_improvement,
+		"full_reward": full_reward,
+		"star_improvement": star_improvement,
+		"reduced": true,
+	}
 
 
 static func calc_customer_tip(patience: float, payout_ratio: float = 1.0) -> int:
@@ -33,8 +66,8 @@ static func perfect_wash_bonus(stars: int) -> int:
 	return 5 + clampi(stars, 1, 3) * 5
 
 
-static func calc_level_milestone_bonus(level: int) -> int:
-	if level <= 0 or level % 5 != 0:
+static func calc_level_milestone_bonus(level: int, already_claimed: bool = false) -> int:
+	if already_claimed or level <= 0 or level % 5 != 0:
 		return 0
 	var step := int(level / 5)
 	return 50 + step * 25

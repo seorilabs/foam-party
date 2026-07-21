@@ -133,6 +133,19 @@ func _run_core_tests() -> void:
 	if int(Economy.calc_coin_reward(3, 15)) != 70 or int(Economy.calc_coin_reward(3, 20)) != 70:
 		_fail("3-star reward should grow through combo 15 and cap at 70 coins")
 		return
+	var first_clear_reward: Dictionary = Economy.calc_completion_base_reward(3, 5, 0, false)
+	var same_star_rewash: Dictionary = Economy.calc_completion_base_reward(3, 5, 3, true)
+	var improved_rewash: Dictionary = Economy.calc_completion_base_reward(3, 5, 1, true)
+	if int(first_clear_reward["coins"]) != 50 or bool(first_clear_reward["reduced"]):
+		_fail("first clear must keep the full completion base reward")
+		return
+	if int(same_star_rewash["coins"]) != 25 or not bool(same_star_rewash["reduced"]):
+		_fail("same-star rewashing must halve the completion base reward")
+		return
+	if int(improved_rewash["coins"]) != 33 \
+			or int(improved_rewash["star_improvement"]) != 2:
+		_fail("rewash star improvement must stay full while the remaining reward is halved")
+		return
 	if int(GameConfig.COIN_REWARD_BASE) != 16 \
 			or int(GameConfig.COIN_REWARD_PER_STAR) != 8 \
 			or int(GameConfig.COIN_REWARD_PER_COMBO) != 2 \
@@ -174,6 +187,10 @@ func _run_core_tests() -> void:
 		return
 	if int(Economy.calc_level_milestone_bonus(5)) != 75:
 		_fail("level 5 milestone bonus should be 75")
+		return
+	if int(Economy.calc_level_milestone_bonus(5, true)) != 0 \
+			or int(Economy.calc_level_milestone_bonus(10, true)) != 0:
+		_fail("claimed level milestones must not pay twice")
 		return
 	if int(Economy.calc_level_milestone_bonus(3)) != 0:
 		_fail("non-milestone level should give no bonus")
@@ -357,6 +374,17 @@ func _run_core_tests() -> void:
 	var preserved_stars: Dictionary = StageSelection.record_best_stars(improved_stars, 3, 2)
 	if int(improved_stars[3]) != 3 or int(preserved_stars[3]) != 3:
 		_fail("stage best stars should improve monotonically")
+		return
+	if int(StageSelection.total_best_stars({1: 3, 2: 2, 3: 1})) != 6:
+		_fail("total stars must equal the bounded sum of per-level bests")
+		return
+	var migrated_stars: Dictionary = StageSelection.migrate_best_stars({}, 8, 3)
+	if migrated_stars != {1: 3, 2: 3, 3: 2} \
+			or int(StageSelection.total_best_stars(migrated_stars)) != 8:
+		_fail("legacy total stars must migrate into bounded unlocked-level records")
+		return
+	if StageSelection.migrate_best_stars({"2": 5, 0: 3}, 99, 2) != {2: 3}:
+		_fail("existing best-star records must normalize without legacy inflation")
 		return
 
 	# --- Wash rules: deterministic patch mutation (lift/mult injected) ---
