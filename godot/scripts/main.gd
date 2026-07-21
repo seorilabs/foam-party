@@ -259,7 +259,8 @@ const STAR_REVEAL_DELAYS: Array[float] = [0.3, 0.75, 1.25]
 const STAR_REVEAL_POP_DUR := 0.5
 const COMPLETION_REVEAL_DELAY := 0.12
 const COMPLETION_REVEAL_DURATION := 0.8
-var sound_enabled := true
+var music_enabled := true
+var sfx_enabled := true
 var text_scale := 1.0
 var reduce_motion := false
 var language_preference := ""
@@ -409,7 +410,7 @@ func _ready() -> void:
 	_bar_fill_style = StyleBoxFlat.new()
 	_bar_fill_style.bg_color = BAR_COL_START
 	_bar_fill_style.set_corner_radius_all(12)
-	_apply_sound_setting()
+	_apply_audio_settings()
 	reset_game(level_index, "cold_start")
 
 
@@ -424,7 +425,7 @@ func _load_progress() -> void:
 		coins = max(0, int(config.get_value("game", "coins", 0)))
 		var legacy_total_stars: int = max(0, int(config.get_value("game", "total_stars", 0)))
 		total_stars = legacy_total_stars
-		sound_enabled = bool(config.get_value("settings", "sound", true))
+		_load_audio_settings(config)
 		_load_text_scale_setting(config)
 		_load_reduce_motion_setting(config)
 		_load_language_preference(config)
@@ -634,7 +635,7 @@ func _save_progress() -> Error:
 	config.set_value("game", "level", level_index)
 	config.set_value("game", "coins", coins)
 	config.set_value("game", "total_stars", total_stars)
-	config.set_value("settings", "sound", sound_enabled)
+	_store_audio_settings(config)
 	_store_text_scale_setting(config)
 	_store_reduce_motion_setting(config)
 	_store_language_preference(config)
@@ -720,8 +721,20 @@ func _flush_daily_if_dirty() -> void:
 			_main_save_dirty = false
 
 
-func _apply_sound_setting() -> void:
-	audio.apply_sound_setting(sound_enabled)
+func _apply_audio_settings() -> void:
+	audio.apply_bus_settings(music_enabled, sfx_enabled)
+
+
+func _load_audio_settings(config: ConfigFile) -> void:
+	# The legacy `sound` key muted Master. New independent keys intentionally
+	# default ON when absent so every old save migrates without a silent channel.
+	music_enabled = bool(config.get_value("settings", "music", true))
+	sfx_enabled = bool(config.get_value("settings", "sfx", true))
+
+
+func _store_audio_settings(config: ConfigFile) -> void:
+	config.set_value("settings", "music", music_enabled)
+	config.set_value("settings", "sfx", sfx_enabled)
 
 
 func _normalize_text_scale(value: float) -> float:
@@ -1599,6 +1612,22 @@ func get_audio_stream_count_for_test() -> int:
 	return audio.get_stream_count()
 
 
+func get_audio_bus_state_for_test() -> Dictionary:
+	return audio.get_bus_state_for_test()
+
+
+func get_audio_player_bus_map_for_test() -> Dictionary:
+	return audio.get_player_bus_map_for_test()
+
+
+func get_music_enabled_for_test() -> bool:
+	return music_enabled
+
+
+func get_sfx_enabled_for_test() -> bool:
+	return sfx_enabled
+
+
 func get_combo_for_test() -> int:
 	return combo_count
 
@@ -2250,9 +2279,10 @@ func _handle_tap(point: Vector2) -> bool:
 			show_pause = false
 			reset_game(active_level_index, "pause_restart")
 			_play_ui_select()
-		elif _pause_button_rect(2).has_point(point):
-			_toggle_sound()
-			queue_redraw()
+		elif _pause_audio_option_rect("music").has_point(point):
+			_toggle_music()
+		elif _pause_audio_option_rect("sfx").has_point(point):
+			_toggle_sfx()
 		elif _pause_language_option_rect("ko").has_point(point):
 			_select_language("ko")
 		elif _pause_language_option_rect("en").has_point(point):
@@ -2312,8 +2342,10 @@ func _handle_tap(point: Vector2) -> bool:
 			show_achievement_panel = true
 			queue_redraw()
 			_play_ui_select()
-		elif _get_title_sound_rect().has_point(point):
-			_toggle_sound()
+		elif _get_title_music_rect().has_point(point):
+			_toggle_music()
+		elif _get_title_sfx_rect().has_point(point):
+			_toggle_sfx()
 		elif _get_title_help_rect().has_point(point):
 			_show_tutorial("title_help")
 			_play_ui_select()
@@ -2436,16 +2468,24 @@ func _show_tutorial(source: String) -> void:
 	_emit_analytics(FtueEvents.tutorial_step_view(FtueEvents.TUTORIAL_STEP_OVERVIEW, source))
 
 
-func _toggle_sound() -> void:
-	# ON→OFF: 뮤트 적용 전에 클릭음을 재생해 소리가 끊기지 않게 한다.
-	# OFF→ON: 언뮤트 후 클릭음을 재생한다.
-	if sound_enabled:
+func _toggle_music() -> void:
+	music_enabled = not music_enabled
+	_apply_audio_settings()
+	_play_ui_select()
+	_save_progress()
+	queue_redraw()
+
+
+func _toggle_sfx() -> void:
+	# ON→OFF plays the click before muting. OFF→ON plays after unmuting.
+	if sfx_enabled:
 		_play_ui_select()
-	sound_enabled = not sound_enabled
-	_apply_sound_setting()
-	if sound_enabled:
+	sfx_enabled = not sfx_enabled
+	_apply_audio_settings()
+	if sfx_enabled:
 		_play_ui_select()
 	_save_progress()
+	queue_redraw()
 
 
 func _text_scale_percent() -> int:
@@ -5146,19 +5186,28 @@ func _draw_daily_mission() -> void:
 
 func _draw_top_buttons() -> void:
 	var font: Font = _font()
-	var sound_rect := _get_title_sound_rect()
+	var music_rect := _get_title_music_rect()
+	var sfx_rect := _get_title_sfx_rect()
 	var help_rect := _get_title_help_rect()
 	var text_scale_rect := _get_title_text_scale_rect()
-	for rect in [sound_rect, help_rect, text_scale_rect]:
+	for rect in [music_rect, sfx_rect, help_rect, text_scale_rect]:
 		draw_style_box(_style("round_button", Color(0.03, 0.14, 0.2, 0.68), rect.size.y * 0.5), rect)
 	var icon_color := Color(0.93, 0.99, 1.0)
-	var speaker_center := sound_rect.get_center()
-	var icon_scale := sound_rect.size.x / 30.0
+	var music_center := music_rect.get_center()
+	draw_circle(music_center + Vector2(-5.0, 6.0), 3.0, icon_color)
+	draw_circle(music_center + Vector2(6.0, 3.0), 3.0, icon_color)
+	draw_line(music_center + Vector2(-2.0, 6.0), music_center + Vector2(-2.0, -7.0), icon_color, 2.2)
+	draw_line(music_center + Vector2(9.0, 3.0), music_center + Vector2(9.0, -10.0), icon_color, 2.2)
+	draw_line(music_center + Vector2(-2.0, -7.0), music_center + Vector2(9.0, -10.0), icon_color, 2.2)
+	if not music_enabled:
+		draw_line(music_center + Vector2(-10.0, -10.0), music_center + Vector2(10.0, 10.0), Color("#ff6b6b"), 3.0)
+	var speaker_center := sfx_rect.get_center()
+	var icon_scale := sfx_rect.size.x / 30.0
 	draw_colored_polygon(PackedVector2Array([
 		speaker_center + Vector2(-9.0, -3.0) * icon_scale, speaker_center + Vector2(-3.0, -3.0) * icon_scale, speaker_center + Vector2(3.0, -9.0) * icon_scale,
 		speaker_center + Vector2(3.0, 9.0) * icon_scale, speaker_center + Vector2(-3.0, 3.0) * icon_scale, speaker_center + Vector2(-9.0, 3.0) * icon_scale,
 	]), icon_color)
-	if sound_enabled:
+	if sfx_enabled:
 		draw_arc(speaker_center + Vector2(4.0, 0.0) * icon_scale, 7.0 * icon_scale, -1.0, 1.0, 8, icon_color, maxf(1.5, 2.0 * icon_scale))
 	else:
 		draw_line(speaker_center + Vector2(-11.0, -11.0) * icon_scale, speaker_center + Vector2(11.0, 11.0) * icon_scale, Color("#ff6b6b"), maxf(2.0, 3.0 * icon_scale))
@@ -5887,7 +5936,7 @@ func _pause_title_text() -> String:
 
 
 func _pause_action_labels() -> Array[String]:
-	return [tr("RESUME"), tr("PAUSE_RESTART"), tr("SOUND_ON") if sound_enabled else tr("SOUND_OFF"), tr("GUIDE"), tr("HOME"), tr("QUIT")]
+	return [tr("RESUME"), tr("PAUSE_RESTART"), "", tr("GUIDE"), tr("HOME"), tr("QUIT")]
 
 
 func _pause_language_labels() -> Array[String]:
@@ -5896,6 +5945,12 @@ func _pause_language_labels() -> Array[String]:
 
 func _pause_reduce_motion_label() -> String:
 	return tr("REDUCE_MOTION_ON") if reduce_motion else tr("REDUCE_MOTION_OFF")
+
+
+func _pause_audio_label(channel: String) -> String:
+	if channel == "music":
+		return tr("MUSIC_ON") if music_enabled else tr("MUSIC_OFF")
+	return tr("SFX_ON") if sfx_enabled else tr("SFX_OFF")
 
 
 func _draw_pause_menu() -> void:
@@ -5911,10 +5966,19 @@ func _draw_pause_menu() -> void:
 	var fills := [Color("#39d98a"), Color("#7fd6e6"), Color("#a9d7ff"), Color("#a9d7ff"), Color("#f8d97a"), Color("#f2a0a0")]
 	var text_cols := [Color("#0d3b2a"), Color("#0d3b55"), Color("#123246"), Color("#123246"), Color("#5b4a10"), Color("#5a1616")]
 	for i in range(labels.size()):
+		if i == 2:
+			continue
 		var r := _pause_button_rect(i)
 		draw_style_box(_style("pause_sh_%d" % i, Color(0.0, 0.0, 0.0, 0.18), 14.0), Rect2(r.position + Vector2(0.0, 4.0), r.size))
 		draw_style_box(_style("pause_btn_%d" % i, fills[i], 14.0), r)
 		draw_string(font, Vector2(r.position.x, r.position.y + 33.0), labels[i], HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 17, text_cols[i])
+
+	for channel in ["music", "sfx"]:
+		var audio_rect := _pause_audio_option_rect(channel)
+		var enabled := music_enabled if channel == "music" else sfx_enabled
+		var fill := Color("#d7f8e5") if enabled else Color("#e5eef5")
+		draw_style_box(_style("pause_audio_%s_%s" % [channel, "on" if enabled else "off"], fill, 14.0), audio_rect)
+		draw_string(font, Vector2(audio_rect.position.x, audio_rect.position.y + 31.0), _pause_audio_label(channel), HORIZONTAL_ALIGNMENT_CENTER, audio_rect.size.x, 15, Color("#123246"))
 
 	var language_labels := _pause_language_labels()
 	var active_locale := _active_locale()
@@ -6301,6 +6365,15 @@ func _pause_button_rect(index: int) -> Rect2:
 	return _pause_row_rect(row)
 
 
+func _pause_audio_option_rect(channel: String) -> Rect2:
+	var row := _pause_button_rect(2)
+	var gap := 8.0
+	var option_width := (row.size.x - gap) * 0.5
+	if channel == "music":
+		return Rect2(row.position, Vector2(option_width, row.size.y))
+	return Rect2(row.position + Vector2(option_width + gap, 0.0), Vector2(option_width, row.size.y))
+
+
 func _pause_language_rect() -> Rect2:
 	return _pause_row_rect(3)
 
@@ -6413,12 +6486,16 @@ func _get_pause_entry_rect() -> Rect2:
 	return Rect2(332.0, _hud_top_y() + 20.0, 44.0, 44.0)
 
 
-func _get_title_sound_rect() -> Rect2:
+func _get_title_music_rect() -> Rect2:
 	return Rect2(14.0, _title_button_y(), 30.0, 30.0)
 
 
-func _get_title_help_rect() -> Rect2:
+func _get_title_sfx_rect() -> Rect2:
 	return Rect2(50.0, _title_button_y(), 30.0, 30.0)
+
+
+func _get_title_help_rect() -> Rect2:
+	return Rect2(86.0, _title_button_y(), 30.0, 30.0)
 
 
 func _get_title_text_scale_rect() -> Rect2:

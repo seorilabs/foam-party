@@ -336,6 +336,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_text_scale_accessibility_contract(root_node):
 		return
+	if not _test_audio_bus_contract(root_node):
+		return
 	if not _test_reduce_motion_accessibility_contract(root_node):
 		return
 
@@ -865,6 +867,13 @@ func _run_smoke() -> void:
 		if root_node.call("_pause_button_rect", pause_index).intersects(language_rect):
 			_fail("language selector must not overlap pause actions")
 			return
+	var music_pause_rect: Rect2 = root_node.call("_pause_audio_option_rect", "music")
+	var sfx_pause_rect: Rect2 = root_node.call("_pause_audio_option_rect", "sfx")
+	if not root_node.call("_pause_button_rect", 2).encloses(music_pause_rect) \
+			or not root_node.call("_pause_button_rect", 2).encloses(sfx_pause_rect) \
+			or music_pause_rect.intersects(sfx_pause_rect):
+		_fail("music and SFX controls must split one non-overlapping pause row")
+		return
 
 	# Keep the implementation contract explicit: these visible strings must stay
 	# connected to TranslationServer through tr(), rather than becoming literals.
@@ -919,13 +928,15 @@ func _run_smoke() -> void:
 	if Input.is_emulating_mouse_from_touch() or Input.is_emulating_touch_from_mouse():
 		_fail("pointer-type emulation must stay disabled for dual mouse/touch handlers")
 		return
-	root_node.set("sound_enabled", true)
+	root_node.set("music_enabled", true)
+	root_node.set("sfx_enabled", true)
 	root_node.set("show_tutorial", false)
 	root_node.set("show_pause", false)
-	root_node.call("_handle_tap", root_node.call("_get_title_sound_rect").get_center())
+	root_node.call("_handle_tap", root_node.call("_get_title_music_rect").get_center())
+	root_node.call("_handle_tap", root_node.call("_get_title_sfx_rect").get_center())
 	root_node.call("_handle_tap", root_node.call("_get_title_help_rect").get_center())
-	if not bool(root_node.get("sound_enabled")) or bool(root_node.get("show_tutorial")):
-		_fail("playing HUD must not expose direct sound/help actions")
+	if not bool(root_node.get("music_enabled")) or not bool(root_node.get("sfx_enabled")) or bool(root_node.get("show_tutorial")):
+		_fail("playing HUD must not expose direct audio/help actions")
 		return
 	root_node.call("_update_canvas_transform")
 	var input_canvas_origin: Vector2 = root_node.get("canvas_origin")
@@ -1005,9 +1016,13 @@ func _run_smoke() -> void:
 		return
 
 	root_node.set("show_pause", true)
-	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 2).get_center())
-	if bool(root_node.get("sound_enabled")) or not bool(root_node.get("show_pause")):
-		_fail("sound toggle must work only inside pause/settings")
+	root_node.call("_handle_tap", music_pause_rect.get_center())
+	if bool(root_node.get("music_enabled")) or not bool(root_node.get("sfx_enabled")) or not bool(root_node.get("show_pause")):
+		_fail("pause music toggle must not change SFX or close settings")
+		return
+	root_node.call("_handle_tap", sfx_pause_rect.get_center())
+	if bool(root_node.get("music_enabled")) or bool(root_node.get("sfx_enabled")) or not bool(root_node.get("show_pause")):
+		_fail("pause SFX toggle must not change music or close settings")
 		return
 	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 3).get_center())
 	if not bool(root_node.get("show_tutorial")):
@@ -1026,6 +1041,9 @@ func _run_smoke() -> void:
 		return
 	if not _test_car_transition_contract(root_node):
 		return
+	root_node.set("music_enabled", true)
+	root_node.set("sfx_enabled", true)
+	root_node.call("_apply_audio_settings")
 	root_node.set("language_preference", "")
 	TranslationServer.set_locale(previous_locale)
 	root_node.call("_rebuild_i18n_labels")
@@ -2653,9 +2671,10 @@ func _test_text_scale_accessibility_contract(root_node: Node) -> bool:
 	var scale_rect: Rect2 = root_node.call("_get_title_text_scale_rect")
 	var design_rect := Rect2(Vector2.ZERO, Vector2(390.0, 844.0))
 	if not design_rect.encloses(scale_rect) \
-			or scale_rect.intersects(root_node.call("_get_title_sound_rect")) \
+			or scale_rect.intersects(root_node.call("_get_title_music_rect")) \
+			or scale_rect.intersects(root_node.call("_get_title_sfx_rect")) \
 			or scale_rect.intersects(root_node.call("_get_title_help_rect")):
-		_fail("text-scale control must fit the title and stay separate from sound/help")
+		_fail("text-scale control must fit the title and stay separate from audio/help")
 		return false
 	root_node.set("game_state", "title")
 	root_node.set("show_tutorial", false)
@@ -2749,6 +2768,98 @@ func _test_text_scale_accessibility_contract(root_node: Node) -> bool:
 		if int(root_node.call("get_scaled_font_size_for_test", base_size)) != base_size:
 			_fail("100% text scale must preserve every existing base font size")
 			return false
+	root_node.set("game_state", original_game_state)
+	return true
+
+
+func _test_audio_bus_contract(root_node: Node) -> bool:
+	# AC-1: runtime setup creates dedicated buses and routes exactly one BGM plus
+	# every current one-shot and loop player. Silent headless nodes keep all 17
+	# SFX routes observable without starting playback.
+	var bus_state: Dictionary = root_node.call("get_audio_bus_state_for_test")
+	if int(bus_state.get("music_index", -1)) < 0 or int(bus_state.get("sfx_index", -1)) < 0:
+		_fail("dedicated Music and SFX buses must exist")
+		return false
+	var player_buses: Dictionary = root_node.call("get_audio_player_bus_map_for_test")
+	if player_buses.size() != 18 or String(player_buses.get("BackgroundMusic", "")) != "Music":
+		_fail("audio routing must expose one Music player and 17 SFX players")
+		return false
+	for player_name in player_buses:
+		if player_name == "BackgroundMusic":
+			continue
+		if String(player_buses[player_name]) != "SFX":
+			_fail("effect player must route to SFX: " + String(player_name))
+			return false
+
+	# AC-2/5: muting either channel changes only its own bus and never Master.
+	root_node.set("music_enabled", false)
+	root_node.set("sfx_enabled", true)
+	root_node.call("_apply_audio_settings")
+	bus_state = root_node.call("get_audio_bus_state_for_test")
+	if not bool(bus_state["music_muted"]) or bool(bus_state["sfx_muted"]) or bool(bus_state["master_muted"]):
+		_fail("music OFF must leave SFX and Master audible")
+		return false
+	root_node.set("music_enabled", true)
+	root_node.set("sfx_enabled", false)
+	root_node.call("_apply_audio_settings")
+	bus_state = root_node.call("get_audio_bus_state_for_test")
+	if bool(bus_state["music_muted"]) or not bool(bus_state["sfx_muted"]) or bool(bus_state["master_muted"]):
+		_fail("SFX OFF must leave Music and Master audible")
+		return false
+
+	# AC-3/6: new keys survive a disk round trip. A legacy save containing only
+	# the old Master-mute key migrates both missing channels to ON.
+	var save_path := OS.get_temp_dir().path_join("foam_party_audio_bus_smoke.cfg")
+	var stored_config := ConfigFile.new()
+	root_node.call("_store_audio_settings", stored_config)
+	if stored_config.save(save_path) != OK:
+		_fail("audio settings fixture failed to save")
+		return false
+	var reloaded_config := ConfigFile.new()
+	if reloaded_config.load(save_path) != OK:
+		_fail("audio settings fixture failed to reload")
+		return false
+	root_node.set("music_enabled", false)
+	root_node.set("sfx_enabled", true)
+	root_node.call("_load_audio_settings", reloaded_config)
+	if not bool(root_node.call("get_music_enabled_for_test")) or bool(root_node.call("get_sfx_enabled_for_test")):
+		_fail("independent audio states must survive a ConfigFile disk round trip")
+		return false
+	var legacy_config := ConfigFile.new()
+	legacy_config.set_value("settings", "sound", false)
+	root_node.call("_load_audio_settings", legacy_config)
+	DirAccess.remove_absolute(save_path)
+	if not bool(root_node.call("get_music_enabled_for_test")) or not bool(root_node.call("get_sfx_enabled_for_test")):
+		_fail("legacy sound-only saves must default both new channels to ON")
+		return false
+
+	# AC-4: title exposes two independent, non-overlapping controls and their taps
+	# update the same localized state projected by the pause controls.
+	var original_game_state := String(root_node.get("game_state"))
+	var music_rect: Rect2 = root_node.call("_get_title_music_rect")
+	var sfx_rect: Rect2 = root_node.call("_get_title_sfx_rect")
+	var help_rect: Rect2 = root_node.call("_get_title_help_rect")
+	if music_rect.intersects(sfx_rect) or music_rect.intersects(help_rect) or sfx_rect.intersects(help_rect):
+		_fail("title music, SFX, and help controls must not overlap")
+		return false
+	root_node.set("game_state", "title")
+	root_node.set("show_tutorial", false)
+	root_node.call("_handle_tap", music_rect.get_center())
+	if bool(root_node.call("get_music_enabled_for_test")) \
+			or not bool(root_node.call("get_sfx_enabled_for_test")) \
+			or root_node.call("_pause_audio_label", "music") != TranslationServer.translate("MUSIC_OFF"):
+		_fail("title music control must update only the music state")
+		return false
+	root_node.call("_handle_tap", sfx_rect.get_center())
+	if bool(root_node.call("get_music_enabled_for_test")) \
+			or bool(root_node.call("get_sfx_enabled_for_test")) \
+			or root_node.call("_pause_audio_label", "sfx") != TranslationServer.translate("SFX_OFF"):
+		_fail("title SFX control must update only the SFX state")
+		return false
+
+	root_node.set("music_enabled", true)
+	root_node.set("sfx_enabled", true)
+	root_node.call("_apply_audio_settings")
 	root_node.set("game_state", original_game_state)
 	return true
 
