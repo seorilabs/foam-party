@@ -184,6 +184,23 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return
+	var droplet_points := [
+		Vector2(118.0, 500.0), Vector2(154.0, 474.0), Vector2(195.0, 488.0),
+		Vector2(236.0, 476.0), Vector2(274.0, 506.0), Vector2(104.0, 548.0),
+		Vector2(146.0, 566.0), Vector2(198.0, 540.0), Vector2(244.0, 568.0),
+		Vector2(286.0, 548.0), Vector2(126.0, 610.0), Vector2(194.0, 600.0),
+		Vector2(260.0, 612.0),
+	]
+	for local_point in droplet_points:
+		for _repeat_index in range(2):
+			node.call("spawn_surface_droplet_for_test", "water", node.call("_gameplay_point", local_point))
+	node.call("update_surface_droplets_for_test", 1.8)
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_surface_droplets.png")):
+		quit(1)
+		return
+	node.call("reset_game", 1, "surface_droplet_screenshot_cleanup")
+	await _settle(3)
 	node.set("level_time", 130.0)
 	for dirty_patch in node.get("dirt_patches"):
 		dirty_patch.set("health", dirty_patch.get("max_health"))
