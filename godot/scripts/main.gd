@@ -120,6 +120,7 @@ const WATER_EFFECT_PARTICLE_CAP := 72
 const FOAM_EFFECT_STYLES := [STYLE_BUBBLE, STYLE_FOAM]
 const FOAM_EFFECT_PARTICLE_CAP := 64
 const PARTICLE_CAP := 192
+const REDUCED_MOTION_PARTICLE_SCALE := 0.4
 const FOAM_BOMB_BURST_PARTICLE_COUNT := 28
 const OIL_SHEEN_BAND_COUNT := 5
 const OIL_SHEEN_MAX_ALPHA := 0.46
@@ -260,6 +261,7 @@ const COMPLETION_REVEAL_DELAY := 0.12
 const COMPLETION_REVEAL_DURATION := 0.8
 var sound_enabled := true
 var text_scale := 1.0
+var reduce_motion := false
 var language_preference := ""
 var tutorial_seen := false
 var show_tutorial := false
@@ -424,6 +426,7 @@ func _load_progress() -> void:
 		total_stars = legacy_total_stars
 		sound_enabled = bool(config.get_value("settings", "sound", true))
 		_load_text_scale_setting(config)
+		_load_reduce_motion_setting(config)
 		_load_language_preference(config)
 		tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
 		_load_upgrade_progress(config)
@@ -633,6 +636,7 @@ func _save_progress() -> Error:
 	config.set_value("game", "total_stars", total_stars)
 	config.set_value("settings", "sound", sound_enabled)
 	_store_text_scale_setting(config)
+	_store_reduce_motion_setting(config)
 	_store_language_preference(config)
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
 	config.set_value("game", "best_times", best_times)
@@ -739,6 +743,14 @@ func _store_text_scale_setting(config: ConfigFile) -> void:
 	config.set_value("settings", "text_scale", text_scale)
 
 
+func _load_reduce_motion_setting(config: ConfigFile) -> void:
+	reduce_motion = bool(config.get_value("settings", "reduce_motion", false))
+
+
+func _store_reduce_motion_setting(config: ConfigFile) -> void:
+	config.set_value("settings", "reduce_motion", reduce_motion)
+
+
 func _apply_language_preference() -> void:
 	I18n.select_locale(language_preference)
 	_rebuild_i18n_labels()
@@ -800,8 +812,9 @@ func _commit_next_level(next_level: int) -> void:
 
 func _car_transition_motion_enabled() -> bool:
 	# Standard headless and screenshot captures must stay deterministic and fully
-	# settled. FOAM_REDUCE_MOTION is the forward-compatible hook for #75.
-	return DisplayServer.get_name() != "headless" \
+	# settled. The persisted accessibility setting applies the same policy in play.
+	return not reduce_motion \
+		and DisplayServer.get_name() != "headless" \
 		and OS.get_environment("FOAM_DISABLE_SAVE") != "1" \
 		and OS.get_environment("FOAM_REDUCE_MOTION") != "1"
 
@@ -1810,6 +1823,27 @@ func set_text_scale_for_test(value: float) -> void:
 	queue_redraw()
 
 
+func get_reduce_motion_for_test() -> bool:
+	return reduce_motion
+
+
+func set_reduce_motion_for_test(enabled: bool) -> void:
+	reduce_motion = enabled
+	queue_redraw()
+
+
+func get_effect_particle_count_for_test(normal_count: int) -> int:
+	return _effect_particle_count(normal_count)
+
+
+func get_combo_flash_visuals_enabled_for_test() -> bool:
+	return _combo_flash_visuals_enabled()
+
+
+func get_completion_gleam_enabled_for_test() -> bool:
+	return _completion_gleam_enabled()
+
+
 func get_scaled_font_size_for_test(base_size: int, text: String = "", max_width: float = -1.0) -> int:
 	if text.is_empty() or max_width <= 0.0:
 		return _fs(base_size)
@@ -2223,6 +2257,8 @@ func _handle_tap(point: Vector2) -> bool:
 			_select_language("ko")
 		elif _pause_language_option_rect("en").has_point(point):
 			_select_language("en")
+		elif _pause_reduce_motion_rect().has_point(point):
+			_toggle_reduce_motion()
 		elif _pause_button_rect(3).has_point(point):
 			show_pause = false
 			_tutorial_returns_to_pause = true
@@ -2427,6 +2463,15 @@ func _cycle_text_scale() -> void:
 			current_index = index
 			break
 	text_scale = TEXT_SCALE_OPTIONS[(current_index + 1) % TEXT_SCALE_OPTIONS.size()]
+	_play_ui_select()
+	_save_progress()
+	queue_redraw()
+
+
+func _toggle_reduce_motion() -> void:
+	reduce_motion = not reduce_motion
+	if reduce_motion:
+		_gleam_time = -1.0
 	_play_ui_select()
 	_save_progress()
 	queue_redraw()
@@ -3044,7 +3089,7 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 	var hot_tint := Color(1.0, 0.84, 0.36, 0.98)
 	var sparkle_tint := cool_tint.lerp(hot_tint, intensity)
 
-	var sparkle_count: int = 4 + min(combo, 10)
+	var sparkle_count: int = _effect_particle_count(4 + min(combo, 10))
 	for index in range(sparkle_count):
 		var angle := rng.randf_range(0.0, TAU)
 		var offset := Vector2.from_angle(angle) * radius * rng.randf_range(0.2, 0.9)
@@ -3052,7 +3097,7 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 		var sparkle := WashParticle.new(center + offset, Vector2(0.0, lift), rng.randf_range(0.4, 0.75) + intensity * 0.2, rng.randf_range(3.5, 6.5) + intensity * 2.0, sparkle_tint, STYLE_SPARKLE)
 		_append_particle(sparkle)
 
-	var bubble_count: int = 5 + min(int(round(float(combo) * 0.7)), 8)
+	var bubble_count: int = _effect_particle_count(5 + min(int(round(float(combo) * 0.7)), 8))
 	for index in range(bubble_count):
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(40.0, 120.0) * (1.0 + intensity * 0.5)
@@ -3060,11 +3105,12 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 		_append_particle(bubble)
 
 	# Expanding shockwave ring grows with the combo to punctuate the pop.
-	_append_particle(WashParticle.new(center, Vector2.ZERO, 0.3 + intensity * 0.2, 4.0 + radius * (0.5 + intensity * 0.6), sparkle_tint, STYLE_RING))
+	if not reduce_motion:
+		_append_particle(WashParticle.new(center, Vector2.ZERO, 0.3 + intensity * 0.2, 4.0 + radius * (0.5 + intensity * 0.6), sparkle_tint, STYLE_RING))
 
 	# Hot combos throw celebratory gold confetti so a streak reads as a payoff.
 	if hot:
-		var confetti_count: int = min(combo - combo_requirement + 2, 7)
+		var confetti_count: int = _effect_particle_count(min(combo - combo_requirement + 2, 7))
 		for index in range(confetti_count):
 			var angle := rng.randf_range(-PI, 0.0)
 			var speed := rng.randf_range(120.0, 230.0)
@@ -3077,7 +3123,7 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 	var base_tool_color: Color = _tc if _tc is Color else Color(0.95, 0.95, 1.0, 0.85)
 	var pop_color := base_tool_color.lightened(0.3)
 	pop_color.a = 0.9
-	var pop_count: int = rng.randi_range(6, 8)
+	var pop_count: int = _effect_particle_count(rng.randi_range(6, 8))
 	for index in range(pop_count):
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(60.0, 130.0)
@@ -3085,29 +3131,32 @@ func _spawn_removal_burst(center: Vector2, radius: float) -> void:
 
 
 func _spawn_gold_spot_burst(center: Vector2, radius: float) -> void:
-	for index in range(12):
-		var angle := TAU * float(index) / 12.0
+	var particle_count := _effect_particle_count(12)
+	for index in range(particle_count):
+		var angle := TAU * float(index) / float(particle_count)
 		var speed := rng.randf_range(85.0, 155.0)
 		_append_particle(WashParticle.new(center, Vector2.from_angle(angle) * speed, rng.randf_range(0.45, 0.75), rng.randf_range(4.0, 7.0), Color("#ffd84a"), STYLE_SPARKLE))
-	_append_particle(WashParticle.new(center, Vector2.ZERO, 0.42, radius + 8.0, Color(1.0, 0.78, 0.12, 0.9), STYLE_RING))
+	if not reduce_motion:
+		_append_particle(WashParticle.new(center, Vector2.ZERO, 0.42, radius + 8.0, Color(1.0, 0.78, 0.12, 0.9), STYLE_RING))
 
 
 func _spawn_water_removal_splash(center: Vector2, radius: float) -> void:
 	# A water-caused removal gets its own impact splash. Particle count and spread
 	# scale with the active combo, while the water-only cap prevents accumulation.
 	var intensity := clampf(float(max(combo_count, 1) - 1) / 8.0, 0.0, 1.0)
-	var splash_count := 5 + int(round(8.0 * intensity))
-	var mist_count := 1 + int(round(2.0 * intensity))
+	var splash_count := _effect_particle_count(5 + int(round(8.0 * intensity)))
+	var mist_count := _effect_particle_count(1 + int(round(2.0 * intensity)))
 	var batch: Array[WashParticle] = []
 	var fan_direction := Vector2(-0.18, -1.0).normalized()
-	batch.append(WashParticle.new(
-		center,
-		fan_direction * 18.0,
-		0.38 + intensity * 0.14,
-		maxf(12.0, radius * (0.72 + intensity * 0.22)),
-		Color(0.7, 0.92, 1.0, 0.82),
-		STYLE_SPRAY_FAN
-	))
+	if not reduce_motion:
+		batch.append(WashParticle.new(
+			center,
+			fan_direction * 18.0,
+			0.38 + intensity * 0.14,
+			maxf(12.0, radius * (0.72 + intensity * 0.22)),
+			Color(0.7, 0.92, 1.0, 0.82),
+			STYLE_SPRAY_FAN
+		))
 	for index in range(splash_count):
 		var angle := rng.randf_range(-PI + 0.12, -0.12)
 		var speed := rng.randf_range(125.0, 220.0) * (1.0 + intensity * 0.42)
@@ -3626,7 +3675,7 @@ func _check_progress_milestone() -> void:
 	_progress_milestone_color = TEXT_COLORS[stage]
 	audio.play_milestone(stage)
 	var hue: float = float(HUES[stage])
-	for index in range(22):
+	for index in range(_effect_particle_count(22)):
 		var angle := rng.randf_range(0.0, TAU)
 		var speed := rng.randf_range(50.0, 130.0)
 		_append_particle(WashParticle.new(
@@ -3643,7 +3692,7 @@ func _spawn_completion_burst() -> void:
 	if completion_burst_done:
 		return
 	completion_burst_done = true
-	for index in range(90):
+	for index in range(_effect_particle_count(90)):
 		var angle := rng.randf_range(-PI, 0.0)
 		var speed := rng.randf_range(70.0, 230.0)
 		var color := Color.from_hsv(rng.randf(), 0.55, 1.0, 0.95)
@@ -3657,8 +3706,9 @@ func _spawn_completion_burst() -> void:
 
 func _spawn_speedrun_burst() -> void:
 	var center := DESIGN_SIZE * 0.5
-	for i in range(32):
-		var angle := TAU * float(i) / 32.0
+	var particle_count := _effect_particle_count(32)
+	for i in range(particle_count):
+		var angle := TAU * float(i) / float(particle_count)
 		var speed := rng.randf_range(190.0, 360.0)
 		var hue := rng.randf_range(0.10, 0.15)  # gold
 		_append_particle(WashParticle.new(
@@ -3672,14 +3722,28 @@ func _spawn_speedrun_burst() -> void:
 
 
 func _spawn_record_burst() -> void:
-	for index in range(26):
+	for index in range(_effect_particle_count(26)):
 		var angle := rng.randf_range(-PI * 0.85, -PI * 0.15)
 		var speed := rng.randf_range(150.0, 320.0)
 		var gold := Color.from_hsv(rng.randf_range(0.1, 0.14), 0.7, 1.0, 0.95)
 		_append_particle(WashParticle.new(Vector2(195.0, 300.0), Vector2.from_angle(angle) * speed, rng.randf_range(0.8, 1.5), rng.randf_range(4.0, 8.0), gold, STYLE_CONFETTI))
-	for index in range(14):
+	for index in range(_effect_particle_count(14)):
 		var angle := rng.randf_range(0.0, TAU)
 		_append_particle(WashParticle.new(Vector2(195.0, 290.0) + Vector2.from_angle(angle) * rng.randf_range(0.0, 60.0), Vector2(0.0, rng.randf_range(-40.0, -12.0)), rng.randf_range(0.5, 1.0), rng.randf_range(4.0, 7.0), Color(1.0, 0.95, 0.65, 0.95), STYLE_SPARKLE))
+
+
+func _effect_particle_count(normal_count: int) -> int:
+	if not reduce_motion:
+		return normal_count
+	return maxi(1, floori(float(normal_count) * REDUCED_MOTION_PARTICLE_SCALE))
+
+
+func _combo_flash_visuals_enabled() -> bool:
+	return not reduce_motion
+
+
+func _completion_gleam_enabled() -> bool:
+	return not reduce_motion
 
 
 func _draw_background() -> void:
@@ -4694,7 +4758,7 @@ func _draw_sparkle(center: Vector2, radius: float, color: Color) -> void:
 
 
 func _draw_gleam() -> void:
-	if _gleam_time < 0.0 or game_state != STATE_PLAYING or not completed:
+	if not _completion_gleam_enabled() or _gleam_time < 0.0 or game_state != STATE_PLAYING or not completed:
 		return
 	var sweep_x: float = lerp(-80.0, float(DESIGN_SIZE.x) + 80.0, _gleam_time)
 	var alpha: float = sin(PI * _gleam_time) * 0.55
@@ -5685,7 +5749,7 @@ func _draw_combo_milestone_flash() -> void:
 		return
 
 	# 화면 플래시 오버레이: 빠르게 점등 후 서서히 소멸
-	if age < FLASH_DUR:
+	if _combo_flash_visuals_enabled() and age < FLASH_DUR:
 		var flash_alpha: float
 		if age < 0.06:
 			flash_alpha = age / 0.06
@@ -5697,7 +5761,7 @@ func _draw_combo_milestone_flash() -> void:
 
 	# ×8 이상: 화면 가장자리 glow 테두리
 	var _milestone_count := _combo_milestone_count
-	if _milestone_count >= 8:
+	if _combo_flash_visuals_enabled() and _milestone_count >= 8:
 		var edge_alpha := maxf(0.0, 1.0 - age / TEXT_DUR)
 		edge_alpha *= 0.55
 		var ec := Color(_combo_milestone_flash_color.r, _combo_milestone_flash_color.g, _combo_milestone_flash_color.b, edge_alpha)
@@ -5830,6 +5894,10 @@ func _pause_language_labels() -> Array[String]:
 	return [tr("LANGUAGE_KO"), tr("LANGUAGE_EN")]
 
 
+func _pause_reduce_motion_label() -> String:
+	return tr("REDUCE_MOTION_ON") if reduce_motion else tr("REDUCE_MOTION_OFF")
+
+
 func _draw_pause_menu() -> void:
 	if not show_pause:
 		return
@@ -5860,6 +5928,12 @@ func _draw_pause_menu() -> void:
 		draw_string(font, Vector2(option_rect.position.x, option_rect.position.y + 31.0), language_labels[index], HORIZONTAL_ALIGNMENT_CENTER, option_rect.size.x, 16, Color("#123246"))
 		if selected:
 			draw_style_box(_style("pause_language_mark_%s" % locale, Color("#159f6d"), 2.0), Rect2(option_rect.position + Vector2(14.0, option_rect.size.y - 7.0), Vector2(option_rect.size.x - 28.0, 3.0)))
+
+	var motion_rect := _pause_reduce_motion_rect()
+	var motion_fill := Color("#d7f8e5") if reduce_motion else Color("#e5eef5")
+	draw_style_box(_style("pause_motion_shadow", Color(0.0, 0.0, 0.0, 0.14), 14.0), Rect2(motion_rect.position + Vector2(0.0, 4.0), motion_rect.size))
+	draw_style_box(_style("pause_motion_%s" % ("on" if reduce_motion else "off"), motion_fill, 14.0), motion_rect)
+	draw_string(font, Vector2(motion_rect.position.x, motion_rect.position.y + 31.0), _pause_reduce_motion_label(), HORIZONTAL_ALIGNMENT_CENTER, motion_rect.size.x, 16, Color("#123246"))
 
 
 func _draw_quit_confirm() -> void:
@@ -6212,9 +6286,9 @@ func _get_double_rect() -> Rect2:
 	return Rect2(58.0, 392.0 + COMPLETION_PREVIEW_EXTRA, 274.0, 42.0)
 
 
-# Pause/settings sheet: resume / restart / sound / language / guide / home / quit.
+# Pause/settings sheet: resume / restart / sound / language / reduced motion / guide / home / quit.
 func _pause_panel() -> Rect2:
-	var panel_height := 500.0
+	var panel_height := 540.0
 	var insets := _safe_area_design_insets()
 	var min_y := insets.y + 16.0
 	var max_y := DESIGN_SIZE.y - insets.w - 16.0 - panel_height
@@ -6223,12 +6297,16 @@ func _pause_panel() -> Rect2:
 
 
 func _pause_button_rect(index: int) -> Rect2:
-	var row := index if index < 3 else index + 1
+	var row := index if index < 3 else index + 2
 	return _pause_row_rect(row)
 
 
 func _pause_language_rect() -> Rect2:
 	return _pause_row_rect(3)
+
+
+func _pause_reduce_motion_rect() -> Rect2:
+	return _pause_row_rect(4)
 
 
 func _pause_language_option_rect(locale: String) -> Rect2:

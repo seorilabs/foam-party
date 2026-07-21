@@ -336,6 +336,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_text_scale_accessibility_contract(root_node):
 		return
+	if not _test_reduce_motion_accessibility_contract(root_node):
+		return
 
 	analytics_recorder.events.clear()
 	root_node.call("reset_game", 2, "smoke_retry")
@@ -2748,6 +2750,124 @@ func _test_text_scale_accessibility_contract(root_node: Node) -> bool:
 			_fail("100% text scale must preserve every existing base font size")
 			return false
 	root_node.set("game_state", original_game_state)
+	return true
+
+
+func _test_reduce_motion_accessibility_contract(root_node: Node) -> bool:
+	# AC-1: legacy saves default OFF. The new row stays inside the existing modal,
+	# separate from language and all six action hit targets.
+	root_node.call("set_reduce_motion_for_test", false)
+	if bool(root_node.call("get_reduce_motion_for_test")):
+		_fail("reduced motion must default to OFF")
+		return false
+	var panel: Rect2 = root_node.call("_pause_panel")
+	var motion_rect: Rect2 = root_node.call("_pause_reduce_motion_rect")
+	var language_rect: Rect2 = root_node.call("_pause_language_rect")
+	if not panel.encloses(motion_rect) or motion_rect.intersects(language_rect):
+		_fail("reduced-motion row must fit the pause sheet below language")
+		return false
+	for action_index in range(6):
+		if motion_rect.intersects(root_node.call("_pause_button_rect", action_index)):
+			_fail("reduced-motion row must not overlap pause actions")
+			return false
+
+	# One real modal tap applies immediately and keeps the sheet open.
+	root_node.set("show_pause", true)
+	root_node.call("_handle_tap", motion_rect.get_center())
+	if not bool(root_node.call("get_reduce_motion_for_test")) \
+			or not bool(root_node.get("show_pause")) \
+			or root_node.call("_pause_reduce_motion_label") != TranslationServer.translate("REDUCE_MOTION_ON"):
+		_fail("pause toggle must enable reduced motion without closing settings")
+		return false
+
+	# AC-1/5: persist ON through an actual ConfigFile disk round trip. A legacy
+	# file with no key must restore the documented OFF default.
+	var save_path := OS.get_temp_dir().path_join("foam_party_reduce_motion_smoke.cfg")
+	var stored_config := ConfigFile.new()
+	root_node.call("_store_reduce_motion_setting", stored_config)
+	if stored_config.save(save_path) != OK:
+		_fail("reduced-motion fixture failed to save")
+		return false
+	var reloaded_config := ConfigFile.new()
+	if reloaded_config.load(save_path) != OK:
+		_fail("reduced-motion fixture failed to reload")
+		return false
+	root_node.call("set_reduce_motion_for_test", false)
+	root_node.call("_load_reduce_motion_setting", reloaded_config)
+	if not bool(root_node.call("get_reduce_motion_for_test")):
+		_fail("reduced motion must survive a ConfigFile disk round trip")
+		return false
+	var legacy_config := ConfigFile.new()
+	legacy_config.set_value("settings", "sound", true)
+	root_node.call("_load_reduce_motion_setting", legacy_config)
+	DirAccess.remove_absolute(save_path)
+	if bool(root_node.call("get_reduce_motion_for_test")):
+		_fail("legacy settings without reduce_motion must default to OFF")
+		return false
+
+	# AC-6: OFF is the exact current policy: all 90 completion particles and both
+	# overlay paths remain enabled.
+	if int(root_node.call("get_effect_particle_count_for_test", 90)) != 90 \
+			or not bool(root_node.call("get_combo_flash_visuals_enabled_for_test")) \
+			or not bool(root_node.call("get_completion_gleam_enabled_for_test")):
+		_fail("OFF must preserve the existing particle, flash, and gleam visuals")
+		return false
+	root_node.get("particles").clear()
+	root_node.set("completion_burst_done", false)
+	root_node.set("is_new_record", false)
+	root_node.set("level_time", 0.0)
+	root_node.call("_spawn_completion_burst")
+	var normal_completion_count := int(root_node.call("get_particle_count_for_test"))
+	if normal_completion_count != 90:
+		_fail("normal completion burst must retain its existing 90 particles")
+		return false
+
+	root_node.get("particles").clear()
+	root_node.set("combo_count", 6)
+	root_node.set("selected_tool", "water")
+	root_node.get("rng").seed = 7501
+	root_node.call("_spawn_removal_burst", Vector2(195.0, 520.0), 18.0)
+	root_node.call("_spawn_water_removal_splash", Vector2(195.0, 520.0), 18.0)
+	var normal_removal_count := int(root_node.call("get_particle_count_for_test"))
+
+	# AC-2/3/4: ON removes flash/edge/gleam, retains the localized fanfare and
+	# keeps visible removal/completion feedback at no more than half normal count.
+	root_node.call("set_reduce_motion_for_test", true)
+	if bool(root_node.call("get_combo_flash_visuals_enabled_for_test")) \
+			or bool(root_node.call("get_completion_gleam_enabled_for_test")):
+		_fail("ON must suppress combo flash, edge glow, and completion gleam")
+		return false
+	root_node.call("_trigger_combo_milestone_flash", 8)
+	if String(root_node.get("_combo_milestone_fanfare")).is_empty() \
+			or int(root_node.get("_combo_milestone_count")) != 8:
+		_fail("reduced motion must retain combo fanfare text")
+		return false
+
+	root_node.get("particles").clear()
+	root_node.set("completion_burst_done", false)
+	root_node.call("_spawn_completion_burst")
+	var reduced_completion_count := int(root_node.call("get_particle_count_for_test"))
+	if reduced_completion_count <= 0 \
+			or reduced_completion_count > int(floor(float(normal_completion_count) * 0.5)):
+		_fail("reduced completion particles must stay visible at no more than 50%")
+		return false
+	root_node.get("particles").clear()
+	root_node.get("rng").seed = 7501
+	root_node.call("_spawn_removal_burst", Vector2(195.0, 520.0), 18.0)
+	root_node.call("_spawn_water_removal_splash", Vector2(195.0, 520.0), 18.0)
+	var reduced_removal_count := int(root_node.call("get_particle_count_for_test"))
+	if reduced_removal_count <= 0 \
+			or reduced_removal_count > int(floor(float(normal_removal_count) * 0.5)):
+		_fail("reduced removal particles must stay visible at no more than 50%")
+		return false
+	if float(root_node.call("get_completion_reveal_progress_for_test", 0.5)) <= 0.0:
+		_fail("reduced motion must retain completion star reveal progress")
+		return false
+
+	root_node.call("set_reduce_motion_for_test", false)
+	root_node.set("show_pause", false)
+	root_node.get("particles").clear()
+	root_node.set("completion_burst_done", false)
 	return true
 
 
