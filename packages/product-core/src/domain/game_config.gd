@@ -127,7 +127,14 @@ const SPONGE_MOTION_PROFILE := {
 	"drift": 3.0,
 	"drift_limit": 7.0,
 }
-const BOMB_COST := 40
+# Completion rewards keep a 24-coin floor for a one-star, no-combo clear while
+# extending skill payout through combo 15. A foam bomb costs about 3.3 of those
+# baseline clears; stronger combo/perfect play intentionally shortens that path.
+const COIN_REWARD_BASE := 16
+const COIN_REWARD_PER_STAR := 8
+const COIN_REWARD_PER_COMBO := 2
+const COIN_REWARD_COMBO_CAP := 15
+const BOMB_COST := 80
 # Ten seconds is long enough for one focused rinse pass without becoming a
 # permanent upgrade. The 1.5x radius and power share one readable tuning ratio,
 # while the higher coin price keeps the instant full-board bomb distinct.
@@ -169,7 +176,9 @@ const DAILY_MISSION_POOL := [
 	{"type": "fast", "label": "%d초 이내 세차 완료", "target": 1, "requirement": 75, "reward": 95},
 	{"type": "perfect3", "label": "별 3개 세차 %d회", "target": 2, "requirement": 3, "reward": 100},
 ]
-const COMBO_BONUS_AMOUNTS := {5: 5, 10: 10, 15: 15, 20: 20}
+# Intermediate eight/twelve milestones keep feedback and instant rewards moving
+# between the five-point beats; combo 20 remains the final one-shot milestone.
+const COMBO_BONUS_AMOUNTS := {5: 5, 8: 8, 10: 10, 12: 12, 15: 15, 20: 20}
 const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime", "sap"]
 # Early levels introduce tool-matching rules gradually. The value is the first
 # playable level where each dirt kind may appear; level 5 converges to the full

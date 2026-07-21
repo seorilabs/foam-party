@@ -24,4 +24,14 @@ done
 
 python3 tools/check_analytics_docs_contract.py
 
+if ! grep -Fq 'min(최고 콤보, 15)×2' docs/game-spec.md; then
+  echo "Game spec must record the combo-15 completion reward curve." >&2
+  exit 1
+fi
+
+if ! grep -Fq '기본 완료 약 3.3회분' docs/game-spec.md; then
+  echo "Game spec must record the foam-bomb price target." >&2
+  exit 1
+fi
+
 echo "Docs source-of-truth structure check passed."

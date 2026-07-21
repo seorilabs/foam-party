@@ -119,13 +119,25 @@ func _run_core_tests() -> void:
 		_fail("1-star clear without combo should pay 24 coins")
 		return
 	if int(Economy.calc_coin_reward(1, 10)) != 44:
-		_fail("1-star clear with max combo bonus should pay 44 coins")
+		_fail("1-star clear at combo 10 should pay 44 coins")
 		return
 	if int(Economy.calc_coin_reward(3, 5)) != 50:
 		_fail("3-star clear should pay 50 coins")
 		return
-	if int(Economy.calc_coin_reward(3, 10)) != 60 or int(Economy.calc_coin_reward(3, 99)) != 60:
-		_fail("3-star reward should cap at 60 coins after combo 10")
+	if int(Economy.calc_coin_reward(3, 10)) != 60:
+		_fail("3-star clear at combo 10 should pay 60 coins")
+		return
+	if int(Economy.calc_coin_reward(3, 15)) != 70 or int(Economy.calc_coin_reward(3, 20)) != 70:
+		_fail("3-star reward should grow through combo 15 and cap at 70 coins")
+		return
+	if int(GameConfig.COIN_REWARD_BASE) != 16 \
+			or int(GameConfig.COIN_REWARD_PER_STAR) != 8 \
+			or int(GameConfig.COIN_REWARD_PER_COMBO) != 2 \
+			or int(GameConfig.COIN_REWARD_COMBO_CAP) != 15:
+		_fail("completion reward tuning must remain centralized in GameConfig")
+		return
+	if GameConfig.COMBO_BONUS_AMOUNTS != {5: 5, 8: 8, 10: 10, 12: 12, 15: 15, 20: 20}:
+		_fail("combo milestone rewards must include the eight and twelve steps")
 		return
 	if int(Economy.perfect_wash_bonus(0)) != 0 \
 			or int(Economy.perfect_wash_bonus(1)) != 10 \
@@ -134,11 +146,12 @@ func _run_core_tests() -> void:
 			or int(Economy.perfect_wash_bonus(99)) != 20:
 		_fail("perfect wash bonus must scale 10/15/20 and cap at three stars")
 		return
-	if int(GameConfig.WATER_BOOST_COST) != 60 \
+	if int(GameConfig.BOMB_COST) != 80 \
+			or int(GameConfig.WATER_BOOST_COST) != 60 \
 			or absf(float(GameConfig.WATER_BOOST_DURATION) - 10.0) > 0.001 \
 			or absf(float(GameConfig.WATER_BOOST_RADIUS_MULT) - 1.5) > 0.001 \
 			or absf(float(GameConfig.WATER_BOOST_POWER_MULT) - 1.5) > 0.001:
-		_fail("water boost tuning must remain centralized in GameConfig")
+		_fail("booster economy and water tuning must remain centralized in GameConfig")
 		return
 	if int(Economy.calc_level_milestone_bonus(5)) != 75:
 		_fail("level 5 milestone bonus should be 75")
@@ -419,12 +432,12 @@ func _run_core_tests() -> void:
 			or String(cp["best_combo"]) != "5" or String(cp["coins_earned"]) != "60" or String(cp["new_record"]) != "true":
 		_fail("level_complete params changed: " + str(cp))
 		return
-	var e_bomb_ad: Dictionary = ContentEvents.foam_bomb_use(4, true, 40)
+	var e_bomb_ad: Dictionary = ContentEvents.foam_bomb_use(4, true, GameConfig.BOMB_COST)
 	if String(e_bomb_ad["params"]["source"]) != "ad" or String(e_bomb_ad["params"]["cost"]) != "0":
 		_fail("ad-sourced foam bomb should report source=ad and cost 0: " + str(e_bomb_ad))
 		return
-	var e_bomb_coin: Dictionary = ContentEvents.foam_bomb_use(4, false, 40)
-	if String(e_bomb_coin["params"]["source"]) != "coins" or String(e_bomb_coin["params"]["cost"]) != "40":
+	var e_bomb_coin: Dictionary = ContentEvents.foam_bomb_use(4, false, GameConfig.BOMB_COST)
+	if String(e_bomb_coin["params"]["source"]) != "coins" or String(e_bomb_coin["params"]["cost"]) != str(GameConfig.BOMB_COST):
 		_fail("coin-sourced foam bomb should report source=coins and its coin cost: " + str(e_bomb_coin))
 		return
 	var e_mission: Dictionary = ContentEvents.daily_mission_claim("dust", 55)
