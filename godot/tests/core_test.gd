@@ -376,6 +376,8 @@ func _run_core_tests() -> void:
 		return
 	if not _test_misapplied_tool_damage(WashRules, Coaching, DirtPatch):
 		return
+	if not _test_heavy_air_mutation_snapshot(WashRules, DirtPatch):
+		return
 	if not _test_correct_wash_snapshots(WashRules, DirtPatch):
 		return
 	if not _test_sap_wash_path(WashRules, Coaching, DirtPatch):
@@ -795,6 +797,29 @@ func _test_misapplied_tool_damage(WashRules: GDScript, Coaching: GDScript, DirtP
 		if absf(heavy.health - 100.0) > 0.0001:
 			_fail("air must keep zero damage on heavy dirt: " + kind)
 			return false
+	return true
+
+
+func _test_heavy_air_mutation_snapshot(WashRules: GDScript, DirtPatch: GDScript) -> bool:
+	var mud = DirtPatch.new("mud", Vector2.ZERO, 18.0, 100.0, 0.5)
+	WashRules.apply_air(mud, 0.5, Vector2(0.0, 20.0), 0.8, 0.0)
+	if absf(mud.drift.x) > 0.0001 or absf(mud.drift.y + 2.8) > 0.0001:
+		_fail("heavy air drift must accumulate push times delta, proximity, and tuning")
+		return false
+	if absf(mud.looseness - 0.032) > 0.0001:
+		_fail("heavy air looseness must accumulate the mud profile coefficient")
+		return false
+	if mud.velocity != Vector2.ZERO or String(mud.state) != "stuck" or absf(mud.health - 100.0) > 0.0001:
+		_fail("heavy air must ignore lift and preserve velocity, state, and health")
+		return false
+
+	WashRules.apply_air(mud, 0.5, Vector2(0.0, 20.0), 0.8, 0.0)
+	if absf(mud.drift.length() - 5.5) > 0.0001:
+		_fail("heavy air drift must clamp to the configured length limit")
+		return false
+	if absf(mud.looseness - 0.064) > 0.0001:
+		_fail("heavy air looseness must keep accumulating after drift is clamped")
+		return false
 	return true
 
 
