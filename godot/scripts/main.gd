@@ -2453,7 +2453,6 @@ func _spawn_dirt() -> void:
 	var body_spawn_count := maxi(0, spawn_count - _wheel_specs().size())
 	var gold_spot_index := GoldSpot.spawn_index(active_level_index, body_spawn_count, spawn_seed)
 	var density_radius_scale: float = DirtSpawnPlan.radius_scale_for_count(spawn_count)
-	var health_scale: float = DirtSpawnPlan.health_scale_for_level(active_level_index)
 	for index in range(body_spawn_count):
 		var kind: String = type_pool[index % type_pool.size()]
 		var base_position: Vector2 = _gameplay_point(pool[index])
@@ -2465,7 +2464,7 @@ func _spawn_dirt() -> void:
 		)
 		var patch := DirtPatch.new(kind, base_position, radius, health, rng.randf_range(0.0, 10.0), index == gold_spot_index)
 		dirt_patches.append(patch)
-	_spawn_wheel_dirt(health_scale, spawn_seed)
+	_spawn_wheel_dirt(spawn_seed)
 
 	initial_dirt_total = 0.0
 	for patch in dirt_patches:
@@ -2473,7 +2472,7 @@ func _spawn_dirt() -> void:
 	initial_dirt_total = max(1.0, initial_dirt_total)
 
 
-func _spawn_wheel_dirt(health_scale: float, spawn_seed: int) -> void:
+func _spawn_wheel_dirt(spawn_seed: int) -> void:
 	var wheels := _wheel_specs()
 	for wheel_index in range(wheels.size()):
 		var wheel: Dictionary = wheels[wheel_index]
@@ -2482,7 +2481,7 @@ func _spawn_wheel_dirt(health_scale: float, spawn_seed: int) -> void:
 			"mud",
 			_gameplay_point(wheel["center"]),
 			_gameplay_length(wheel_radius * 0.58),
-			(88.0 + wheel_radius * 0.3) * health_scale,
+			DirtSpawnPlan.scaled_health(88.0 + wheel_radius * 0.3, "mud", active_level_index),
 			float(spawn_seed % 997) * 0.01 + float(wheel_index) * 1.37
 		)
 		_wheel_dirt_indices.append(dirt_patches.size())

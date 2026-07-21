@@ -2017,6 +2017,10 @@ func _test_dirt_health_cap_contract(root_node: Node) -> bool:
 		return false
 	var capped_scaled_health := -1.0
 	var capped_wheel_health := -1.0
+	var wheel_specs: Array[Dictionary] = root_node.call("get_wheel_specs_for_test")
+	var gameplay_scale: float = root_node.call("_gameplay_length", 1.0)
+	var first_wheel_radius: float = float(wheel_specs[0]["radius"]) / gameplay_scale
+	var first_wheel_base_health := 88.0 + first_wheel_radius * 0.3
 	for level in [10, 20, 50]:
 		if absf(float(root_node.call("get_dirt_health_scale_for_test", level)) - 1.5) > 0.0001:
 			_fail("actual dirt health scale must stop at 1.5 in late levels")
@@ -2033,6 +2037,12 @@ func _test_dirt_health_cap_contract(root_node: Node) -> bool:
 			_fail("late-level health cap fixture must spawn wheel mud")
 			return false
 		var wheel_health: float = root_node.call("get_patch_health_for_test", wheel_indices[0])
+		var expected_wheel_health: float = root_node.call(
+			"get_scaled_dirt_health_for_test", "mud", first_wheel_base_health, level
+		)
+		if absf(wheel_health - expected_wheel_health) > 0.0001:
+			_fail("actual wheel mud must use the shared capped dirt health rule")
+			return false
 		if capped_wheel_health < 0.0:
 			capped_wheel_health = wheel_health
 		elif absf(wheel_health - capped_wheel_health) > 0.0001:
