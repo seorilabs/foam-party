@@ -18,6 +18,11 @@ const STAR_WARN_SECONDS := 15.0
 const COMBO_WINDOW := 2.5
 const COMBO_GRACE := 1.0
 const CLEAN_DAMAGE_RATE := 72.0
+# Dirt durability grows through the early game but must not turn endless levels
+# into unbounded scrubbing. +6% keeps the shipped level 1-9 curve (1.00-1.48),
+# and level 10 onward stays at the 1.50 mobile-casual ceiling.
+const DIRT_HEALTH_SCALE_PER_LEVEL := 0.06
+const DIRT_HEALTH_SCALE_MAX := 1.5
 
 # Tool/dirt mutation rates are data, while wash_rules.gd owns state transitions
 # and formulas. Keeping every shipped dirt kind explicit makes a balance change a

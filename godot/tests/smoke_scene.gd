@@ -356,6 +356,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_dirt_spawn_density_contract(root_node):
 		return
+	if not _test_dirt_health_cap_contract(root_node):
+		return
 	if not _test_wheel_dirt_contract(root_node):
 		return
 	if not _test_customer_patience_contract(root_node):
@@ -1998,6 +2000,62 @@ func _test_dirt_spawn_density_contract(root_node: Node) -> bool:
 	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
 		_fail("dirt density must not change top HUD residency")
 		return false
+	return true
+
+
+func _test_dirt_health_cap_contract(root_node: Node) -> bool:
+	var baseline_control_count: int = root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	if absf(float(root_node.call("get_dirt_health_scale_for_test", 1)) - 1.0) > 0.0001 \
+			or absf(float(root_node.call("get_dirt_health_scale_for_test", 9)) - 1.48) > 0.0001:
+		_fail("actual dirt health scale must preserve level 1 through 9 tuning")
+		return false
+	var capped_scaled_health := -1.0
+	var capped_wheel_health := -1.0
+	var wheel_specs: Array[Dictionary] = root_node.call("get_wheel_specs_for_test")
+	var gameplay_scale: float = root_node.call("_gameplay_length", 1.0)
+	var first_wheel_radius: float = float(wheel_specs[0]["radius"]) / gameplay_scale
+	var first_wheel_base_health := 88.0 + first_wheel_radius * 0.3
+	for level in [10, 20, 50]:
+		if absf(float(root_node.call("get_dirt_health_scale_for_test", level)) - 1.5) > 0.0001:
+			_fail("actual dirt health scale must stop at 1.5 in late levels")
+			return false
+		var scaled_health: float = root_node.call("get_scaled_dirt_health_for_test", "oil", 100.0, level)
+		if capped_scaled_health < 0.0:
+			capped_scaled_health = scaled_health
+		elif absf(scaled_health - capped_scaled_health) > 0.0001:
+			_fail("same oil base health must remain identical across capped levels")
+			return false
+		root_node.call("reset_game", level, "dirt_health_cap_smoke")
+		var wheel_indices: Array[int] = root_node.call("get_wheel_dirt_indices_for_test")
+		if wheel_indices.is_empty():
+			_fail("late-level health cap fixture must spawn wheel mud")
+			return false
+		var wheel_health: float = root_node.call("get_patch_health_for_test", wheel_indices[0])
+		var expected_wheel_health: float = root_node.call(
+			"get_scaled_dirt_health_for_test", "mud", first_wheel_base_health, level
+		)
+		if absf(wheel_health - expected_wheel_health) > 0.0001:
+			_fail("actual wheel mud must use the shared capped dirt health rule")
+			return false
+		if capped_wheel_health < 0.0:
+			capped_wheel_health = wheel_health
+		elif absf(wheel_health - capped_wheel_health) > 0.0001:
+			_fail("actual same-car wheel mud health must stay capped across late levels")
+			return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_count \
+			or root_node.call("_get_status_rect") != baseline_hud_rects["status"] \
+			or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] \
+			or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] \
+			or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("dirt health cap must not add or move a gameplay HUD element")
+		return false
+	root_node.call("reset_game", 1, "dirt_health_cap_cleanup")
 	return true
 
 

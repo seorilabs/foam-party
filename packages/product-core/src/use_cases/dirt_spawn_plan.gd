@@ -20,6 +20,14 @@ const CANDIDATE_JITTER := 0.10
 const MIN_CENTER_DISTANCE := 25.0
 const SILHOUETTE_EDGE_MARGIN := 8.0
 
+const HEALTH_BONUS_BY_KIND := {
+	"oil": 25.0,
+	"bug": 25.0,
+	"poop": 15.0,
+	"road_grime": 20.0,
+	"sap": 20.0,
+}
+
 # Duplicate entries are intentional weights. Keeping the catalog in core makes
 # both the level gate and each car's dirt bias independently testable.
 const CAR_TYPE_POOLS := {
@@ -43,6 +51,19 @@ static func radius_scale_for_count(patch_count: int) -> float:
 	var dense_span := maxi(MAX_PATCH_COUNT - DENSE_RADIUS_START_COUNT, 1)
 	var density := clampf(float(patch_count - DENSE_RADIUS_START_COUNT) / float(dense_span), 0.0, 1.0)
 	return lerpf(1.0, DENSE_RADIUS_MIN_SCALE, density)
+
+
+static func health_scale_for_level(level: int) -> float:
+	var safe_level := maxi(level, 1)
+	return minf(
+		1.0 + float(safe_level - 1) * GameConfig.DIRT_HEALTH_SCALE_PER_LEVEL,
+		GameConfig.DIRT_HEALTH_SCALE_MAX
+	)
+
+
+static func scaled_health(base_health: float, kind: String, level: int) -> float:
+	var bonus: float = float(HEALTH_BONUS_BY_KIND.get(kind, 0.0))
+	return (maxf(base_health, 0.0) + bonus) * health_scale_for_level(level)
 
 
 static func normalized_candidates() -> Array[Vector2]:
