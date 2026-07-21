@@ -14,6 +14,7 @@ const CustomerPresentation = preload("res://core/use_cases/customer_presentation
 const CustomerPatience = preload("res://core/use_cases/customer_patience.gd")
 const StalledDirtHighlight = preload("res://core/use_cases/stalled_dirt_highlight.gd")
 const DailyMission = preload("res://core/use_cases/daily_mission.gd")
+const AchievementProgress = preload("res://core/use_cases/achievement_progress.gd")
 const BestTime = preload("res://core/use_cases/best_time.gd")
 const StageSelection = preload("res://core/use_cases/stage_selection.gd")
 const DirtSpawnPlan = preload("res://core/use_cases/dirt_spawn_plan.gd")
@@ -283,6 +284,7 @@ var upgrade_sponge := 0
 var show_upgrade_panel := false
 var show_skin_panel := false
 var show_stage_panel := false
+var show_achievement_panel := false
 var show_booster_panel := false
 var _stage_page := 0
 var _skin_panel_tab := 0
@@ -298,6 +300,8 @@ var _nozzle_skins: Dictionary = SkinCatalog.catalog()
 var _car_paints: Dictionary = CarPaintCatalog.catalog()
 var _main_save_dirty := false
 var _daily_save_timer: Timer = null
+var achievement_counters: Dictionary = AchievementProgress.default_counters()
+var achievement_claimed: Dictionary = {}
 
 var tool_ids := [TOOL_AIR, TOOL_WATER, TOOL_SOAP, TOOL_SPONGE]
 # Localized at runtime in _rebuild_i18n_labels() (device language -> ko/en).
@@ -398,6 +402,7 @@ func _load_progress() -> void:
 			for key in (stored_best_stars as Dictionary):
 				best_stars[int(key)] = clampi(int(stored_best_stars[key]), 0, 3)
 		main_claimed_date = String(config.get_value("daily", "claimed_date", ""))
+		_load_achievement_progress(config)
 	_apply_language_preference()
 	var today := _today_string()
 	var daily_config := ConfigFile.new()
@@ -504,6 +509,32 @@ func _store_car_paint_customization(config: ConfigFile) -> void:
 	config.set_value("customization", "owned_car_paints", owned_car_paints)
 
 
+func _load_achievement_progress(config: ConfigFile) -> void:
+	achievement_counters = AchievementProgress.normalize_counters(
+		config.get_value("achievements", "counters", {})
+	)
+	achievement_claimed = AchievementProgress.normalize_claimed(
+		config.get_value("achievements", "claimed", {})
+	)
+	# total_stars predates achievements and is an exact local counter, so existing
+	# players keep that progress and receive the one-time reward after migration.
+	var result := AchievementProgress.apply_value(
+		achievement_counters, achievement_claimed,
+		AchievementProgress.COUNTER_STARS, total_stars
+	)
+	achievement_counters = result["counters"]
+	achievement_claimed = result["claimed"]
+	var migration_reward := int(result["reward"])
+	if migration_reward > 0:
+		coins += migration_reward
+		_main_save_dirty = true
+
+
+func _store_achievement_progress(config: ConfigFile) -> void:
+	config.set_value("achievements", "counters", achievement_counters)
+	config.set_value("achievements", "claimed", achievement_claimed)
+
+
 func _save_progress() -> Error:
 	if not persistence_enabled:
 		return OK
@@ -523,7 +554,51 @@ func _save_progress() -> Error:
 	_store_nozzle_skin_customization(config)
 	_store_car_paint_customization(config)
 	config.set_value("customization", "license_plate", license_plate_text)
+	_store_achievement_progress(config)
 	return config.save(SAVE_PATH)
+
+
+func _record_achievement_value(counter_key: String, value: int) -> int:
+	var previous_counters := achievement_counters.duplicate(true)
+	var previous_claimed := achievement_claimed.duplicate(true)
+	var previous_coins := coins
+	var previous_dirty := _main_save_dirty
+	var result := AchievementProgress.apply_value(
+		achievement_counters, achievement_claimed, counter_key, value
+	)
+	achievement_counters = result["counters"]
+	achievement_claimed = result["claimed"]
+	if achievement_counters == previous_counters and achievement_claimed == previous_claimed:
+		return 0
+	var reward := int(result["reward"])
+	coins += reward
+	if reward > 0:
+		# Completion and its coin grant are one transaction. A failed save restores
+		# every achievement mutation so a later retry cannot duplicate the payout.
+		if _save_progress() != OK:
+			achievement_counters = previous_counters
+			achievement_claimed = previous_claimed
+			coins = previous_coins
+			_main_save_dirty = previous_dirty
+			return 0
+		_main_save_dirty = false
+		if audio != null:
+			audio.play_coin_bonus()
+	else:
+		_main_save_dirty = true
+	queue_redraw()
+	return reward
+
+
+func _record_achievement_increment(counter_key: String, amount: int = 1) -> int:
+	if amount <= 0:
+		return 0
+	var current := int(achievement_counters.get(counter_key, 0))
+	return _record_achievement_value(counter_key, current + amount)
+
+
+func _record_achievement_max(counter_key: String, observed_value: int) -> int:
+	return _record_achievement_value(counter_key, observed_value)
 
 
 func _save_daily() -> Error:
@@ -710,6 +785,8 @@ func _on_back_pressed() -> void:
 		show_skin_panel = false
 	elif show_stage_panel:
 		show_stage_panel = false
+	elif show_achievement_panel:
+		show_achievement_panel = false
 	elif game_state == STATE_PLAYING:
 		show_pause = true
 		_play_ui_select()
@@ -723,6 +800,7 @@ func _go_home() -> void:
 	show_pause = false
 	show_quit_confirm = false
 	show_stage_panel = false
+	show_achievement_panel = false
 	show_booster_panel = false
 	is_washing = false
 	game_state = STATE_TITLE
@@ -1059,6 +1137,8 @@ func _draw() -> void:
 			_draw_skin_panel()
 		if show_stage_panel:
 			_draw_stage_panel()
+		if show_achievement_panel:
+			_draw_achievement_panel()
 	else:
 		_draw_wash_trail()
 		_draw_tool_cursor()
@@ -1077,7 +1157,7 @@ func _draw() -> void:
 	# live inside that sheet; title-screen shortcuts remain available before play.
 	if game_state == STATE_PLAYING and not completed and not show_tutorial and not show_pause and not show_quit_confirm and not show_booster_panel and not _car_transition_blocks_gameplay():
 		_draw_pause_entry()
-	elif game_state == STATE_TITLE and not (show_upgrade_panel or show_skin_panel or show_stage_panel):
+	elif game_state == STATE_TITLE and not (show_upgrade_panel or show_skin_panel or show_stage_panel or show_achievement_panel):
 		_draw_top_buttons()
 	if show_tutorial:
 		_draw_tutorial()
@@ -1436,6 +1516,27 @@ func get_best_stars_for_test(level: int) -> int:
 
 func get_coins_for_test() -> int:
 	return coins
+
+
+func get_achievement_definitions_for_test() -> Array[Dictionary]:
+	return AchievementProgress.definitions()
+
+
+func get_achievement_counters_for_test() -> Dictionary:
+	return achievement_counters.duplicate(true)
+
+
+func get_achievement_claimed_for_test() -> Dictionary:
+	return achievement_claimed.duplicate(true)
+
+
+func set_achievement_state_for_test(counters: Dictionary, claimed: Dictionary) -> void:
+	achievement_counters = AchievementProgress.normalize_counters(counters)
+	achievement_claimed = AchievementProgress.normalize_claimed(claimed)
+
+
+func record_achievement_progress_for_test(counter_key: String, value: int) -> int:
+	return _record_achievement_value(counter_key, value)
 
 
 func get_daily_mission_reward_for_test() -> int:
@@ -1893,6 +1994,9 @@ func _handle_tap(point: Vector2) -> bool:
 		if show_stage_panel:
 			_handle_stage_panel_tap(point)
 			return true
+		if show_achievement_panel:
+			_handle_achievement_panel_tap(point)
+			return true
 		if _get_start_rect().has_point(point):
 			_emit_analytics(FtueEvents.play_tap(level_index))
 			start_game()
@@ -1908,6 +2012,10 @@ func _handle_tap(point: Vector2) -> bool:
 		elif _get_stage_btn_rect().has_point(point):
 			_stage_page = 0
 			show_stage_panel = true
+			queue_redraw()
+			_play_ui_select()
+		elif _get_achievement_btn_rect().has_point(point):
+			show_achievement_panel = true
 			queue_redraw()
 			_play_ui_select()
 		elif _get_title_sound_rect().has_point(point):
@@ -2593,6 +2701,9 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 				Input.vibrate_handheld(38)
 		if patch.kind == daily_mission_type:
 			_advance_daily_mission()
+		_record_achievement_increment(AchievementProgress.COUNTER_DIRT)
+		if patch.kind == "leaf":
+			_record_achievement_increment(AchievementProgress.COUNTER_LEAF)
 	_spawn_removal_burst(burst_center, burst_radius)
 	if selected_tool == TOOL_WATER:
 		_spawn_water_removal_splash(burst_center, burst_radius)
@@ -2608,6 +2719,7 @@ func _register_combo_removal() -> void:
 	combo_timer = COMBO_WINDOW
 	combo_grace_active = false
 	best_combo = max(best_combo, combo_count)
+	_record_achievement_max(AchievementProgress.COUNTER_COMBO, best_combo)
 	if daily_mission_type == "combo" and combo_count == daily_mission_requirement:
 		_advance_daily_mission()
 
@@ -2993,6 +3105,8 @@ func _update_clean_progress() -> void:
 			active_level_index, earned_stars, int(level_time), best_combo, coin_reward, is_new_record
 		))
 		_record_completion_daily_mission()
+		_record_achievement_increment(AchievementProgress.COUNTER_WASHES)
+		_record_achievement_max(AchievementProgress.COUNTER_STARS, total_stars)
 		_save_progress()
 		_stop_tool_loop()
 		_play_completion_sound()
@@ -4401,6 +4515,12 @@ func _draw_title_screen() -> void:
 	draw_style_box(_style("stage_shadow", Color(0.09, 0.34, 0.43, 0.9), 12.0), Rect2(stage_rect.position + Vector2(0.0, 4.0), stage_rect.size))
 	draw_style_box(_style("stage_btn", Color(0.18, 0.67, 0.74, 1.0), 12.0), stage_rect)
 	draw_string(font, Vector2(stage_rect.position.x, stage_rect.position.y + 28.0), tr("BTN_STAGE"), HORIZONTAL_ALIGNMENT_CENTER, stage_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
+	var achievement_rect := _get_achievement_btn_rect()
+	draw_style_box(_style("achievement_shadow", Color(0.48, 0.25, 0.02, 0.9), 12.0), Rect2(achievement_rect.position + Vector2(0.0, 4.0), achievement_rect.size))
+	draw_style_box(_style("achievement_btn", Color(0.95, 0.58, 0.16, 1.0), 12.0), achievement_rect)
+	var achievement_total := AchievementProgress.DEFINITIONS.size()
+	var achievement_label := tr("BTN_ACHIEVEMENT") % [_achievement_completed_count(), achievement_total]
+	draw_string(font, Vector2(achievement_rect.position.x, achievement_rect.position.y + 28.0), achievement_label, HORIZONTAL_ALIGNMENT_CENTER, achievement_rect.size.x, 15, Color(0.24, 0.12, 0.01, 0.96))
 	var version_y := minf(826.0, DESIGN_SIZE.y - _safe_area_design_insets().w - 12.0)
 	draw_string(font, Vector2(0.0, version_y), "v0.1", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 12, Color(1.0, 1.0, 1.0, 0.5))
 
@@ -5636,6 +5756,74 @@ func _get_skin_btn_rect() -> Rect2:
 
 func _get_stage_btn_rect() -> Rect2:
 	return Rect2(95.0, 704.0, 200.0, 44.0)
+
+
+func _get_achievement_btn_rect() -> Rect2:
+	return Rect2(95.0, 756.0, 200.0, 44.0)
+
+
+func _achievement_completed_count() -> int:
+	var count := 0
+	for definition in AchievementProgress.DEFINITIONS:
+		if bool(achievement_claimed.get(String(definition["id"]), false)):
+			count += 1
+	return count
+
+
+func _achievement_panel_rect() -> Rect2:
+	return Rect2(15.0, 62.0, 360.0, 650.0)
+
+
+func _achievement_close_rect(panel: Rect2) -> Rect2:
+	return Rect2(panel.end.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
+
+
+func _achievement_row_rect(panel: Rect2, row_index: int) -> Rect2:
+	return Rect2(panel.position.x + 14.0, panel.position.y + 102.0 + float(row_index) * 100.0, panel.size.x - 28.0, 88.0)
+
+
+func _handle_achievement_panel_tap(point: Vector2) -> void:
+	var panel := _achievement_panel_rect()
+	if _achievement_close_rect(panel).has_point(point):
+		show_achievement_panel = false
+		queue_redraw()
+		_play_ui_select()
+
+
+func _draw_achievement_panel() -> void:
+	var font := _font()
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.03, 0.06, 0.14, 0.76))
+	var panel := _achievement_panel_rect()
+	draw_style_box(_style("achievement_panel_shadow", Color(0.19, 0.10, 0.02, 0.48), 22.0), Rect2(panel.position + Vector2(0.0, 6.0), panel.size))
+	draw_style_box(_style("achievement_panel", Color("#fff8e8"), 22.0), panel)
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 46.0), tr("ACH_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 23, Color("#4d2c08"))
+	var definitions := AchievementProgress.definitions()
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 72.0), tr("ACH_SUMMARY") % [_achievement_completed_count(), definitions.size()], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 13, Color("#8a5b20"))
+	var close_rect := _achievement_close_rect(panel)
+	draw_style_box(_style("achievement_close", Color("#f2dfb8"), 10.0), close_rect)
+	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 26.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 18, Color("#4d2c08"))
+
+	for achievement_index in range(definitions.size()):
+		var definition: Dictionary = definitions[achievement_index]
+		var achievement_id: String = definition["id"]
+		var complete := bool(achievement_claimed.get(achievement_id, false))
+		var row := _achievement_row_rect(panel, achievement_index)
+		var row_bg := Color("#e6f7e9") if complete else Color("#fff1d2")
+		var row_border := Color("#35a966") if complete else Color("#e5aa45")
+		draw_style_box(_style("achievement_row_%s_%s" % [achievement_id, str(complete)], row_bg, 13.0, row_border, 2), row)
+		var title := tr(String(definition["label_key"])) % int(definition["target"])
+		draw_string(font, Vector2(row.position.x + 12.0, row.position.y + 25.0), title, HORIZONTAL_ALIGNMENT_LEFT, row.size.x - 112.0, 15, Color("#3f2c13"))
+		draw_string(font, Vector2(row.position.x, row.position.y + 25.0), tr("ACH_REWARD") % int(definition["reward"]), HORIZONTAL_ALIGNMENT_RIGHT, row.size.x - 12.0, 12, Color("#9b650d"))
+		var progress := AchievementProgress.progress_for(definition, achievement_counters)
+		var target := int(definition["target"])
+		var bar := Rect2(row.position.x + 12.0, row.position.y + 43.0, row.size.x - 24.0, 9.0)
+		draw_style_box(_style("achievement_bar_bg", Color(0.22, 0.16, 0.08, 0.18), 4.0), bar)
+		var ratio := float(progress) / float(maxi(target, 1))
+		if ratio > 0.0:
+			var fill := Rect2(bar.position, Vector2(maxf(7.0, bar.size.x * ratio), bar.size.y))
+			draw_style_box(_style("achievement_bar_done" if complete else "achievement_bar_active", Color("#35a966") if complete else Color("#f0a52b"), 4.0), fill)
+		var progress_label := tr("ACH_DONE") if complete else "%d / %d" % [progress, target]
+		draw_string(font, Vector2(row.position.x + 12.0, row.position.y + 74.0), progress_label, HORIZONTAL_ALIGNMENT_LEFT, row.size.x - 24.0, 13, Color("#25834d") if complete else Color("#76511c"))
 
 
 func _stage_panel_rect() -> Rect2:
