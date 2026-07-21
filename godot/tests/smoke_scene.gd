@@ -399,6 +399,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_soap_foam_visual_contract(root_node):
 		return
+	if not _test_car_wash_bay_visual_contract(root_node):
+		return
 	if not _test_sap_dirt_contract(root_node):
 		return
 	root_node.call("reset_game", 1, "dirt_density_smoke_cleanup")
@@ -4186,6 +4188,47 @@ func _test_soap_foam_visual_contract(root_node: Node) -> bool:
 		return false
 	if full_area <= partial_area:
 		_fail("soap amount must increase foam coverage as well as count")
+		return false
+	return true
+
+
+func _test_car_wash_bay_visual_contract(root_node: Node) -> bool:
+	var geometry: Dictionary = root_node.call("get_car_wash_bay_geometry_for_test")
+	var expected_parts := ["left_pillar", "right_pillar", "overhead_rail", "left_roller", "right_roller", "floor_drain"]
+	if geometry.size() != expected_parts.size():
+		_fail("car wash bay must expose pillars, rail, rollers, and floor drain")
+		return false
+	var design_bounds := Rect2(Vector2.ZERO, Vector2(390.0, 844.0))
+	for part_name in expected_parts:
+		if not geometry.has(part_name) or not design_bounds.encloses(geometry[part_name]):
+			_fail("car wash bay part must stay inside 390x844: " + part_name)
+			return false
+	var protected_car_area := Rect2(68.0, 222.0, 254.0, 470.0)
+	for side_part in ["left_pillar", "right_pillar", "left_roller", "right_roller"]:
+		if (geometry[side_part] as Rect2).intersects(protected_car_area):
+			_fail("side bay equipment must not cover the central car area: " + side_part)
+			return false
+	if (geometry["overhead_rail"] as Rect2).end.y >= protected_car_area.position.y \
+			or (geometry["floor_drain"] as Rect2).position.y <= protected_car_area.end.y:
+		_fail("rail and drain must frame rather than cover the car")
+		return false
+
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var bay_start := source.find("func _draw_car_wash_bay(")
+	var bay_end := source.find("\nfunc ", bay_start + 1)
+	var bay_body := source.substr(bay_start, bay_end - bay_start)
+	if bay_start < 0 or bay_body.find("draw_rect") < 0 or bay_body.find("draw_line") < 0 \
+			or bay_body.find("_draw_bay_roller") < 0 or bay_body.find("_draw_tex") >= 0:
+		_fail("car wash bay must use procedural draw calls for structure, rollers, and drain")
+		return false
+	var draw_start := source.find("func _draw()")
+	var draw_end := source.find("\nfunc ", draw_start + 1)
+	var draw_body := source.substr(draw_start, draw_end - draw_start)
+	var background_index := draw_body.find("_draw_background()")
+	if background_index < 0 \
+			or background_index >= draw_body.find("_draw_status()") \
+			or background_index >= draw_body.find("_draw_car()"):
+		_fail("car wash bay background must render before HUD and car")
 		return false
 	return true
 
