@@ -63,6 +63,13 @@ func _run() -> void:
 		quit(1)
 		return
 	node.set("show_stage_panel", false)
+	node.set("show_upgrade_panel", true)
+	node.set("coins", 0)
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_upgrade_locked_cues.png")):
+		quit(1)
+		return
+	node.set("show_upgrade_panel", false)
 	node.set("show_skin_panel", true)
 	await _settle(3)
 	if not await _capture(out_dir.path_join("shot_car_customization.png")):
@@ -111,6 +118,11 @@ func _run() -> void:
 		quit(1)
 		return
 	node.call("_dismiss_tutorial")
+	node.set("coins", 0)
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_foam_bomb_locked_cue.png")):
+		quit(1)
+		return
 	node.set("coins", 120)
 
 	await _settle(10)

@@ -1193,6 +1193,10 @@ func get_customer_patience_zone_for_test(elapsed_seconds: float, progress: float
 	return CustomerPatience.zone(CustomerPatience.value(elapsed_seconds, progress))
 
 
+func get_customer_patience_pattern_for_test(patience: float) -> String:
+	return _patience_pattern_for_zone(CustomerPatience.zone(patience))
+
+
 func should_customer_patience_warn_for_test(previous_zone: int, current_zone: int) -> bool:
 	return CustomerPatience.should_warn(previous_zone, current_zone)
 
@@ -4421,8 +4425,18 @@ func _draw_bomb_button() -> void:
 		draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#ffce3d"))
 		draw_circle(rect.position + Vector2(52.0, 33.0), 6.0, Color("#9a7400"), false, 1.5)
 		draw_string(font, Vector2(rect.position.x + 62.0, rect.position.y + 38.0), "%d" % BOMB_COST, HORIZONTAL_ALIGNMENT_LEFT, 30.0, 13, Color("#123246"))
+	_draw_unaffordable_lock(rect, ad_ready or can_afford, Color("#123246"))
 	if pop > 1.001:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_unaffordable_lock(rect: Rect2, available: bool, color: Color) -> void:
+	if available:
+		return
+	var center := Vector2(rect.end.x - 10.0, rect.get_center().y + 4.0)
+	draw_arc(center + Vector2(0.0, -5.0), 4.0, PI, TAU, 12, color, 1.8)
+	draw_rect(Rect2(center + Vector2(-5.0, -3.0), Vector2(10.0, 9.0)), color)
+	draw_circle(center + Vector2(0.0, 1.0), 1.2, Color(1.0, 1.0, 1.0, 0.75))
 
 
 # Live "what grade am I earning right now" tracker. Surfaces the otherwise
@@ -4556,8 +4570,11 @@ func _draw_customer_patience() -> void:
 		else:
 			bar_key = "cust_bar_r"
 			bar_col = Color(1.0, 0.40, 0.28)
-		draw_style_box(_style(bar_key, bar_col, 5.0),
-			Rect2(bar.position, Vector2(bar.size.x * patience, bar.size.y)))
+		var fill_rect := Rect2(bar.position, Vector2(bar.size.x * patience, bar.size.y))
+		draw_style_box(_style(bar_key, bar_col, 5.0), fill_rect)
+		_draw_patience_tier_pattern(bar, fill_rect, patience_zone)
+	else:
+		_draw_patience_tier_pattern(bar, Rect2(bar.position, Vector2.ZERO), patience_zone)
 
 	# 기분 레이블
 	var font: Font = _font()
@@ -4595,6 +4612,44 @@ func _draw_customer_patience() -> void:
 		draw_string(font, Vector2(bubble.position.x, bubble.position.y + 20.0),
 			_customer_cheer_text, HORIZONTAL_ALIGNMENT_CENTER, bubble.size.x, 14,
 			Color(0.35, 0.18, 0.02, cheer_alpha))
+
+
+func _patience_pattern_for_zone(patience_zone: int) -> String:
+	if patience_zone == 3:
+		return "dots"
+	if patience_zone == 2:
+		return "ticks"
+	if patience_zone == 1:
+		return "crosses"
+	return "alert"
+
+
+func _draw_patience_tier_pattern(bar: Rect2, fill_rect: Rect2, patience_zone: int) -> void:
+	var pattern := _patience_pattern_for_zone(patience_zone)
+	var ink := Color(0.04, 0.12, 0.16, 0.58)
+	if pattern == "alert":
+		var alert_center := bar.get_center()
+		draw_line(alert_center + Vector2(0.0, -3.0), alert_center + Vector2(0.0, 1.0), ink, 2.0)
+		draw_circle(alert_center + Vector2(0.0, 3.5), 1.2, ink)
+		return
+	if fill_rect.size.x < 4.0:
+		return
+	if pattern == "dots":
+		var dot_x := fill_rect.position.x + 5.0
+		while dot_x < fill_rect.end.x - 2.0:
+			draw_circle(Vector2(dot_x, fill_rect.get_center().y), 1.3, ink)
+			dot_x += 9.0
+	elif pattern == "ticks":
+		var tick_x := fill_rect.position.x + 4.0
+		while tick_x < fill_rect.end.x - 1.0:
+			draw_line(Vector2(tick_x, fill_rect.position.y + 2.0), Vector2(tick_x, fill_rect.end.y - 2.0), ink, 1.2)
+			tick_x += 6.0
+	else:
+		var cross_x := fill_rect.position.x + 4.0
+		while cross_x < fill_rect.end.x:
+			draw_line(Vector2(cross_x - 2.0, fill_rect.position.y + 2.0), Vector2(cross_x + 2.0, fill_rect.end.y - 2.0), ink, 1.2)
+			draw_line(Vector2(cross_x + 2.0, fill_rect.position.y + 2.0), Vector2(cross_x - 2.0, fill_rect.end.y - 2.0), ink, 1.2)
+			cross_x += 7.0
 
 
 func _customer_profile() -> Dictionary:
@@ -5330,6 +5385,7 @@ func _draw_upgrade_panel() -> void:
 			var btn_col := Color("#39d98a") if affordable else Color("#8fc4b4")
 			draw_style_box(_style("upg_buy_%d" % idx, btn_col, 10.0), buy_rect)
 			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), tr("COST_COIN") % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 14, Color("#0d2a3b") if affordable else Color("#4a7a6a"))
+			_draw_unaffordable_lock(buy_rect, affordable, Color("#264d45"))
 
 
 func _get_skin_btn_rect() -> Rect2:
@@ -5744,6 +5800,7 @@ func _draw_skin_panel() -> void:
 			var btn_c := Color("#a855f7") if affordable else Color("#c8a8f0")
 			draw_style_box(_style("skin_buy_%d_%d_%s" % [ci, int(affordable), sid], btn_c, 8.0), buy_rect)
 			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 20.0), tr("COST_COIN") % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 11, Color(1.0, 1.0, 1.0) if affordable else Color("#6a4a8a"))
+			_draw_unaffordable_lock(buy_rect, affordable, Color("#4a2a6a"))
 
 	draw_string(font, Vector2(panel.position.x + 14.0, panel.position.y + 386.0), tr("PLATE_TITLE"), HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 28.0, 15, Color("#2a0d50"))
 	var plate_options := LicensePlate.options()
