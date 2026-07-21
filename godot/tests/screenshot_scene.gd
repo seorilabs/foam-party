@@ -39,6 +39,11 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_title.png")):
 		quit(1)
 		return
+	node.call("_handle_tap", node.call("_get_title_haptics_rect").get_center())
+	if not await _capture(out_dir.path_join("shot_haptics_title_off.png")):
+		quit(1)
+		return
+	node.call("_handle_tap", node.call("_get_title_haptics_rect").get_center())
 	node.call("_handle_tap", node.call("_get_title_text_scale_rect").get_center())
 	node.call("_handle_tap", node.call("_get_title_text_scale_rect").get_center())
 	await _settle(2)
@@ -376,6 +381,11 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_pause.png")):
 		quit(1)
 		return
+	node.call("_handle_tap", node.call("_pause_haptics_rect").get_center())
+	if not await _capture(out_dir.path_join("shot_haptics_pause_off.png")):
+		quit(1)
+		return
+	node.call("_handle_tap", node.call("_pause_haptics_rect").get_center())
 	node.call("_handle_tap", node.call("_pause_audio_option_rect", "music").get_center())
 	if not await _capture(out_dir.path_join("shot_audio_music_off.png")):
 		quit(1)

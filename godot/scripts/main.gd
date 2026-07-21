@@ -261,6 +261,7 @@ const COMPLETION_REVEAL_DELAY := 0.12
 const COMPLETION_REVEAL_DURATION := 0.8
 var music_enabled := true
 var sfx_enabled := true
+var haptics_enabled := true
 var text_scale := 1.0
 var reduce_motion := false
 var language_preference := ""
@@ -426,6 +427,7 @@ func _load_progress() -> void:
 		var legacy_total_stars: int = max(0, int(config.get_value("game", "total_stars", 0)))
 		total_stars = legacy_total_stars
 		_load_audio_settings(config)
+		_load_haptics_setting(config)
 		_load_text_scale_setting(config)
 		_load_reduce_motion_setting(config)
 		_load_language_preference(config)
@@ -636,6 +638,7 @@ func _save_progress() -> Error:
 	config.set_value("game", "coins", coins)
 	config.set_value("game", "total_stars", total_stars)
 	_store_audio_settings(config)
+	_store_haptics_setting(config)
 	_store_text_scale_setting(config)
 	_store_reduce_motion_setting(config)
 	_store_language_preference(config)
@@ -735,6 +738,14 @@ func _load_audio_settings(config: ConfigFile) -> void:
 func _store_audio_settings(config: ConfigFile) -> void:
 	config.set_value("settings", "music", music_enabled)
 	config.set_value("settings", "sfx", sfx_enabled)
+
+
+func _load_haptics_setting(config: ConfigFile) -> void:
+	haptics_enabled = bool(config.get_value("settings", "haptics", true))
+
+
+func _store_haptics_setting(config: ConfigFile) -> void:
+	config.set_value("settings", "haptics", haptics_enabled)
 
 
 func _normalize_text_scale(value: float) -> float:
@@ -1648,6 +1659,14 @@ func get_sfx_enabled_for_test() -> bool:
 	return sfx_enabled
 
 
+func get_haptics_enabled_for_test() -> bool:
+	return haptics_enabled
+
+
+func set_haptics_enabled_for_test(enabled: bool) -> void:
+	haptics_enabled = enabled
+
+
 func get_soap_foam_layout_for_test(amount: float) -> Array[Dictionary]:
 	return _soap_foam_bubbles(Vector2.ZERO, 40.0, amount)
 
@@ -2318,6 +2337,8 @@ func _handle_tap(point: Vector2) -> bool:
 			_toggle_music()
 		elif _pause_audio_option_rect("sfx").has_point(point):
 			_toggle_sfx()
+		elif _pause_haptics_rect().has_point(point):
+			_toggle_haptics()
 		elif _pause_language_option_rect("ko").has_point(point):
 			_select_language("ko")
 		elif _pause_language_option_rect("en").has_point(point):
@@ -2381,6 +2402,8 @@ func _handle_tap(point: Vector2) -> bool:
 			_toggle_music()
 		elif _get_title_sfx_rect().has_point(point):
 			_toggle_sfx()
+		elif _get_title_haptics_rect().has_point(point):
+			_toggle_haptics()
 		elif _get_title_help_rect().has_point(point):
 			_show_tutorial("title_help")
 			_play_ui_select()
@@ -2521,6 +2544,23 @@ func _toggle_sfx() -> void:
 		_play_ui_select()
 	_save_progress()
 	queue_redraw()
+
+
+func _toggle_haptics() -> void:
+	haptics_enabled = not haptics_enabled
+	_play_ui_select()
+	_save_progress()
+	queue_redraw()
+
+
+func _haptic_allowed(mobile_available: bool) -> bool:
+	return haptics_enabled and mobile_available
+
+
+func _haptic(duration_ms: int) -> void:
+	if not _haptic_allowed(OS.has_feature("mobile")):
+		return
+	Input.vibrate_handheld(duration_ms)
 
 
 func _text_scale_percent() -> int:
@@ -2943,8 +2983,7 @@ func _update_patch_hint(patch: DirtPatch, delta: float) -> void:
 			_tool_misapplied_time = time_now
 			_tool_misapplied_tool_id = selected_tool
 			patch.shake_x = 6.0
-			if OS.has_feature("mobile"):
-				Input.vibrate_handheld(30)
+			_haptic(30)
 		if patch.resist_time >= 0.3:
 			# Keep a single active coach so overlapping patches stay readable.
 			if _hint_patch != null and _hint_patch != patch:
@@ -3100,8 +3139,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		if combo_count == _star3_combo_requirement() and not _star3_combo_unlocked:
 			_star3_combo_unlocked = true
 			audio.play_star3_gate()
-			if OS.has_feature("mobile"):
-				Input.vibrate_handheld(50)
+			_haptic(50)
 		if COMBO_BONUS_AMOUNTS.has(combo_count):
 			var _bonus: int = COMBO_BONUS_AMOUNTS[combo_count]
 			coins += _bonus
@@ -3125,8 +3163,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		if combo_count % 5 == 0 and combo_count != _last_milestone_haptic_combo:
 			_last_milestone_haptic_combo = combo_count
 			audio.play_combo_milestone()
-			if OS.has_feature("mobile"):
-				Input.vibrate_handheld(38)
+			_haptic(38)
 		if patch.kind == daily_mission_type:
 			_advance_daily_mission()
 		_record_achievement_increment(AchievementProgress.COUNTER_DIRT)
@@ -3137,8 +3174,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 		_spawn_water_removal_splash(burst_center, burst_radius)
 	if not completed:
 		_play_removal_sound()
-		if OS.has_feature("mobile"):
-			Input.vibrate_handheld(28)
+		_haptic(28)
 
 
 func _register_combo_removal() -> void:
@@ -3641,8 +3677,7 @@ func _update_clean_progress() -> void:
 			var _t := float(Time.get_ticks_msec()) / 1000.0
 			for _si in range(min(earned_stars, STAR_REVEAL_DELAYS.size())):
 				_star_reveal_times[_si] = _t + STAR_REVEAL_DELAYS[_si]
-		if OS.has_feature("mobile"):
-			Input.vibrate_handheld(80)
+		_haptic(80)
 
 
 func _reset_stalled_dirt_highlight() -> void:
@@ -5312,8 +5347,7 @@ func _claim_daily_mission_reward() -> bool:
 	var prog_err := _save_progress()
 	if prog_err != OK:
 		_main_save_dirty = true
-	if OS.has_feature("mobile"):
-		Input.vibrate_handheld(60)
+	_haptic(60)
 	return true
 
 
@@ -5396,9 +5430,10 @@ func _draw_top_buttons() -> void:
 	var font: Font = _font()
 	var music_rect := _get_title_music_rect()
 	var sfx_rect := _get_title_sfx_rect()
+	var haptics_rect := _get_title_haptics_rect()
 	var help_rect := _get_title_help_rect()
 	var text_scale_rect := _get_title_text_scale_rect()
-	for rect in [music_rect, sfx_rect, help_rect, text_scale_rect]:
+	for rect in [music_rect, sfx_rect, haptics_rect, help_rect, text_scale_rect]:
 		draw_style_box(_style("round_button", Color(0.03, 0.14, 0.2, 0.68), rect.size.y * 0.5), rect)
 	var icon_color := Color(0.93, 0.99, 1.0)
 	var music_center := music_rect.get_center()
@@ -5419,6 +5454,13 @@ func _draw_top_buttons() -> void:
 		draw_arc(speaker_center + Vector2(4.0, 0.0) * icon_scale, 7.0 * icon_scale, -1.0, 1.0, 8, icon_color, maxf(1.5, 2.0 * icon_scale))
 	else:
 		draw_line(speaker_center + Vector2(-11.0, -11.0) * icon_scale, speaker_center + Vector2(11.0, 11.0) * icon_scale, Color("#ff6b6b"), maxf(2.0, 3.0 * icon_scale))
+	var haptics_center := haptics_rect.get_center()
+	draw_style_box(_style("haptics_phone", Color(0.93, 0.99, 1.0), 3.0), Rect2(haptics_center - Vector2(5.0, 9.0), Vector2(10.0, 18.0)))
+	draw_rect(Rect2(haptics_center - Vector2(3.0, 6.0), Vector2(6.0, 10.0)), Color(0.03, 0.14, 0.2, 0.68))
+	draw_arc(haptics_center + Vector2(-7.0, 0.0), 4.0, PI * 0.5, PI * 1.5, 8, icon_color, 1.5)
+	draw_arc(haptics_center + Vector2(7.0, 0.0), 4.0, -PI * 0.5, PI * 0.5, 8, icon_color, 1.5)
+	if not haptics_enabled:
+		draw_line(haptics_center + Vector2(-10.0, -10.0), haptics_center + Vector2(10.0, 10.0), Color("#ff6b6b"), 3.0)
 	var help_font_size := maxi(15, roundi(20.0 * help_rect.size.x / 30.0))
 	# draw_string() receives a baseline, not a glyph center. Derive it from the
 	# font metrics so the question mark shares the speaker icon's visual center.
@@ -6161,6 +6203,10 @@ func _pause_audio_label(channel: String) -> String:
 	return tr("SFX_ON") if sfx_enabled else tr("SFX_OFF")
 
 
+func _pause_haptics_label() -> String:
+	return tr("HAPTICS_ON") if haptics_enabled else tr("HAPTICS_OFF")
+
+
 func _draw_pause_menu() -> void:
 	if not show_pause:
 		return
@@ -6187,6 +6233,10 @@ func _draw_pause_menu() -> void:
 		var fill := Color("#d7f8e5") if enabled else Color("#e5eef5")
 		draw_style_box(_style("pause_audio_%s_%s" % [channel, "on" if enabled else "off"], fill, 14.0), audio_rect)
 		draw_string(font, Vector2(audio_rect.position.x, audio_rect.position.y + 31.0), _pause_audio_label(channel), HORIZONTAL_ALIGNMENT_CENTER, audio_rect.size.x, 15, Color("#123246"))
+	var haptics_rect := _pause_haptics_rect()
+	var haptics_fill := Color("#d7f8e5") if haptics_enabled else Color("#e5eef5")
+	draw_style_box(_style("pause_haptics_%s" % ("on" if haptics_enabled else "off"), haptics_fill, 14.0), haptics_rect)
+	draw_string(font, Vector2(haptics_rect.position.x, haptics_rect.position.y + 30.0), _pause_haptics_label(), HORIZONTAL_ALIGNMENT_CENTER, haptics_rect.size.x, 12, Color("#123246"))
 
 	var language_labels := _pause_language_labels()
 	var active_locale := _active_locale()
@@ -6575,11 +6625,18 @@ func _pause_button_rect(index: int) -> Rect2:
 
 func _pause_audio_option_rect(channel: String) -> Rect2:
 	var row := _pause_button_rect(2)
-	var gap := 8.0
-	var option_width := (row.size.x - gap) * 0.5
+	var gap := 6.0
+	var option_width := (row.size.x - gap * 2.0) / 3.0
 	if channel == "music":
 		return Rect2(row.position, Vector2(option_width, row.size.y))
 	return Rect2(row.position + Vector2(option_width + gap, 0.0), Vector2(option_width, row.size.y))
+
+
+func _pause_haptics_rect() -> Rect2:
+	var row := _pause_button_rect(2)
+	var gap := 6.0
+	var option_width := (row.size.x - gap * 2.0) / 3.0
+	return Rect2(row.position + Vector2((option_width + gap) * 2.0, 0.0), Vector2(option_width, row.size.y))
 
 
 func _pause_language_rect() -> Rect2:
@@ -6702,8 +6759,12 @@ func _get_title_sfx_rect() -> Rect2:
 	return Rect2(50.0, _title_button_y(), 30.0, 30.0)
 
 
-func _get_title_help_rect() -> Rect2:
+func _get_title_haptics_rect() -> Rect2:
 	return Rect2(86.0, _title_button_y(), 30.0, 30.0)
+
+
+func _get_title_help_rect() -> Rect2:
+	return Rect2(122.0, _title_button_y(), 30.0, 30.0)
 
 
 func _get_title_text_scale_rect() -> Rect2:

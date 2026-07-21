@@ -150,6 +150,8 @@ const STRINGS := {
 	"MUSIC_OFF": ["음악 꺼짐", "Music Off"],
 	"SFX_ON": ["효과음 켜짐", "SFX On"],
 	"SFX_OFF": ["효과음 꺼짐", "SFX Off"],
+	"HAPTICS_ON": ["진동 켜짐", "Haptics On"],
+	"HAPTICS_OFF": ["진동 꺼짐", "Haptics Off"],
 	"LANGUAGE_KO": ["한국어", "한국어"],
 	"LANGUAGE_EN": ["English", "English"],
 	"REDUCE_MOTION_ON": ["모션 줄이기  켜짐", "Reduced Motion  On"],

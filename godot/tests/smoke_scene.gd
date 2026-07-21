@@ -338,6 +338,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_audio_bus_contract(root_node):
 		return
+	if not _test_haptics_setting_contract(root_node):
+		return
 	if not _test_reduce_motion_accessibility_contract(root_node):
 		return
 
@@ -873,10 +875,14 @@ func _run_smoke() -> void:
 			return
 	var music_pause_rect: Rect2 = root_node.call("_pause_audio_option_rect", "music")
 	var sfx_pause_rect: Rect2 = root_node.call("_pause_audio_option_rect", "sfx")
+	var haptics_pause_rect: Rect2 = root_node.call("_pause_haptics_rect")
 	if not root_node.call("_pause_button_rect", 2).encloses(music_pause_rect) \
 			or not root_node.call("_pause_button_rect", 2).encloses(sfx_pause_rect) \
-			or music_pause_rect.intersects(sfx_pause_rect):
-		_fail("music and SFX controls must split one non-overlapping pause row")
+			or not root_node.call("_pause_button_rect", 2).encloses(haptics_pause_rect) \
+			or music_pause_rect.intersects(sfx_pause_rect) \
+			or music_pause_rect.intersects(haptics_pause_rect) \
+			or sfx_pause_rect.intersects(haptics_pause_rect):
+		_fail("music, SFX, and haptics controls must split one non-overlapping pause row")
 		return
 
 	# Keep the implementation contract explicit: these visible strings must stay
@@ -2894,6 +2900,116 @@ func _test_audio_bus_contract(root_node: Node) -> bool:
 	return true
 
 
+func _test_haptics_setting_contract(root_node: Node) -> bool:
+	var original_game_state := String(root_node.get("game_state"))
+	var original_show_pause := bool(root_node.get("show_pause"))
+	var original_music := bool(root_node.call("get_music_enabled_for_test"))
+	var original_sfx := bool(root_node.call("get_sfx_enabled_for_test"))
+
+	# AC-1/2: old saves default haptics to ON, while the pure policy proves that
+	# OFF blocks dispatch even when a mobile vibrator is available.
+	var legacy_config := ConfigFile.new()
+	root_node.call("_load_haptics_setting", legacy_config)
+	if not bool(root_node.call("get_haptics_enabled_for_test")):
+		_fail("legacy settings without haptics must default to ON")
+		return false
+	root_node.call("set_haptics_enabled_for_test", false)
+	if bool(root_node.call("_haptic_allowed", true)):
+		_fail("haptics OFF must block a mobile vibration dispatch")
+		return false
+	root_node.call("set_haptics_enabled_for_test", true)
+	if not bool(root_node.call("_haptic_allowed", true)) or bool(root_node.call("_haptic_allowed", false)):
+		_fail("haptics must require both the user setting and a mobile vibrator")
+		return false
+
+	# AC-1: store OFF through an actual ConfigFile disk round trip and restore it.
+	var save_path := OS.get_temp_dir().path_join("foam_party_haptics_smoke.cfg")
+	var stored_config := ConfigFile.new()
+	root_node.call("set_haptics_enabled_for_test", false)
+	root_node.call("_store_haptics_setting", stored_config)
+	if stored_config.save(save_path) != OK:
+		_fail("haptics settings fixture failed to save")
+		return false
+	var reloaded_config := ConfigFile.new()
+	if reloaded_config.load(save_path) != OK:
+		_fail("haptics settings fixture failed to reload")
+		return false
+	root_node.call("set_haptics_enabled_for_test", true)
+	root_node.call("_load_haptics_setting", reloaded_config)
+	DirAccess.remove_absolute(save_path)
+	if bool(root_node.call("get_haptics_enabled_for_test")):
+		_fail("haptics OFF must survive a ConfigFile disk round trip")
+		return false
+
+	# AC-2/5: every feedback site calls one helper, and only that helper may call
+	# Input.vibrate_handheld after applying the setting plus mobile feature gate.
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var helper_start := source.find("func _haptic(duration_ms: int)")
+	var helper_end := source.find("\nfunc ", helper_start + 1)
+	var helper_body := source.substr(helper_start, helper_end - helper_start)
+	if source.count("Input.vibrate_handheld(") != 1 \
+			or helper_start < 0 \
+			or not helper_body.contains('_haptic_allowed(OS.has_feature("mobile"))') \
+			or not helper_body.contains("Input.vibrate_handheld(duration_ms)"):
+		_fail("all vibration calls must converge on the gated haptic helper")
+		return false
+	for duration_ms in [30, 50, 38, 28, 80, 60]:
+		if source.count("_haptic(%d)" % duration_ms) != 1:
+			_fail("haptic feedback site must call the helper exactly once: %dms" % duration_ms)
+			return false
+
+	# AC-3/4: title and pause both expose one non-overlapping toggle. A real tap
+	# changes only haptics, retains the audio states, and keeps pause open.
+	var design_bounds := Rect2(Vector2.ZERO, Vector2(390.0, 844.0))
+	var title_haptics: Rect2 = root_node.call("_get_title_haptics_rect")
+	if not design_bounds.encloses(title_haptics):
+		_fail("title haptics toggle must stay inside the design canvas")
+		return false
+	for other_rect_name in ["_get_title_music_rect", "_get_title_sfx_rect", "_get_title_help_rect", "_get_title_text_scale_rect"]:
+		if title_haptics.intersects(root_node.call(other_rect_name)):
+			_fail("title haptics toggle must not overlap other settings controls")
+			return false
+	root_node.set("music_enabled", false)
+	root_node.set("sfx_enabled", true)
+	root_node.call("set_haptics_enabled_for_test", true)
+	root_node.set("game_state", "title")
+	root_node.set("show_tutorial", false)
+	root_node.call("_handle_tap", title_haptics.get_center())
+	if bool(root_node.call("get_haptics_enabled_for_test")) \
+			or bool(root_node.call("get_music_enabled_for_test")) \
+			or not bool(root_node.call("get_sfx_enabled_for_test")) \
+			or root_node.call("_pause_haptics_label") != TranslationServer.translate("HAPTICS_OFF"):
+		_fail("title haptics tap must disable only haptics immediately")
+		return false
+	var pause_haptics: Rect2 = root_node.call("_pause_haptics_rect")
+	if not root_node.call("_pause_button_rect", 2).encloses(pause_haptics):
+		_fail("pause haptics toggle must fit the feedback settings row")
+		return false
+	root_node.set("game_state", "playing")
+	root_node.set("show_pause", true)
+	root_node.call("_handle_tap", pause_haptics.get_center())
+	if not bool(root_node.call("get_haptics_enabled_for_test")) \
+			or bool(root_node.call("get_music_enabled_for_test")) \
+			or not bool(root_node.call("get_sfx_enabled_for_test")) \
+			or not bool(root_node.get("show_pause")) \
+			or root_node.call("_pause_haptics_label") != TranslationServer.translate("HAPTICS_ON"):
+		_fail("pause haptics tap must enable only haptics and keep settings open")
+		return false
+	var toggle_start := source.find("func _toggle_haptics()")
+	var toggle_end := source.find("\nfunc ", toggle_start + 1)
+	if toggle_start < 0 or not source.substr(toggle_start, toggle_end - toggle_start).contains("_save_progress()"):
+		_fail("haptics toggle must persist immediately")
+		return false
+
+	root_node.set("music_enabled", original_music)
+	root_node.set("sfx_enabled", original_sfx)
+	root_node.call("set_haptics_enabled_for_test", true)
+	root_node.call("_apply_audio_settings")
+	root_node.set("game_state", original_game_state)
+	root_node.set("show_pause", original_show_pause)
+	return true
+
+
 func _test_reduce_motion_accessibility_contract(root_node: Node) -> bool:
 	# AC-1: legacy saves default OFF. The new row stays inside the existing modal,
 	# separate from language and all six action hit targets.
@@ -3468,7 +3584,7 @@ func _test_scaled_star3_combo_gate_contract(root_node: Node) -> bool:
 		return false
 	var gate_guard := main_source.find("if combo_count == _star3_combo_requirement() and not _star3_combo_unlocked:")
 	var gate_sound := main_source.find("audio.play_star3_gate()", gate_guard)
-	var gate_haptic := main_source.find("Input.vibrate_handheld(50)", gate_sound)
+	var gate_haptic := main_source.find("_haptic(50)", gate_sound)
 	var next_branch := main_source.find("if COMBO_BONUS_AMOUNTS.has(combo_count):", gate_guard)
 	if gate_guard < 0 or gate_sound < gate_guard or gate_haptic < gate_sound or next_branch < gate_haptic:
 		_fail("scaled combo gate must guard its existing sound and haptic feedback")
