@@ -1029,6 +1029,19 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		queue_redraw()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
+		if what == NOTIFICATION_APPLICATION_PAUSED:
+			is_washing = false
+			if audio != null:
+				_stop_tool_loop()
+			# Existing overlays already block gameplay and keep their own context.
+			# Only active washing returns through the normal pause/settings sheet.
+			if game_state == STATE_PLAYING \
+					and not completed \
+					and not show_tutorial \
+					and not show_booster_panel \
+					and not show_quit_confirm:
+				show_pause = true
+				queue_redraw()
 		var prog_err := _save_progress()
 		var daily_err := _save_daily()
 		if prog_err == OK:

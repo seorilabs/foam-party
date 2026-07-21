@@ -1049,6 +1049,36 @@ func _run_smoke() -> void:
 	if bool(root_node.get("show_pause")):
 		_fail("resume action should close pause/settings")
 		return
+
+	# Issue #68: app backgrounding must preserve an existing overlay instead of
+	# stacking pause behind it, then open pause for active washing. The shared
+	# gameplay gate freezes scored time until the explicit resume tap.
+	root_node.set("show_tutorial", true)
+	root_node.set("show_pause", false)
+	root_node.call("_notification", NOTIFICATION_APPLICATION_PAUSED)
+	if not bool(root_node.get("show_tutorial")) or bool(root_node.get("show_pause")):
+		_fail("app pause must preserve tutorial context without stacking the pause sheet")
+		return
+	root_node.set("show_tutorial", false)
+	root_node.set("show_booster_panel", false)
+	root_node.set("show_quit_confirm", false)
+	root_node.set("game_state", "playing")
+	root_node.set("completed", false)
+	root_node.set("level_time", 9.0)
+	root_node.set("is_washing", true)
+	root_node.call("_notification", NOTIFICATION_APPLICATION_PAUSED)
+	if not bool(root_node.get("show_pause")) or bool(root_node.get("is_washing")):
+		_fail("app pause must open settings and stop active washing")
+		return
+	root_node.call("_process", 0.75)
+	if not is_equal_approx(float(root_node.call("get_level_time_for_test")), 9.0):
+		_fail("scored level time must remain frozen while app-triggered pause is open")
+		return
+	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 0).get_center())
+	root_node.call("_process", 0.25)
+	if bool(root_node.get("show_pause")) or float(root_node.call("get_level_time_for_test")) <= 9.0:
+		_fail("resume must close app-triggered pause and continue scored time")
+		return
 	if not _test_car_transition_contract(root_node):
 		return
 	root_node.set("music_enabled", true)
