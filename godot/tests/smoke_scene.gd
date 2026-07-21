@@ -119,7 +119,12 @@ func _test_achievement_contract(root_node: Node) -> bool:
 		"claimed": root_node.call("get_achievement_claimed_for_test"),
 		"coins": root_node.get("coins"),
 		"game_state": root_node.get("game_state"),
+		"active_level": root_node.call("get_active_level_for_test"),
+		"selected_tool": root_node.get("selected_tool"),
 		"main_save_dirty": root_node.get("_main_save_dirty"),
+		"daily_type": root_node.get("daily_mission_type"),
+		"daily_progress": root_node.get("daily_mission_progress"),
+		"daily_claimed": root_node.get("daily_mission_claimed"),
 	}
 	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
 	var baseline_hud_rects := {
@@ -128,6 +133,24 @@ func _test_achievement_contract(root_node: Node) -> bool:
 		"customer": root_node.call("_get_customer_rect"),
 		"mission": root_node.call("_get_daily_mission_rect"),
 	}
+	# AC-2: drive the real local gameplay hook. One removed leaf is also one
+	# removed dirt spot and the first observed combo peak; no analytics input or
+	# external value is supplied to the achievement state.
+	root_node.call("reset_game", 1, "achievement_local_counter_smoke")
+	root_node.set("daily_mission_claimed", true)
+	root_node.call("set_achievement_state_for_test", {}, {})
+	var leaf_index := int(root_node.call("get_patch_index_by_kind_for_test", "leaf"))
+	if leaf_index < 0:
+		_fail("local achievement smoke needs a leaf patch")
+		return false
+	root_node.call("_mark_patch_removed", (root_node.get("dirt_patches") as Array)[leaf_index])
+	var local_counters: Dictionary = root_node.call("get_achievement_counters_for_test")
+	if int(local_counters.get("dirt_removed", 0)) != 1 \
+			or int(local_counters.get("leaf_removed", 0)) != 1 \
+			or int(local_counters.get("combo_peak", 0)) != 1:
+		_fail("real leaf removal must feed only local dirt, leaf, and combo counters")
+		return false
+
 	root_node.call("set_achievement_state_for_test", {}, {})
 	root_node.set("coins", 0)
 	var expected_coins := 0
@@ -175,6 +198,14 @@ func _test_achievement_contract(root_node: Node) -> bool:
 		if achievement_button.intersects(other_button):
 			_fail("achievement title entry must not overlap an existing button")
 			return false
+	# AC-5: the same title-button coordinate must not open the sheet while the
+	# game is playing. The title branch is the only runtime entry point.
+	root_node.set("game_state", "playing")
+	root_node.set("show_achievement_panel", false)
+	root_node.call("_handle_tap", achievement_button.get_center())
+	if bool(root_node.get("show_achievement_panel")):
+		_fail("achievement sheet must not open from the playing HUD")
+		return false
 	root_node.call("_go_home")
 	root_node.call("_handle_tap", achievement_button.get_center())
 	if not bool(root_node.get("show_achievement_panel")) or String(root_node.get("game_state")) != "title":
@@ -224,8 +255,13 @@ func _test_achievement_contract(root_node: Node) -> bool:
 		return false
 	root_node.call("set_achievement_state_for_test", original_state["counters"], original_state["claimed"])
 	root_node.set("coins", original_state["coins"])
+	root_node.call("reset_game", original_state["active_level"], "achievement_smoke_cleanup")
 	root_node.set("game_state", original_state["game_state"])
+	root_node.set("selected_tool", original_state["selected_tool"])
 	root_node.set("_main_save_dirty", original_state["main_save_dirty"])
+	root_node.set("daily_mission_type", original_state["daily_type"])
+	root_node.set("daily_mission_progress", original_state["daily_progress"])
+	root_node.set("daily_mission_claimed", original_state["daily_claimed"])
 	return true
 
 
