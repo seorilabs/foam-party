@@ -186,6 +186,11 @@ const REACH_UPGRADE_MULTS := [1.0, 1.12, 1.24, 1.36]
 const REACH_UPGRADE_KEYS := ["air", "water", "soap", "sponge"]
 const REACH_UPGRADE_MAX_LEVEL := 3
 const DAILY_MISSION_REWARD := 50
+const DAILY_MISSION_COUNT := 3
+# Consecutive attendance raises every mission payout. The tiers are cumulative
+# ranges rather than one-day-only prizes, so returning after a milestone keeps a
+# visible benefit until the next tier.
+const DAILY_STREAK_REWARD_BONUSES := {3: 10, 7: 25, 14: 50}
 const DAILY_MISSION_POOL := [
 	{"type": "leaf", "label": "낙엽 %d개 날리기", "target": 20, "reward": 50},
 	{"type": "dust", "label": "먼지 %d개 제거하기", "target": 20, "reward": 55},

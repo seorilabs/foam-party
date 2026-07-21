@@ -20,7 +20,7 @@
 | `level_start` | `level`, `car_type` | 레벨 퍼널(시작) |
 | `level_complete` | `level`, `stars`, `time_sec`, `best_combo`, `coins_earned`, `new_record` | 레벨 퍼널(완료/클리어시간/별), 경제(코인 획득) |
 | `foam_bomb_use` | `level`, **`source`**(`coins` \| `ad`), `cost` | 수익화(폼밤), 경제(코인/광고 소비) |
-| `daily_mission_claim` | `mission_type`, `reward` | 미션·리텐션 훅, 경제(코인 획득) |
+| `daily_mission_claim` | `mission_type`, `reward` | 3개 데일리 슬롯별 수령·streak 보너스를 포함한 실제 코인 획득 |
 | `upgrade_purchase` | `tool`, `level`, `cost` | 수익화(업그레이드), 경제(코인 소비) |
 | `skin_select` / `skin_purchase` | `tool`, `skin_id`(, `cost`) | 수익화(스킨), 경제(코인 소비) |
 

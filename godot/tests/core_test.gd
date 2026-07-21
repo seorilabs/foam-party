@@ -273,6 +273,29 @@ func _run_core_tests() -> void:
 	if String(mission["type"]) != "mud" or int(mission["target"]) != 15 or int(mission["requirement"]) != 0 or String(mission["label"]) != "흙탕물 15개 씻기" or int(mission["reward"]) != 60:
 		_fail("daily mission for 2026-07-06 changed: " + str(mission))
 		return
+	var mission_set: Array[Dictionary] = DailyMission.missions_for("2026-07-06", 3, 7)
+	if mission_set != DailyMission.missions_for("2026-07-06", 3, 7) or mission_set.size() != 3:
+		_fail("same date and streak must return the same three daily missions")
+		return
+	var mission_types: Dictionary = {}
+	for daily_entry in mission_set:
+		mission_types[String(daily_entry["type"])] = true
+	if mission_types.size() != 3 or String(mission_set[0]["type"]) != "mud":
+		_fail("daily mission set must contain three unique types and preserve the legacy first pick")
+		return
+	if int(mission_set[0]["reward"]) != 85:
+		_fail("seven-day streak must add the 25-coin tier bonus")
+		return
+	if DailyMission.streak_bonus(1) != 0 or DailyMission.streak_bonus(3) != 10 \
+			or DailyMission.streak_bonus(7) != 25 or DailyMission.streak_bonus(14) != 50:
+		_fail("daily streak reward tiers changed")
+		return
+	if DailyMission.updated_streak(6, "2026-07-20", "2026-07-20") != 6 \
+			or DailyMission.updated_streak(6, "2026-07-20", "2026-07-21") != 7 \
+			or DailyMission.updated_streak(6, "2026-07-19", "2026-07-21") != 1 \
+			or DailyMission.updated_streak(4, "2026-07-31", "2026-08-01") != 5:
+		_fail("daily attendance streak must be idempotent, increment consecutive dates, and reset gaps")
+		return
 	var seen_style_missions: Dictionary = {}
 	var style_mission_dates: Dictionary = {}
 	for month in range(1, 13):

@@ -313,6 +313,13 @@ var daily_mission_reward := DAILY_MISSION_REWARD
 var daily_mission_progress := 0
 var daily_mission_claimed := false
 var daily_mission_date := ""
+# The scalar fields above remain a compatibility mirror of slot zero for old
+# saves and test helpers. Runtime progression uses these independent mission
+# dictionaries so every slot can advance and claim exactly once.
+var daily_missions: Array[Dictionary] = []
+var daily_streak := 1
+var daily_last_active_date := ""
+var _daily_last_claim_reward := DAILY_MISSION_REWARD
 var _daily_mission_pop_time := -10.0
 var _daily_progress_dirty := false
 var upgrade_air := 0
@@ -420,6 +427,7 @@ func _load_progress() -> void:
 		return
 	var config := ConfigFile.new()
 	var main_claimed_date := ""
+	var main_claimed_types: Array[String] = []
 	var main_save_ok := config.load(SAVE_PATH) == OK
 	if main_save_ok:
 		level_index = max(1, int(config.get_value("game", "level", 1)))
@@ -456,62 +464,118 @@ func _load_progress() -> void:
 		total_stars = migrated_total_stars
 		_load_milestone_reward_history(config)
 		main_claimed_date = String(config.get_value("daily", "claimed_date", ""))
+		var raw_claimed_types: Variant = config.get_value("daily", "claimed_types", [])
+		if raw_claimed_types is Array:
+			for raw_type in raw_claimed_types:
+				main_claimed_types.append(String(raw_type))
 		_load_achievement_progress(config)
 	_apply_language_preference()
 	var today := _today_string()
 	var daily_config := ConfigFile.new()
 	if daily_config.load(DAILY_SAVE_PATH) != OK:
 		_generate_daily_mission(today)
-		if main_claimed_date == today:
-			daily_mission_claimed = true
-			daily_mission_progress = daily_mission_target
+		_reconcile_daily_claims_with_main(main_claimed_date, main_claimed_types, today, main_save_ok)
 		return
+	daily_streak = maxi(0, int(daily_config.get_value("daily", "streak", 0)))
+	daily_last_active_date = String(daily_config.get_value("daily", "last_active_date", ""))
 	var saved_date: String = daily_config.get_value("daily", "date", "")
 	if saved_date != today:
+		if daily_last_active_date.is_empty():
+			daily_last_active_date = saved_date
 		_generate_daily_mission(today)
-		if main_claimed_date == today:
-			daily_mission_claimed = true
-			daily_mission_progress = daily_mission_target
-			daily_mission_date = today
-		return
-	var loaded_type: String = daily_config.get_value("daily", "type", "")
-	var loaded_label: String = daily_config.get_value("daily", "label", "")
-	var loaded_target: int = int(daily_config.get_value("daily", "target", 0))
-	var loaded_requirement: int = int(daily_config.get_value("daily", "requirement", 0))
-	# Preserve today's progress for installs that generated the retired sticker
-	# mission before road grime replaced that dirt type.
-	if loaded_type == "sticker":
-		loaded_type = "road_grime"
-		loaded_label = tr("DM_ROAD_GRIME") % loaded_target
+		_reconcile_daily_claims_with_main(main_claimed_date, main_claimed_types, today, main_save_ok)
 		_daily_progress_dirty = true
-	var type_valid := false
-	for m in DAILY_MISSION_POOL:
-		if m["type"] == loaded_type:
-			type_valid = true
-			break
-	if loaded_target <= 0 or not type_valid or loaded_label.is_empty():
-		_generate_daily_mission(today)
-		if main_claimed_date == today:
-			daily_mission_claimed = true
-			daily_mission_progress = daily_mission_target
 		return
-	daily_mission_type = loaded_type
-	daily_mission_label = loaded_label
-	daily_mission_target = loaded_target
-	daily_mission_requirement = maxi(0, loaded_requirement)
-	if daily_mission_requirement == 0:
-		daily_mission_requirement = int(DailyMission.mission_for_type(loaded_type).get("requirement", 0))
-	daily_mission_reward = DailyMission.reward_for_type(loaded_type)
-	daily_mission_progress = clampi(int(daily_config.get_value("daily", "progress", 0)), 0, daily_mission_target)
-	daily_mission_claimed = bool(daily_config.get_value("daily", "claimed", false))
-	if daily_mission_claimed or daily_mission_progress >= daily_mission_target or main_claimed_date == today:
-		daily_mission_claimed = true
-		if daily_mission_progress < daily_mission_target:
-			daily_mission_progress = daily_mission_target
+	if daily_last_active_date.is_empty():
+		daily_last_active_date = saved_date
+	daily_streak = DailyMission.updated_streak(daily_streak, daily_last_active_date, today)
+	daily_last_active_date = today
 	daily_mission_date = saved_date
-	if main_save_ok and daily_mission_claimed and main_claimed_date != today:
-		_grant_daily_mission_coins()
-		_main_save_dirty = true
+	daily_missions = _daily_missions_from_config(daily_config, today)
+	if daily_missions.is_empty():
+		_generate_daily_mission(today)
+		_reconcile_daily_claims_with_main(main_claimed_date, main_claimed_types, today, main_save_ok)
+		return
+	_sync_legacy_daily_from_first()
+	_reconcile_daily_claims_with_main(main_claimed_date, main_claimed_types, today, main_save_ok)
+
+
+func _daily_missions_from_config(config: ConfigFile, today: String) -> Array[Dictionary]:
+	var loaded: Array[Dictionary] = []
+	var mission_count := clampi(int(config.get_value("daily", "mission_count", 0)), 0, DAILY_MISSION_POOL.size())
+	if mission_count > 0:
+		for index in range(mission_count):
+			var mission := _daily_mission_from_section(config, "mission_%d" % index)
+			if mission.is_empty():
+				return []
+			loaded.append(mission)
+		return loaded
+
+	# Legacy one-mission files migrate into slot zero while the two new slots are
+	# filled from today's deterministic selection.
+	var legacy := _daily_mission_from_section(config, "daily")
+	if legacy.is_empty():
+		return []
+	loaded = _new_daily_mission_states(today)
+	var legacy_type := String(legacy["type"])
+	for index in range(loaded.size() - 1, -1, -1):
+		if String(loaded[index]["type"]) == legacy_type:
+			loaded.remove_at(index)
+	loaded.push_front(legacy)
+	if loaded.size() > GameConfig.DAILY_MISSION_COUNT:
+		loaded.resize(GameConfig.DAILY_MISSION_COUNT)
+	_daily_progress_dirty = true
+	return loaded
+
+
+func _daily_mission_from_section(config: ConfigFile, section: String) -> Dictionary:
+	var mission_type := String(config.get_value(section, "type", ""))
+	if mission_type == "sticker":
+		mission_type = "road_grime"
+		_daily_progress_dirty = true
+	var definition := DailyMission.mission_for_type(mission_type)
+	if definition.is_empty():
+		return {}
+	var target := int(config.get_value(section, "target", definition["target"]))
+	if target <= 0:
+		return {}
+	var requirement := maxi(0, int(config.get_value(section, "requirement", definition["requirement"])))
+	var progress := clampi(int(config.get_value(section, "progress", 0)), 0, target)
+	var claimed := bool(config.get_value(section, "claimed", false)) or progress >= target
+	return {
+		"type": mission_type,
+		"label": String(config.get_value(section, "label", definition["label"])),
+		"target": target,
+		"requirement": requirement,
+		"reward": maxi(
+			int(config.get_value(section, "reward", 0)),
+			DailyMission.reward_for_type(mission_type, daily_streak)
+		),
+		"progress": target if claimed else progress,
+		"claimed": claimed,
+	}
+
+
+func _reconcile_daily_claims_with_main(
+	main_claimed_date: String,
+	main_claimed_types: Array[String],
+	today: String,
+	main_save_ok: bool
+) -> void:
+	var backed_up_types := main_claimed_types.duplicate()
+	if main_claimed_date == today and backed_up_types.is_empty() and not daily_missions.is_empty():
+		backed_up_types.append(String(daily_missions[0]["type"]))
+	for index in range(daily_missions.size()):
+		var mission := daily_missions[index]
+		var mission_type := String(mission["type"])
+		if main_claimed_date == today and backed_up_types.has(mission_type):
+			mission["claimed"] = true
+			mission["progress"] = int(mission["target"])
+			daily_missions[index] = mission
+		elif main_save_ok and bool(mission["claimed"]):
+			coins += int(mission["reward"])
+			_main_save_dirty = true
+	_sync_legacy_daily_from_first()
 
 
 func _load_milestone_reward_history(config: ConfigFile) -> void:
@@ -646,7 +710,12 @@ func _save_progress() -> Error:
 	config.set_value("game", "best_times", best_times)
 	config.set_value("game", "best_stars", best_stars)
 	config.set_value("game", "milestone_rewards_claimed", milestone_rewards_claimed)
-	config.set_value("daily", "claimed_date", daily_mission_date if daily_mission_claimed else "")
+	var claimed_daily_types: Array[String] = []
+	for mission in daily_missions:
+		if bool(mission.get("claimed", false)):
+			claimed_daily_types.append(String(mission.get("type", "")))
+	config.set_value("daily", "claimed_date", daily_mission_date if not claimed_daily_types.is_empty() else "")
+	config.set_value("daily", "claimed_types", claimed_daily_types)
 	_store_upgrade_progress(config)
 	_store_nozzle_skin_customization(config)
 	_store_car_paint_customization(config)
@@ -701,7 +770,15 @@ func _record_achievement_max(counter_key: String, observed_value: int) -> int:
 func _save_daily() -> Error:
 	if not persistence_enabled:
 		return OK
+	return _save_daily_to_path(DAILY_SAVE_PATH)
+
+
+func _save_daily_to_path(path: String) -> Error:
+	_sync_first_daily_from_legacy()
 	var config := ConfigFile.new()
+	config.set_value("daily", "mission_count", daily_missions.size())
+	config.set_value("daily", "streak", daily_streak)
+	config.set_value("daily", "last_active_date", daily_last_active_date)
 	config.set_value("daily", "type", daily_mission_type)
 	config.set_value("daily", "label", daily_mission_label)
 	config.set_value("daily", "target", daily_mission_target)
@@ -710,7 +787,14 @@ func _save_daily() -> Error:
 	config.set_value("daily", "progress", daily_mission_progress)
 	config.set_value("daily", "claimed", daily_mission_claimed)
 	config.set_value("daily", "date", daily_mission_date)
-	return config.save(DAILY_SAVE_PATH)
+	for index in range(daily_missions.size()):
+		_store_daily_mission_section(config, "mission_%d" % index, daily_missions[index])
+	return config.save(path)
+
+
+func _store_daily_mission_section(config: ConfigFile, section: String, mission: Dictionary) -> void:
+	for key in ["type", "label", "target", "requirement", "reward", "progress", "claimed"]:
+		config.set_value(section, key, mission.get(key))
 
 
 func _flush_daily_if_dirty() -> void:
@@ -1831,23 +1915,87 @@ func get_daily_mission_reward_for_test() -> int:
 	return daily_mission_reward
 
 
+func get_daily_missions_for_test() -> Array[Dictionary]:
+	return daily_missions.duplicate(true)
+
+
+func get_daily_streak_for_test() -> int:
+	return daily_streak
+
+
 func prepare_daily_mission_for_test(mission_type: String) -> void:
 	configure_daily_mission_for_test(mission_type)
-	daily_mission_progress = daily_mission_target
-	daily_mission_claimed = false
+	if daily_missions.is_empty():
+		return
+	daily_missions[0]["progress"] = int(daily_missions[0]["target"])
+	daily_missions[0]["claimed"] = false
+	_sync_legacy_daily_from_first()
 
 
 func configure_daily_mission_for_test(mission_type: String) -> void:
 	var mission := DailyMission.mission_for_type(mission_type)
 	if mission.is_empty():
 		return
-	daily_mission_type = String(mission["type"])
-	daily_mission_label = String(mission["label"])
-	daily_mission_target = int(mission["target"])
-	daily_mission_requirement = int(mission["requirement"])
-	daily_mission_reward = int(mission["reward"])
-	daily_mission_progress = 0
-	daily_mission_claimed = false
+	mission["progress"] = 0
+	mission["claimed"] = false
+	daily_missions = [mission]
+	_sync_legacy_daily_from_first()
+
+
+func configure_daily_missions_for_test(mission_types: Array, streak: int = 1) -> void:
+	daily_streak = maxi(streak, 1)
+	daily_missions = []
+	for raw_type in mission_types:
+		var mission := DailyMission.mission_for_type(String(raw_type))
+		if mission.is_empty():
+			continue
+		mission["reward"] = DailyMission.reward_for_type(String(raw_type), daily_streak)
+		mission["progress"] = 0
+		mission["claimed"] = false
+		daily_missions.append(mission)
+	_sync_legacy_daily_from_first()
+
+
+func set_daily_mission_progress_for_test(index: int, progress: int, claimed: bool = false) -> void:
+	if index < 0 or index >= daily_missions.size():
+		return
+	var mission := daily_missions[index]
+	mission["progress"] = clampi(progress, 0, int(mission["target"]))
+	mission["claimed"] = claimed
+	daily_missions[index] = mission
+	_sync_legacy_daily_from_first()
+
+
+func advance_daily_missions_for_type_for_test(mission_type: String, amount: int = 1) -> bool:
+	return _advance_daily_missions_for_type(mission_type, amount)
+
+
+func update_daily_streak_for_test(last_active_date: String, previous_streak: int, today: String) -> int:
+	daily_last_active_date = last_active_date
+	daily_streak = previous_streak
+	_generate_daily_mission(today)
+	return daily_streak
+
+
+func save_daily_to_path_for_test(path: String) -> Error:
+	return _save_daily_to_path(path)
+
+
+func load_daily_from_path_for_test(path: String, today: String) -> Error:
+	var config := ConfigFile.new()
+	var error := config.load(path)
+	if error != OK:
+		return error
+	if String(config.get_value("daily", "date", "")) != today:
+		return ERR_INVALID_DATA
+	daily_streak = maxi(1, int(config.get_value("daily", "streak", 1)))
+	daily_last_active_date = String(config.get_value("daily", "last_active_date", today))
+	daily_mission_date = today
+	daily_missions = _daily_missions_from_config(config, today)
+	if daily_missions.is_empty():
+		return ERR_INVALID_DATA
+	_sync_legacy_daily_from_first()
+	return OK
 
 
 func claim_daily_mission_for_test() -> bool:
@@ -3177,8 +3325,7 @@ func _mark_patch_removed(patch: DirtPatch) -> void:
 			_last_milestone_haptic_combo = combo_count
 			audio.play_combo_milestone()
 			_haptic(38)
-		if patch.kind == daily_mission_type:
-			_advance_daily_mission()
+		_advance_daily_missions_for_type(patch.kind)
 		_record_achievement_increment(AchievementProgress.COUNTER_DIRT)
 		if patch.kind == "leaf":
 			_record_achievement_increment(AchievementProgress.COUNTER_LEAF)
@@ -3197,8 +3344,11 @@ func _register_combo_removal() -> void:
 	combo_grace_active = false
 	best_combo = max(best_combo, combo_count)
 	_record_achievement_max(AchievementProgress.COUNTER_COMBO, best_combo)
-	if daily_mission_type == "combo" and combo_count == daily_mission_requirement:
-		_advance_daily_mission()
+	for index in range(daily_missions.size()):
+		var mission := daily_missions[index]
+		if String(mission.get("type", "")) == "combo" \
+				and combo_count == int(mission.get("requirement", 0)):
+			_advance_daily_mission_at(index)
 
 
 func _spawn_removal_burst(center: Vector2, radius: float) -> void:
@@ -4051,11 +4201,14 @@ func _tool_hint() -> String:
 # Localized daily-mission label rendered from the mission type + target so it
 # follows the active locale (the persisted `daily_mission_label` stays for save
 # compatibility but does not drive display).
-func _daily_mission_display_label() -> String:
+func _daily_mission_display_label(mission: Dictionary = {}) -> String:
+	var mission_type := String(mission.get("type", daily_mission_type))
+	var target := int(mission.get("target", daily_mission_target))
+	var requirement := int(mission.get("requirement", daily_mission_requirement))
 	var display_value := DailyMission.display_value(
-		daily_mission_type, daily_mission_target, daily_mission_requirement
+		mission_type, target, requirement
 	)
-	return tr("DM_" + daily_mission_type.to_upper()) % display_value
+	return tr("DM_" + mission_type.to_upper()) % display_value
 
 
 func _build_car_shapes() -> void:
@@ -5255,39 +5408,39 @@ func _draw_title_screen() -> void:
 	_draw_title_hero_car()
 	_draw_title_skin_swatches()
 
-	# 타이틀 데일리 미션 카드 — 시작 전에 오늘 할 일을 보여준다
-	if not daily_mission_type.is_empty():
-		var dm_rect := Rect2(18.0, 382.0, 354.0, 82.0)
-		var dm_claimed := daily_mission_claimed
-		var dm_prog := mini(daily_mission_progress, daily_mission_target)
+	# 타이틀 데일리 미션 카드 — 세 개의 독립 진행과 출석 streak를 함께 보여준다.
+	if not daily_missions.is_empty():
+		var dm_rect := Rect2(18.0, 374.0, 354.0, 106.0)
 		draw_style_box(_style("title_dm_shadow", Color(0.03, 0.12, 0.22, 0.22), 14.0),
 			Rect2(dm_rect.position + Vector2(0.0, 3.0), dm_rect.size))
-		var dm_bg_key := "title_dm_bg_done" if dm_claimed else "title_dm_bg_todo"
-		var dm_bg_col := Color(0.05, 0.26, 0.18, 0.72) if dm_claimed else Color(0.05, 0.20, 0.32, 0.72)
-		draw_style_box(_style(dm_bg_key, dm_bg_col, 14.0), dm_rect)
+		draw_style_box(_style("title_dm_bg", Color(0.05, 0.20, 0.32, 0.76), 14.0), dm_rect)
 		draw_string(font, Vector2(dm_rect.position.x + 12.0, dm_rect.position.y + 18.0),
 			tr("DM_HEADER"), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.6, 0.85, 1.0, 0.8))
+		var streak_text := tr("DM_STREAK") % [daily_streak, DailyMission.streak_bonus(daily_streak)]
 		draw_string(font, Vector2(dm_rect.position.x, dm_rect.position.y + 18.0),
-			tr("DM_REWARD") % daily_mission_reward, HORIZONTAL_ALIGNMENT_RIGHT, dm_rect.size.x - 10.0, 11,
+			streak_text, HORIZONTAL_ALIGNMENT_RIGHT, dm_rect.size.x - 12.0, 10,
 			Color(1.0, 0.85, 0.25, 0.9))
-		var mission_col := Color(0.72, 1.0, 0.78) if dm_claimed else Color(0.90, 0.96, 1.0)
-		draw_string(font, Vector2(dm_rect.position.x + 12.0, dm_rect.position.y + 40.0),
-			_daily_mission_display_label(), HORIZONTAL_ALIGNMENT_LEFT, dm_rect.size.x - 24.0, 14, mission_col)
-		var dm_bar_margin := 12.0
-		var dm_bar_rect := Rect2(dm_rect.position.x + dm_bar_margin, dm_rect.position.y + 52.0,
-			dm_rect.size.x - dm_bar_margin * 2.0, 6.0)
-		draw_style_box(_style("title_dm_bar_bg", Color(0.0, 0.0, 0.0, 0.35), 3.0), dm_bar_rect)
-		var dm_fill := 1.0 if dm_claimed else float(dm_prog) / float(max(daily_mission_target, 1))
-		if dm_fill > 0.0:
-			var bar_fill_key := "title_dm_bar_fill_done" if dm_claimed else "title_dm_bar_fill_todo"
-			var bar_fill_col := Color("#39d98a") if dm_claimed else Color("#49a7ff")
-			var fill_w := maxf(8.0, dm_bar_rect.size.x * dm_fill)
-			draw_style_box(_style(bar_fill_key, bar_fill_col, 3.0),
-				Rect2(dm_bar_rect.position, Vector2(fill_w, dm_bar_rect.size.y)))
-		var count_text := tr("DM_DONE") if dm_claimed else "%d / %d" % [dm_prog, daily_mission_target]
-		var count_col := Color("#39d98a") if dm_claimed else Color(0.7, 0.9, 1.0)
-		draw_string(font, Vector2(dm_rect.position.x, dm_rect.position.y + 74.0),
-			count_text, HORIZONTAL_ALIGNMENT_RIGHT, dm_rect.size.x - 12.0, 12, count_col)
+		for index in range(daily_missions.size()):
+			var mission := daily_missions[index]
+			var claimed := bool(mission.get("claimed", false))
+			var target := maxi(int(mission.get("target", 0)), 1)
+			var progress := mini(int(mission.get("progress", 0)), target)
+			var row_y := dm_rect.position.y + 26.0 + float(index) * 25.0
+			var count_text := tr("DM_DONE") if claimed else "%d/%d" % [progress, target]
+			var label_text := "%s  %s" % [_daily_mission_display_label(mission), count_text]
+			var mission_col := Color(0.72, 1.0, 0.78) if claimed else Color(0.90, 0.96, 1.0)
+			draw_string(font, Vector2(dm_rect.position.x + 12.0, row_y + 10.0), label_text,
+				HORIZONTAL_ALIGNMENT_LEFT, dm_rect.size.x - 98.0, _fit_fs(label_text, 10, dm_rect.size.x - 100.0), mission_col)
+			draw_string(font, Vector2(dm_rect.position.x, row_y + 10.0),
+				tr("DM_REWARD") % int(mission.get("reward", DAILY_MISSION_REWARD)),
+				HORIZONTAL_ALIGNMENT_RIGHT, dm_rect.size.x - 12.0, 9, Color(1.0, 0.85, 0.25, 0.9))
+			var dm_bar_rect := Rect2(dm_rect.position.x + 12.0, row_y + 15.0, dm_rect.size.x - 24.0, 4.0)
+			draw_style_box(_style("title_dm_bar_bg", Color(0.0, 0.0, 0.0, 0.35), 2.0), dm_bar_rect)
+			var fill := 1.0 if claimed else float(progress) / float(target)
+			if fill > 0.0:
+				var fill_col := Color("#39d98a") if claimed else Color("#49a7ff")
+				draw_style_box(_style("title_dm_bar_fill", fill_col, 2.0),
+					Rect2(dm_bar_rect.position, Vector2(maxf(6.0, dm_bar_rect.size.x * fill), dm_bar_rect.size.y)))
 
 	var start_rect := _get_start_rect()
 	draw_style_box(_style("start_shadow", Color("#1f8a55"), 16.0), Rect2(start_rect.position + Vector2(0.0, 5.0), start_rect.size))
@@ -5337,24 +5490,82 @@ func _today_string() -> String:
 
 
 func _generate_daily_mission(today: String) -> void:
+	daily_streak = DailyMission.updated_streak(daily_streak, daily_last_active_date, today)
+	daily_last_active_date = today
 	daily_mission_date = today
-	var m := DailyMission.mission_for(today)
-	daily_mission_type = m["type"]
-	daily_mission_target = m["target"]
-	daily_mission_requirement = m["requirement"]
-	daily_mission_label = m["label"]
-	daily_mission_reward = m["reward"]
-	daily_mission_progress = 0
-	daily_mission_claimed = false
+	daily_missions = _new_daily_mission_states(today)
+	_sync_legacy_daily_from_first()
+	_daily_progress_dirty = true
+
+
+func _new_daily_mission_states(today: String) -> Array[Dictionary]:
+	var states: Array[Dictionary] = []
+	for definition in DailyMission.missions_for(today, GameConfig.DAILY_MISSION_COUNT, daily_streak):
+		var mission := definition.duplicate(true)
+		mission["progress"] = 0
+		mission["claimed"] = false
+		states.append(mission)
+	return states
+
+
+func _sync_legacy_daily_from_first() -> void:
+	if daily_missions.is_empty():
+		daily_mission_type = ""
+		daily_mission_label = ""
+		daily_mission_target = 0
+		daily_mission_requirement = 0
+		daily_mission_reward = DAILY_MISSION_REWARD
+		daily_mission_progress = 0
+		daily_mission_claimed = false
+		return
+	var first := daily_missions[0]
+	daily_mission_type = String(first.get("type", ""))
+	daily_mission_label = String(first.get("label", ""))
+	daily_mission_target = int(first.get("target", 0))
+	daily_mission_requirement = int(first.get("requirement", 0))
+	daily_mission_reward = int(first.get("reward", DAILY_MISSION_REWARD))
+	daily_mission_progress = int(first.get("progress", 0))
+	daily_mission_claimed = bool(first.get("claimed", false))
+
+
+func _sync_first_daily_from_legacy() -> void:
+	if daily_mission_type.is_empty():
+		return
+	var first := {
+		"type": daily_mission_type,
+		"label": daily_mission_label,
+		"target": daily_mission_target,
+		"requirement": daily_mission_requirement,
+		"reward": daily_mission_reward,
+		"progress": daily_mission_progress,
+		"claimed": daily_mission_claimed,
+	}
+	if daily_missions.is_empty():
+		daily_missions.append(first)
+	else:
+		daily_missions[0] = first
 
 
 func _claim_daily_mission_reward() -> bool:
-	if daily_mission_claimed or daily_mission_target <= 0 or daily_mission_progress < daily_mission_target:
+	_sync_first_daily_from_legacy()
+	return _claim_daily_mission_at(0)
+
+
+func _claim_daily_mission_at(index: int) -> bool:
+	if index < 0 or index >= daily_missions.size():
 		return false
-	daily_mission_claimed = true
-	var granted_reward := _grant_daily_mission_coins()
-	_emit_analytics(ContentEvents.daily_mission_claim(daily_mission_type, granted_reward))
+	var mission := daily_missions[index]
+	var target := int(mission.get("target", 0))
+	if bool(mission.get("claimed", false)) or target <= 0 or int(mission.get("progress", 0)) < target:
+		return false
+	mission["claimed"] = true
+	mission["progress"] = target
+	daily_missions[index] = mission
+	var granted_reward := _grant_daily_mission_coins(int(mission.get("reward", DAILY_MISSION_REWARD)))
+	_emit_analytics(ContentEvents.daily_mission_claim(String(mission.get("type", "")), granted_reward))
+	_daily_last_claim_reward = granted_reward
 	_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
+	_sync_legacy_daily_from_first()
 	var daily_err := _save_daily()
 	_daily_progress_dirty = daily_err != OK
 	var prog_err := _save_progress()
@@ -5365,34 +5576,57 @@ func _claim_daily_mission_reward() -> bool:
 
 
 func _advance_daily_mission(amount: int = 1) -> bool:
-	if daily_mission_claimed or daily_mission_target <= 0 or amount <= 0:
+	_sync_first_daily_from_legacy()
+	return _advance_daily_mission_at(0, amount)
+
+
+func _advance_daily_mission_at(index: int, amount: int = 1) -> bool:
+	if index < 0 or index >= daily_missions.size() or amount <= 0:
 		return false
-	var previous_progress := daily_mission_progress
-	daily_mission_progress = mini(daily_mission_target, daily_mission_progress + amount)
-	if daily_mission_progress == previous_progress:
+	var mission := daily_missions[index]
+	var target := int(mission.get("target", 0))
+	if bool(mission.get("claimed", false)) or target <= 0:
 		return false
-	if daily_mission_progress >= daily_mission_target:
-		return _claim_daily_mission_reward()
+	var previous_progress := int(mission.get("progress", 0))
+	mission["progress"] = mini(target, previous_progress + amount)
+	if int(mission["progress"]) == previous_progress:
+		return false
+	daily_missions[index] = mission
+	_sync_legacy_daily_from_first()
+	if int(mission["progress"]) >= target:
+		return _claim_daily_mission_at(index)
 	_daily_progress_dirty = true
 	return true
 
 
+func _advance_daily_missions_for_type(mission_type: String, amount: int = 1) -> bool:
+	var advanced := false
+	for index in range(daily_missions.size()):
+		if String(daily_missions[index].get("type", "")) == mission_type:
+			advanced = _advance_daily_mission_at(index, amount) or advanced
+	return advanced
+
+
 func _record_completion_daily_mission() -> void:
-	if daily_mission_claimed:
-		return
-	if daily_mission_type == "fast" and level_time <= float(daily_mission_requirement):
-		_advance_daily_mission()
-	elif daily_mission_type == "perfect3" and earned_stars == daily_mission_requirement:
-		_advance_daily_mission()
+	for index in range(daily_missions.size()):
+		var mission := daily_missions[index]
+		if bool(mission.get("claimed", false)):
+			continue
+		var mission_type := String(mission.get("type", ""))
+		var requirement := int(mission.get("requirement", 0))
+		if mission_type == "fast" and level_time <= float(requirement):
+			_advance_daily_mission_at(index)
+		elif mission_type == "perfect3" and earned_stars == requirement:
+			_advance_daily_mission_at(index)
 
 
-func _grant_daily_mission_coins() -> int:
-	coins += daily_mission_reward
-	return daily_mission_reward
+func _grant_daily_mission_coins(reward: int = daily_mission_reward) -> int:
+	coins += reward
+	return reward
 
 
 func _draw_daily_mission() -> void:
-	if game_state != STATE_PLAYING or daily_mission_type.is_empty():
+	if game_state != STATE_PLAYING or daily_missions.is_empty():
 		return
 	var time_now := float(Time.get_ticks_msec()) / 1000.0
 	var rect := _get_daily_mission_rect()
@@ -5402,37 +5636,38 @@ func _draw_daily_mission() -> void:
 	draw_style_box(_style("dm_bg", Color(0.03, 0.14, 0.2, 0.66), 16.0), rect)
 
 	var font := _font()
-	var claimed := daily_mission_claimed
-	var progress := mini(daily_mission_progress, daily_mission_target)
+	var completed_count := 0
+	for mission in daily_missions:
+		if bool(mission.get("claimed", false)):
+			completed_count += 1
+	var streak_text := tr("DM_STREAK_SHORT") % daily_streak
+	var summary_text := tr("DM_PROGRESS") % [completed_count, daily_missions.size()]
+	draw_string(font, Vector2(rect.position.x + 8.0, rect.position.y + 13.0), streak_text,
+		HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 16.0, 9, Color(1.0, 0.85, 0.25, 0.9))
+	draw_string(font, Vector2(rect.position.x, rect.position.y + 13.0), summary_text,
+		HORIZONTAL_ALIGNMENT_RIGHT, rect.size.x - 8.0, 9, Color(0.75, 0.92, 1.0))
 
-	var bar_rect := _get_daily_mission_bar_rect()
-	draw_style_box(_style("dm_bar_bg", Color(0.0, 0.0, 0.0, 0.35), 2.0), bar_rect)
-	var fill := 1.0 if claimed else float(progress) / float(max(daily_mission_target, 1))
-	if fill > 0.0:
-		var fill_col := Color("#39d98a") if claimed else Color("#49a7ff")
-		var fill_w := maxf(6.0, bar_rect.size.x * fill)
-		draw_style_box(_style("dm_bar_fill", fill_col, 2.0),
-			Rect2(bar_rect.position, Vector2(fill_w, bar_rect.size.y)))
-
-	var label_text := _daily_mission_display_label()
-	var count_text := tr("DM_DONE") if claimed else "%d/%d" % [progress, daily_mission_target]
-	var label_col := Color(0.7, 1.0, 0.75) if claimed else Color(0.85, 0.95, 1.0)
-	var count_col := Color("#39d98a") if claimed else Color(0.7, 0.9, 1.0)
-	var label_width := rect.size.x - 16.0
-	var label_font_size := 11
-	while label_font_size > 8 and font.get_string_size(label_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, label_font_size).x > label_width:
-		label_font_size -= 1
-	draw_string(font, Vector2(rect.position.x + 8.0, rect.position.y + 18.0),
-		label_text, HORIZONTAL_ALIGNMENT_CENTER, label_width, label_font_size, label_col)
-	draw_string(font, Vector2(rect.position.x + 8.0, rect.position.y + 40.0),
-		count_text, HORIZONTAL_ALIGNMENT_CENTER, label_width, 11, count_col)
+	for index in range(daily_missions.size()):
+		var mission := daily_missions[index]
+		var claimed := bool(mission.get("claimed", false))
+		var target := maxi(int(mission.get("target", 0)), 1)
+		var progress := mini(int(mission.get("progress", 0)), target)
+		var bar_rect := _get_daily_mission_bar_rect(index)
+		draw_style_box(_style("dm_bar_bg", Color(0.0, 0.0, 0.0, 0.35), 2.0), bar_rect)
+		var fill := 1.0 if claimed else float(progress) / float(target)
+		if fill > 0.0:
+			var fill_col := Color("#39d98a") if claimed else Color("#49a7ff")
+			draw_style_box(_style("dm_bar_fill", fill_col, 2.0),
+				Rect2(bar_rect.position, Vector2(maxf(5.0, bar_rect.size.x * fill), bar_rect.size.y)))
+		draw_string(font, Vector2(rect.position.x + 3.0, bar_rect.position.y + 4.0), str(index + 1),
+			HORIZONTAL_ALIGNMENT_CENTER, 10.0, 7, Color(0.8, 0.95, 1.0))
 
 	if _daily_mission_pop_time >= 0.0:
 		var age := time_now - _daily_mission_pop_time
 		if age < 2.8:
 			var alpha := clampf(1.0 - (age - 1.6) / 1.2, 0.0, 1.0)
 			var rise := age * 26.0
-			var pop_text := tr("DM_CLEAR_POP") % daily_mission_reward
+			var pop_text := tr("DM_CLEAR_POP") % _daily_last_claim_reward
 			draw_string(font, Vector2(rect.position.x - 30.0, rect.end.y + 18.0 - rise),
 				pop_text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x + 30.0, 11, Color(1.0, 0.9, 0.3, alpha))
 		else:
@@ -6747,15 +6982,14 @@ func _get_daily_mission_rect() -> Rect2:
 	return Rect2(234.0, _hud_top_y() + 90.0, 142.0, 56.0)
 
 
-func _get_daily_mission_bar_rect() -> Rect2:
+func _get_daily_mission_bar_rect(index: int = 0) -> Rect2:
 	var rect := _get_daily_mission_rect()
-	var margin_x := 10.0
+	var margin_x := 16.0
 	var height := 4.0
-	var bottom_padding := 7.0
 	return Rect2(
 		rect.position.x + margin_x,
-		rect.end.y - bottom_padding - height,
-		rect.size.x - margin_x * 2.0,
+		rect.position.y + 19.0 + float(index) * 10.0,
+		rect.size.x - margin_x - 8.0,
 		height
 	)
 
