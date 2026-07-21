@@ -67,13 +67,11 @@ func _run() -> void:
 	node.set("skin_sponge", "classic")
 	node.set("selected_car_paint", "")
 	node.call("_set_car_palette")
-	node.set("daily_mission_type", "road_grime")
-	node.set("daily_mission_target", 8)
-	node.set("daily_mission_reward", 85)
-	node.set("daily_mission_progress", 3)
-	node.set("daily_mission_claimed", false)
+	node.call("configure_daily_missions_for_test", ["road_grime", "mud", "combo"], 7)
+	node.call("set_daily_mission_progress_for_test", 0, 3)
+	node.call("set_daily_mission_progress_for_test", 1, 5)
 	await _settle(2)
-	if not await _capture(out_dir.path_join("shot_daily_mission_reward.png")):
+	if not await _capture(out_dir.path_join("shot_daily_missions_streak.png")):
 		quit(1)
 		return
 	node.call("configure_daily_mission_for_test", "combo")

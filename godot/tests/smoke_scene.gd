@@ -542,6 +542,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_daily_mission_style_contract(root_node, analytics_recorder):
 		return
+	if not _test_multi_daily_mission_streak_contract(root_node, analytics_recorder):
+		return
 
 	if String(root_node.call("get_car_type_for_test")) != "compact":
 		_fail("level 1 should be a compact car")
@@ -1535,7 +1537,7 @@ func _test_daily_mission_reward_contract(root_node: Node, analytics_recorder: An
 		_fail("retroactive daily mission grant must use the same mission reward")
 		return false
 	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
-	if not main_source.contains('tr("DM_REWARD") % daily_mission_reward'):
+	if not main_source.contains('tr("DM_REWARD") % int(mission.get("reward", DAILY_MISSION_REWARD))'):
 		_fail("title mission card must display the actual mission reward")
 		return false
 	if not main_source.contains("_grant_daily_mission_coins()"):
@@ -1689,7 +1691,7 @@ func _test_daily_mission_style_contract(root_node: Node, analytics_recorder: Ana
 		_fail("style daily missions must reuse the existing title card and HUD chip residency")
 		return false
 	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
-	var claim_start := main_source.find("func _claim_daily_mission_reward() -> bool:")
+	var claim_start := main_source.find("func _claim_daily_mission_at(index: int) -> bool:")
 	var claim_end := main_source.find("\nfunc ", claim_start + 1)
 	var claim_body := main_source.substr(claim_start, claim_end - claim_start)
 	if not claim_body.contains("_save_daily()") or not claim_body.contains("_save_progress()"):
@@ -1704,6 +1706,112 @@ func _test_daily_mission_style_contract(root_node: Node, analytics_recorder: Ana
 	for key in original_daily:
 		root_node.set("daily_mission_" + key, original_daily[key])
 	TranslationServer.set_locale(previous_locale)
+	analytics_recorder.events.clear()
+	return true
+
+
+func _test_multi_daily_mission_streak_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var original_coins := int(root_node.get("coins"))
+	analytics_recorder.events.clear()
+	root_node.set("coins", 0)
+	root_node.set("daily_mission_date", "2026-07-21")
+	root_node.set("daily_last_active_date", "2026-07-21")
+	root_node.call("configure_daily_missions_for_test", ["dust", "mud", "combo"], 7)
+	var missions: Array[Dictionary] = root_node.call("get_daily_missions_for_test")
+	var unique_types: Dictionary = {}
+	for mission in missions:
+		unique_types[String(mission["type"])] = true
+	if missions.size() != 3 or unique_types.size() != 3:
+		_fail("daily board must expose three unique mission types")
+		return false
+	if int(missions[0]["reward"]) != 80 or int(missions[1]["reward"]) != 85 \
+			or int(missions[2]["reward"]) != 115:
+		_fail("seven-day streak bonus must be included in every independent reward")
+		return false
+
+	# Completing one mission must claim only that slot; the others retain their
+	# own progress and remain claimable.
+	root_node.call("advance_daily_missions_for_type_for_test", "dust", 20)
+	missions = root_node.call("get_daily_missions_for_test")
+	if not bool(missions[0]["claimed"]) or bool(missions[1]["claimed"]) \
+			or bool(missions[2]["claimed"]) or int(root_node.get("coins")) != 80:
+		_fail("claiming one daily mission must not claim or pay another slot")
+		return false
+	root_node.call("advance_daily_missions_for_type_for_test", "mud", 4)
+	missions = root_node.call("get_daily_missions_for_test")
+	if int(missions[1]["progress"]) != 4 or int(missions[2]["progress"]) != 0:
+		_fail("daily mission progress must remain independent by type")
+		return false
+
+	# Save and load the same date through the production ConfigFile schema.
+	var save_snapshot := missions.duplicate(true)
+	var test_path := "user://foam_party_daily_issue_66_test.cfg"
+	if root_node.call("save_daily_to_path_for_test", test_path) != OK:
+		_fail("multi daily mission fixture failed to save")
+		return false
+	root_node.call("configure_daily_missions_for_test", ["leaf", "oil", "fast"], 1)
+	if root_node.call("load_daily_from_path_for_test", test_path, "2026-07-21") != OK:
+		_fail("multi daily mission fixture failed to load")
+		return false
+	missions = root_node.call("get_daily_missions_for_test")
+	if missions != save_snapshot or int(root_node.call("get_daily_streak_for_test")) != 7:
+		_fail("same-day reload must preserve mission composition, progress, claims, rewards, and streak")
+		return false
+
+	# A pre-multi-slot file keeps its original mission/progress in slot zero and
+	# deterministically fills the other two slots without duplicating the type.
+	var legacy_config := ConfigFile.new()
+	legacy_config.set_value("daily", "date", "2026-07-21")
+	legacy_config.set_value("daily", "type", "road_grime")
+	legacy_config.set_value("daily", "label", "도로 때 8개 닦기")
+	legacy_config.set_value("daily", "target", 8)
+	legacy_config.set_value("daily", "requirement", 0)
+	legacy_config.set_value("daily", "reward", 85)
+	legacy_config.set_value("daily", "progress", 3)
+	legacy_config.set_value("daily", "claimed", false)
+	if legacy_config.save(test_path) != OK \
+			or root_node.call("load_daily_from_path_for_test", test_path, "2026-07-21") != OK:
+		_fail("legacy single daily mission fixture failed to migrate")
+		return false
+	missions = root_node.call("get_daily_missions_for_test")
+	unique_types.clear()
+	for mission in missions:
+		unique_types[String(mission["type"])] = true
+	if missions.size() != 3 or unique_types.size() != 3 \
+			or String(missions[0]["type"]) != "road_grime" \
+			or int(missions[0]["progress"]) != 3 or bool(missions[0]["claimed"]):
+		_fail("legacy daily progress must survive in slot zero while two unique slots are added")
+		return false
+	var absolute_test_path := ProjectSettings.globalize_path(test_path)
+	if FileAccess.file_exists(test_path):
+		DirAccess.remove_absolute(absolute_test_path)
+
+	if int(root_node.call("update_daily_streak_for_test", "2026-07-20", 6, "2026-07-21")) != 7 \
+			or int(root_node.call("update_daily_streak_for_test", "2026-07-21", 7, "2026-07-21")) != 7 \
+			or int(root_node.call("update_daily_streak_for_test", "2026-07-19", 7, "2026-07-21")) != 1:
+		_fail("saved attendance streak must increment once and reset after a missed date")
+		return false
+
+	var mission_rect: Rect2 = root_node.call("_get_daily_mission_rect")
+	for index in range(3):
+		var bar_rect: Rect2 = root_node.call("_get_daily_mission_bar_rect", index)
+		if not mission_rect.encloses(bar_rect):
+			_fail("all three daily mission bars must remain inside the existing HUD card")
+			return false
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_source.contains('tr("DM_STREAK")') or not main_source.contains('tr("DM_STREAK_SHORT")') \
+			or not main_source.contains("for index in range(daily_missions.size())"):
+		_fail("title and gameplay daily panels must render streak and multiple mission rows")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("multi daily board must reuse the existing procedural UI residency")
+		return false
+
+	root_node.set("coins", original_coins)
+	root_node.set("daily_streak", 0)
+	root_node.set("daily_last_active_date", "")
+	root_node.call("_generate_daily_mission", root_node.call("_today_string"))
 	analytics_recorder.events.clear()
 	return true
 

@@ -57,6 +57,9 @@ const STRINGS := {
 	"STAGE_PAGE": ["%d / %d", "%d / %d"],
 	# daily mission
 	"DM_HEADER": ["오늘의 미션", "Daily Mission"],
+	"DM_STREAK": ["연속 %d일 · 보너스 +%d", "%d-day streak · +%d bonus"],
+	"DM_STREAK_SHORT": ["연속 %d일", "Streak %dd"],
+	"DM_PROGRESS": ["%d/%d 완료", "%d/%d done"],
 	"DM_REWARD": ["+%d 코인", "+%d Coins"],
 	"DM_DONE": ["완료!", "Done!"],
 	"DM_CLEAR_POP": ["+%d 코인!  데일리 미션 클리어!", "+%d Coins!  Daily mission clear!"],
