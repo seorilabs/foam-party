@@ -31,6 +31,7 @@ const AudioService = preload("res://scripts/services/audio_service.gd")
 const FirebaseAnalyticsAdapter = preload("res://scripts/services/firebase_analytics_adapter.gd")
 const AdService = preload("res://scripts/services/ad_service.gd")
 const I18n = preload("res://scripts/services/i18n.gd")
+const BackgroundLayer = preload("res://scripts/background_layer.gd")
 
 const DESIGN_SIZE := Vector2(390.0, 844.0)
 const TOOL_AIR := "air"
@@ -278,6 +279,7 @@ var car_type := "compact"
 var car_type_labels: Dictionary = {}
 var canvas_origin := Vector2.ZERO
 var canvas_scale := 1.0
+var _background_layer: BackgroundLayer = null
 # window.__foamPartySafeArea proxy (web/AIT only): CSS-px safe-area insets + viewport
 # size published by the AIT wrapper (safeAreaRuntime.ts). Cached once available.
 var _web_safe_area = null
@@ -395,6 +397,9 @@ func _ready() -> void:
 	_rebuild_i18n_labels()
 	_setup_font()
 	_build_car_shapes()
+	_background_layer = BackgroundLayer.new()
+	add_child(_background_layer)
+	_update_canvas_transform()
 	_load_progress()
 	if daily_mission_type.is_empty():
 		_generate_daily_mission(_today_string())
@@ -1111,6 +1116,7 @@ func _process(delta: float) -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
+		_update_canvas_transform()
 		queue_redraw()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
 		if what == NOTIFICATION_APPLICATION_PAUSED:
@@ -1378,7 +1384,8 @@ func _draw() -> void:
 	_update_canvas_transform()
 	_set_design_draw_transform()
 
-	_draw_background()
+	# The static backdrop (sky + wash bay) lives on _background_layer, a cached
+	# behind-parent canvas item, so per-frame redraws skip its ~90 commands.
 	if game_state == STATE_PLAYING:
 		_draw_status()
 	if game_state != STATE_TITLE:
@@ -1777,14 +1784,11 @@ func get_soap_foam_layout_for_test(amount: float) -> Array[Dictionary]:
 
 
 func get_car_wash_bay_geometry_for_test() -> Dictionary:
-	return {
-		"left_pillar": _bay_left_pillar_rect(),
-		"right_pillar": _bay_right_pillar_rect(),
-		"overhead_rail": _bay_overhead_rail_rect(),
-		"left_roller": _bay_left_roller_rect(),
-		"right_roller": _bay_right_roller_rect(),
-		"floor_drain": _bay_floor_drain_rect(),
-	}
+	return _background_layer.bay_geometry()
+
+
+func get_background_layer_for_test() -> CanvasItem:
+	return _background_layer
 
 
 func get_combo_for_test() -> int:
@@ -2325,6 +2329,8 @@ func _update_canvas_transform() -> void:
 		available_size = DESIGN_SIZE
 	canvas_scale = min(available_size.x / DESIGN_SIZE.x, available_size.y / DESIGN_SIZE.y)
 	canvas_origin = (available_size - DESIGN_SIZE * canvas_scale) * 0.5
+	if _background_layer != null:
+		_background_layer.update_layout(canvas_origin, canvas_scale, DESIGN_SIZE)
 
 
 func _safe_area_design_insets() -> Vector4:
@@ -4060,116 +4066,6 @@ func _completion_gleam_enabled() -> bool:
 	return not reduce_motion
 
 
-func _draw_background() -> void:
-	var overhang := canvas_origin / maxf(canvas_scale, 0.001)
-	var bg_left := -overhang.x
-	var bg_top := -overhang.y
-	var bg_width := DESIGN_SIZE.x + overhang.x * 2.0
-	var bg_bottom := DESIGN_SIZE.y + overhang.y
-	draw_rect(Rect2(bg_left, bg_top, bg_width, bg_bottom - bg_top), Color("#87e3e9"))
-	draw_rect(Rect2(bg_left, bg_top, bg_width, 155.0 - bg_top), Color("#9ff0ef"))
-	draw_rect(Rect2(bg_left, 620.0, bg_width, bg_bottom - 620.0), Color("#6dd0d1"))
-
-	var line_slope := 28.0 / DESIGN_SIZE.x
-	for y_index in range(0, 7):
-		var y := 638.0 + float(y_index) * 32.0
-		draw_line(Vector2(bg_left, y + bg_left * line_slope), Vector2(bg_left + bg_width, y + (bg_left + bg_width) * line_slope), Color(1.0, 1.0, 1.0, 0.18), 1.0)
-	var x_start := int(floor((bg_left - 50.0) / 58.0))
-	var x_end := int(ceil((bg_left + bg_width + 30.0) / 58.0))
-	for x_index in range(x_start, x_end):
-		var x := float(x_index) * 58.0 - 30.0
-		draw_line(Vector2(x, 620.0), Vector2(x + 80.0, bg_bottom), Color(0.0, 0.0, 0.0, 0.08), 1.0)
-
-	draw_circle(Vector2(68.0, 170.0), 48.0, Color(1.0, 1.0, 1.0, 0.18))
-	draw_circle(Vector2(345.0, 197.0), 28.0, Color(1.0, 1.0, 1.0, 0.13))
-	draw_circle(Vector2(35.0, 720.0), 20.0, Color(1.0, 1.0, 1.0, 0.16))
-	draw_circle(Vector2(356.0, 690.0), 24.0, Color(1.0, 1.0, 1.0, 0.12))
-	_draw_car_wash_bay()
-
-
-func _bay_left_pillar_rect() -> Rect2:
-	return Rect2(10.0, 184.0, 36.0, 444.0)
-
-
-func _bay_right_pillar_rect() -> Rect2:
-	return Rect2(344.0, 184.0, 36.0, 444.0)
-
-
-func _bay_overhead_rail_rect() -> Rect2:
-	return Rect2(28.0, 178.0, 334.0, 24.0)
-
-
-func _bay_left_roller_rect() -> Rect2:
-	return Rect2(36.0, 246.0, 30.0, 132.0)
-
-
-func _bay_right_roller_rect() -> Rect2:
-	return Rect2(324.0, 246.0, 30.0, 132.0)
-
-
-func _bay_floor_drain_rect() -> Rect2:
-	return Rect2(120.0, 712.0, 150.0, 12.0)
-
-
-func _draw_bay_pillar(rect: Rect2, inner_edge_x: float) -> void:
-	draw_rect(Rect2(rect.position + Vector2(0.0, 5.0), rect.size), Color(0.03, 0.22, 0.30, 0.24))
-	draw_rect(rect, Color("#1c6572"))
-	draw_rect(Rect2(rect.position + Vector2(5.0, 5.0), rect.size - Vector2(10.0, 5.0)), Color("#55bcc2"))
-	draw_line(Vector2(inner_edge_x, rect.position.y + 5.0), Vector2(inner_edge_x, rect.end.y), Color(0.86, 1.0, 1.0, 0.55), 2.0)
-	for index in range(4):
-		var bolt_y := rect.position.y + 40.0 + float(index) * 105.0
-		draw_circle(Vector2(rect.get_center().x, bolt_y), 3.0, Color("#d8fbf8"))
-		draw_circle(Vector2(rect.get_center().x, bolt_y), 3.0, Color("#164b59"), false, 1.0)
-
-
-func _draw_bay_roller(rect: Rect2, arm_start: Vector2) -> void:
-	var center_x := rect.get_center().x
-	draw_line(arm_start, Vector2(center_x, rect.position.y - 12.0), Color("#174f60"), 7.0)
-	draw_line(arm_start, Vector2(center_x, rect.position.y - 12.0), Color("#8fe5df"), 3.0)
-	draw_rect(Rect2(center_x - 3.0, rect.position.y, 6.0, rect.size.y), Color("#164b59"))
-	for index in range(8):
-		var segment_y := rect.position.y + 9.0 + float(index) * 16.0
-		var segment_color := Color("#82e6de") if index % 2 == 0 else Color("#70c9e8")
-		draw_circle(Vector2(center_x, segment_y), 12.0, Color(segment_color.r, segment_color.g, segment_color.b, 0.58))
-		draw_line(Vector2(center_x - 10.0, segment_y), Vector2(center_x + 10.0, segment_y), Color(0.91, 1.0, 1.0, 0.58), 1.5)
-
-
-func _draw_bay_nozzle(x: float) -> void:
-	draw_rect(Rect2(x - 5.0, 199.0, 10.0, 15.0), Color("#225a68"))
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(x - 8.0, 214.0),
-		Vector2(x + 8.0, 214.0),
-		Vector2(x + 4.0, 221.0),
-		Vector2(x - 4.0, 221.0),
-	]), Color("#7bd8dc"))
-
-
-func _draw_car_wash_bay() -> void:
-	var left_pillar := _bay_left_pillar_rect()
-	var right_pillar := _bay_right_pillar_rect()
-	var overhead_rail := _bay_overhead_rail_rect()
-	draw_rect(Rect2(overhead_rail.position + Vector2(0.0, 5.0), overhead_rail.size), Color(0.03, 0.22, 0.30, 0.24))
-	draw_rect(overhead_rail, Color("#1c6572"))
-	draw_rect(Rect2(overhead_rail.position + Vector2(7.0, 5.0), overhead_rail.size - Vector2(14.0, 10.0)), Color("#61c8cb"))
-	draw_line(Vector2(overhead_rail.position.x + 12.0, overhead_rail.position.y + 7.0), Vector2(overhead_rail.end.x - 12.0, overhead_rail.position.y + 7.0), Color(0.88, 1.0, 1.0, 0.62), 2.0)
-	_draw_bay_pillar(left_pillar, left_pillar.end.x - 5.0)
-	_draw_bay_pillar(right_pillar, right_pillar.position.x + 5.0)
-	_draw_bay_nozzle(84.0)
-	_draw_bay_nozzle(195.0)
-	_draw_bay_nozzle(306.0)
-	_draw_bay_roller(_bay_left_roller_rect(), Vector2(left_pillar.end.x, 234.0))
-	_draw_bay_roller(_bay_right_roller_rect(), Vector2(right_pillar.position.x, 234.0))
-
-	var drain := _bay_floor_drain_rect()
-	draw_rect(Rect2(drain.position + Vector2(0.0, 3.0), drain.size), Color(0.01, 0.18, 0.22, 0.24))
-	draw_rect(drain, Color(0.08, 0.34, 0.39, 0.72))
-	for index in range(9):
-		var groove_x := drain.position.x + 10.0 + float(index) * 16.0
-		draw_line(Vector2(groove_x, drain.position.y + 2.0), Vector2(groove_x - 4.0, drain.end.y - 2.0), Color(0.75, 0.96, 0.94, 0.58), 2.0)
-	draw_line(Vector2(18.0, 650.0), Vector2(66.0, 738.0), Color(0.92, 1.0, 1.0, 0.26), 3.0)
-	draw_line(Vector2(372.0, 650.0), Vector2(324.0, 738.0), Color(0.92, 1.0, 1.0, 0.26), 3.0)
-
-
 func _draw_status() -> void:
 	var font: Font = _font()
 	var card := _get_status_rect()
@@ -5075,13 +4971,33 @@ func _draw_wet_gloss(center: Vector2, radius: float, wetness: float) -> void:
 	draw_circle(center + Vector2(-radius * 0.28, -radius * 0.32), maxf(1.2, radius * 0.075), Color(1.0, 1.0, 1.0, alpha * 0.9))
 
 
+# --- soap foam (per-bucket cached layouts) -------------------------------------
+# Soap strength is quantized to SOAP_FOAM_STRENGTH_BUCKETS steps and each bucket's
+# bubble layout (unit-radius offsets/radii plus final colors) is built once and
+# reused by every soaped patch on every frame. A foam-bombed late level can show
+# 40 soaped patches at once, so the per-frame path must be draw-only: no trig,
+# no HSV conversion, no per-bubble allocations, and 3 primitives per cluster
+# bubble / 1 per satellite instead of the former 4 (which included a 16-segment
+# draw_arc outline).
+const SOAP_FOAM_STRENGTH_BUCKETS := 10
+const SOAP_FOAM_CLUSTER_MIN_RADIUS := 2.2
+const SOAP_FOAM_SATELLITE_MIN_RADIUS := 1.8
+var _soap_foam_layouts: Array[Dictionary] = []
+
+
+func _soap_foam_bucket(amount: float) -> int:
+	return roundi(clampf(amount, 0.0, 1.0) * float(SOAP_FOAM_STRENGTH_BUCKETS))
+
+
 func _soap_foam_count(strength: float, satellite: bool) -> int:
 	if strength <= 0.0:
 		return 0
 	return 2 + roundi(strength * 5.0) if satellite else 4 + roundi(strength * 7.0)
 
 
-func _soap_foam_bubble_params(radius: float, strength: float, index: int, count: int, satellite: bool) -> Vector4:
+func _soap_foam_unit_params(strength: float, index: int, count: int, satellite: bool) -> Vector4:
+	# xy: offset, z: bubble radius — both at unit patch radius (scale by the
+	# patch radius, then clamp with the SOAP_FOAM_*_MIN_RADIUS floors). w: hue.
 	if satellite:
 		var satellite_size := 0.08
 		match index % 3:
@@ -5090,13 +5006,9 @@ func _soap_foam_bubble_params(radius: float, strength: float, index: int, count:
 			2:
 				satellite_size = 0.10
 		var satellite_angle := float(index) * TAU / float(count) + 0.47
-		var orbit := radius * (0.48 + 0.18 * sin(float(index) * 1.73 + 0.8))
-		var satellite_radius := maxf(
-			1.8,
-			radius * satellite_size * (0.78 + 0.22 * strength)
-		)
+		var orbit := 0.48 + 0.18 * sin(float(index) * 1.73 + 0.8)
 		var satellite_offset := Vector2.from_angle(satellite_angle) * orbit
-		return Vector4(satellite_offset.x, satellite_offset.y, satellite_radius, fmod(0.58 + float(index) * 0.163, 1.0))
+		return Vector4(satellite_offset.x, satellite_offset.y, satellite_size * (0.78 + 0.22 * strength), fmod(0.58 + float(index) * 0.163, 1.0))
 	var cluster_size := 0.30
 	match index % 4:
 		1:
@@ -5107,9 +5019,8 @@ func _soap_foam_bubble_params(radius: float, strength: float, index: int, count:
 			cluster_size = 0.18
 	var cluster_angle := float(index) * TAU / float(count) + sin(float(index) * 1.37) * 0.14
 	var ring := 0.10 + 0.46 * (0.5 + 0.5 * sin(float(index) * 2.17 + 0.4))
-	var cluster_offset := Vector2.from_angle(cluster_angle) * radius * ring * (0.74 + 0.26 * strength)
-	var cluster_radius := maxf(2.2, radius * cluster_size * (0.72 + 0.28 * strength))
-	return Vector4(cluster_offset.x, cluster_offset.y, cluster_radius, fmod(0.50 + float(index) * 0.117, 1.0))
+	var cluster_offset := Vector2.from_angle(cluster_angle) * ring * (0.74 + 0.26 * strength)
+	return Vector4(cluster_offset.x, cluster_offset.y, cluster_size * (0.72 + 0.28 * strength), fmod(0.50 + float(index) * 0.117, 1.0))
 
 
 func _soap_foam_alpha(strength: float, index: int, satellite: bool) -> float:
@@ -5122,55 +5033,117 @@ func _soap_foam_saturation(index: int, satellite: bool) -> float:
 	return 0.09 + 0.02 * float(index % 2) if satellite else 0.07 + 0.025 * float(index % 3)
 
 
+func _soap_foam_layout(bucket: int) -> Dictionary:
+	if _soap_foam_layouts.is_empty():
+		_soap_foam_layouts.resize(SOAP_FOAM_STRENGTH_BUCKETS + 1)
+	if not _soap_foam_layouts[bucket].is_empty():
+		return _soap_foam_layouts[bucket]
+	var strength := float(bucket) / float(SOAP_FOAM_STRENGTH_BUCKETS)
+	var cluster_offsets := PackedVector2Array()
+	var cluster_radii := PackedFloat32Array()
+	var cluster_fills := PackedColorArray()
+	var cluster_rims := PackedColorArray()
+	var cluster_highlights := PackedColorArray()
+	var cluster_count := _soap_foam_count(strength, false)
+	for index in range(cluster_count):
+		var params := _soap_foam_unit_params(strength, index, cluster_count, false)
+		var alpha := _soap_foam_alpha(strength, index, false)
+		cluster_offsets.append(Vector2(params.x, params.y))
+		cluster_radii.append(params.z)
+		cluster_fills.append(Color.from_hsv(params.w, _soap_foam_saturation(index, false), 1.0, alpha))
+		cluster_rims.append(Color.from_hsv(fmod(params.w + 0.05, 1.0), 0.14, 1.0, minf(0.78, alpha + 0.20)))
+		cluster_highlights.append(Color(1.0, 1.0, 1.0, minf(0.94, alpha + 0.30)))
+	var satellite_offsets := PackedVector2Array()
+	var satellite_radii := PackedFloat32Array()
+	var satellite_fills := PackedColorArray()
+	var satellite_count := _soap_foam_count(strength, true)
+	for index in range(satellite_count):
+		var params := _soap_foam_unit_params(strength, index, satellite_count, true)
+		satellite_offsets.append(Vector2(params.x, params.y))
+		satellite_radii.append(params.z)
+		satellite_fills.append(Color.from_hsv(params.w, _soap_foam_saturation(index, true), 1.0, _soap_foam_alpha(strength, index, true)))
+	_soap_foam_layouts[bucket] = {
+		"cluster_offsets": cluster_offsets,
+		"cluster_radii": cluster_radii,
+		"cluster_fills": cluster_fills,
+		"cluster_rims": cluster_rims,
+		"cluster_highlights": cluster_highlights,
+		"satellite_offsets": satellite_offsets,
+		"satellite_radii": satellite_radii,
+		"satellite_fills": satellite_fills,
+	}
+	return _soap_foam_layouts[bucket]
+
+
 func _soap_foam_bubbles(center: Vector2, radius: float, amount: float) -> Array[Dictionary]:
-	# Test-only layout projection. Runtime drawing below uses the same scalar
-	# helpers directly so mobile frames do not allocate per-bubble Dictionaries.
-	var strength := clampf(amount, 0.0, 1.0)
+	# Test-only projection of the same quantized per-bucket layout the runtime
+	# draw path renders, so visual contracts observe the real output. Satellite
+	# bubbles are intentionally fill-only (no highlight/rim keys): that is the
+	# mobile draw budget, not an omission.
 	var bubbles: Array[Dictionary] = []
-	for satellite in [false, true]:
-		var count := _soap_foam_count(strength, satellite)
-		for index in range(count):
-			var params := _soap_foam_bubble_params(radius, strength, index, count, satellite)
-			var bubble_radius := params.z
-			var alpha := _soap_foam_alpha(strength, index, satellite)
-			bubbles.append({
-				"role": "satellite" if satellite else "cluster",
-				"position": center + Vector2(params.x, params.y),
-				"radius": bubble_radius,
-				"fill": Color.from_hsv(params.w, _soap_foam_saturation(index, satellite), 1.0, alpha),
-				"highlight_offset": Vector2(-bubble_radius * (0.30 if satellite else 0.32), -bubble_radius * (0.32 if satellite else 0.34)),
-				"highlight_radius": maxf(0.9 if satellite else 1.1, bubble_radius * (0.22 if satellite else 0.21)),
-			})
+	var bucket := _soap_foam_bucket(amount)
+	if bucket <= 0:
+		return bubbles
+	var layout := _soap_foam_layout(bucket)
+	var cluster_offsets: PackedVector2Array = layout["cluster_offsets"]
+	var cluster_radii: PackedFloat32Array = layout["cluster_radii"]
+	var cluster_fills: PackedColorArray = layout["cluster_fills"]
+	var cluster_rims: PackedColorArray = layout["cluster_rims"]
+	for index in range(cluster_offsets.size()):
+		var bubble_radius := maxf(SOAP_FOAM_CLUSTER_MIN_RADIUS, cluster_radii[index] * radius)
+		bubbles.append({
+			"role": "cluster",
+			"position": center + cluster_offsets[index] * radius,
+			"radius": bubble_radius,
+			"fill": cluster_fills[index],
+			"rim": cluster_rims[index],
+			"highlight_offset": Vector2(-bubble_radius * 0.32, -bubble_radius * 0.34),
+			"highlight_radius": maxf(1.1, bubble_radius * 0.21),
+		})
+	var satellite_offsets: PackedVector2Array = layout["satellite_offsets"]
+	var satellite_radii: PackedFloat32Array = layout["satellite_radii"]
+	var satellite_fills: PackedColorArray = layout["satellite_fills"]
+	for index in range(satellite_offsets.size()):
+		bubbles.append({
+			"role": "satellite",
+			"position": center + satellite_offsets[index] * radius,
+			"radius": maxf(SOAP_FOAM_SATELLITE_MIN_RADIUS, satellite_radii[index] * radius),
+			"fill": satellite_fills[index],
+		})
 	return bubbles
 
 
-func _draw_soap_foam_bubble(center: Vector2, params: Vector4, alpha: float, saturation: float, satellite: bool) -> void:
-	var position := center + Vector2(params.x, params.y)
-	var bubble_radius := params.z
-	var fill := Color.from_hsv(params.w, saturation, 1.0, alpha)
-	var outline_hue := fmod(params.w + (0.06 if satellite else 0.05), 1.0)
-	var outline_saturation := 0.15 if satellite else 0.14
-	var outline_alpha := minf(0.74 if satellite else 0.78, alpha + (0.18 if satellite else 0.20))
-	var outline := Color.from_hsv(outline_hue, outline_saturation, 1.0, outline_alpha)
-	var shadow := Color(0.42, 0.73, 0.86, fill.a * 0.18)
-	var highlight_offset := Vector2(-bubble_radius * (0.30 if satellite else 0.32), -bubble_radius * (0.32 if satellite else 0.34))
-	var highlight_radius := maxf(0.9 if satellite else 1.1, bubble_radius * (0.22 if satellite else 0.21))
-	draw_circle(position + Vector2(0.0, bubble_radius * 0.12), bubble_radius * 1.03, shadow)
-	draw_circle(position, bubble_radius, fill)
-	draw_arc(position, bubble_radius, 0.0, TAU, 16, outline, maxf(1.0, bubble_radius * 0.11))
-	draw_circle(position + highlight_offset, highlight_radius, Color(1.0, 1.0, 1.0, minf(0.94, fill.a + 0.30)))
-
-
 func _draw_soap_foam(center: Vector2, radius: float, amount: float) -> void:
-	var strength := clampf(amount, 0.0, 1.0)
-	var cluster_count := _soap_foam_count(strength, false)
-	for index in range(cluster_count):
-		var cluster_params := _soap_foam_bubble_params(radius, strength, index, cluster_count, false)
-		_draw_soap_foam_bubble(center, cluster_params, _soap_foam_alpha(strength, index, false), _soap_foam_saturation(index, false), false)
-	var satellite_count := _soap_foam_count(strength, true)
-	for index in range(satellite_count):
-		var satellite_params := _soap_foam_bubble_params(radius, strength, index, satellite_count, true)
-		_draw_soap_foam_bubble(center, satellite_params, _soap_foam_alpha(strength, index, true), _soap_foam_saturation(index, true), true)
+	var bucket := _soap_foam_bucket(amount)
+	if bucket <= 0:
+		return
+	var layout := _soap_foam_layout(bucket)
+	var cluster_offsets: PackedVector2Array = layout["cluster_offsets"]
+	var cluster_radii: PackedFloat32Array = layout["cluster_radii"]
+	var cluster_fills: PackedColorArray = layout["cluster_fills"]
+	var cluster_rims: PackedColorArray = layout["cluster_rims"]
+	var cluster_highlights: PackedColorArray = layout["cluster_highlights"]
+	for index in range(cluster_offsets.size()):
+		var position := center + cluster_offsets[index] * radius
+		var bubble_radius := maxf(SOAP_FOAM_CLUSTER_MIN_RADIUS, cluster_radii[index] * radius)
+		# Rim circle behind the fill replaces the former 16-segment arc outline
+		# at a third of its cost while keeping the pastel border readable.
+		draw_circle(position, bubble_radius * 1.11, cluster_rims[index])
+		draw_circle(position, bubble_radius, cluster_fills[index])
+		draw_circle(
+			position + Vector2(-bubble_radius * 0.32, -bubble_radius * 0.34),
+			maxf(1.1, bubble_radius * 0.21),
+			cluster_highlights[index]
+		)
+	var satellite_offsets: PackedVector2Array = layout["satellite_offsets"]
+	var satellite_radii: PackedFloat32Array = layout["satellite_radii"]
+	var satellite_fills: PackedColorArray = layout["satellite_fills"]
+	for index in range(satellite_offsets.size()):
+		draw_circle(
+			center + satellite_offsets[index] * radius,
+			maxf(SOAP_FOAM_SATELLITE_MIN_RADIUS, satellite_radii[index] * radius),
+			satellite_fills[index]
+		)
 
 
 func _draw_particles() -> void:

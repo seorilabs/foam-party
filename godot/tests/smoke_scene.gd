@@ -4516,7 +4516,6 @@ func _test_soap_foam_visual_contract(root_node: Node) -> bool:
 	for bubble in full_layout:
 		var bubble_radius: float = bubble["radius"]
 		var fill: Color = bubble["fill"]
-		var highlight_offset: Vector2 = bubble["highlight_offset"]
 		roles[String(bubble["role"])] = true
 		radius_buckets[roundi(bubble_radius * 10.0)] = true
 		hue_buckets[roundi(fill.h * 100.0)] = true
@@ -4524,8 +4523,13 @@ func _test_soap_foam_visual_contract(root_node: Node) -> bool:
 		min_radius = minf(min_radius, bubble_radius)
 		max_radius = maxf(max_radius, bubble_radius)
 		full_area += PI * bubble_radius * bubble_radius
-		if highlight_offset.x >= 0.0 or highlight_offset.y >= 0.0 or float(bubble["highlight_radius"]) <= 0.0:
-			_fail("every foam bubble needs an upper-left highlight")
+		if String(bubble["role"]) == "cluster":
+			var highlight_offset: Vector2 = bubble["highlight_offset"]
+			if highlight_offset.x >= 0.0 or highlight_offset.y >= 0.0 or float(bubble["highlight_radius"]) <= 0.0:
+				_fail("cluster foam bubbles need an upper-left highlight")
+				return false
+		elif bubble.has("highlight_offset") or bubble.has("rim"):
+			_fail("satellite bubbles must stay single-draw for the mobile frame budget")
 			return false
 	if not roles.has("cluster") or not roles.has("satellite") or radius_buckets.size() < 4 or max_radius < min_radius * 2.0:
 		_fail("foam needs large clusters plus visibly smaller satellite bubbles")
@@ -4535,6 +4539,15 @@ func _test_soap_foam_visual_contract(root_node: Node) -> bool:
 		return false
 	if full_area <= partial_area:
 		_fail("soap amount must increase foam coverage as well as count")
+		return false
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var foam_draw_start := main_source.find("func _draw_soap_foam(")
+	var foam_draw_end := main_source.find("\nfunc ", foam_draw_start + 1)
+	if foam_draw_end < 0:
+		foam_draw_end = main_source.length()
+	var foam_draw_body := main_source.substr(foam_draw_start, foam_draw_end - foam_draw_start)
+	if foam_draw_start < 0 or foam_draw_body.find("draw_arc") >= 0 or foam_draw_body.find("Color.from_hsv") >= 0:
+		_fail("per-frame foam drawing must render cached layouts without arcs or HSV math")
 		return false
 	return true
 
@@ -4560,22 +4573,29 @@ func _test_car_wash_bay_visual_contract(root_node: Node) -> bool:
 		_fail("rail and drain must frame rather than cover the car")
 		return false
 
-	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var source := FileAccess.get_file_as_string("res://scripts/background_layer.gd")
 	var bay_start := source.find("func _draw_car_wash_bay(")
 	var bay_end := source.find("\nfunc ", bay_start + 1)
+	if bay_end < 0:
+		bay_end = source.length()
 	var bay_body := source.substr(bay_start, bay_end - bay_start)
 	if bay_start < 0 or bay_body.find("draw_rect") < 0 or bay_body.find("draw_line") < 0 \
 			or bay_body.find("_draw_bay_roller") < 0 or bay_body.find("_draw_tex") >= 0:
 		_fail("car wash bay must use procedural draw calls for structure, rollers, and drain")
 		return false
-	var draw_start := source.find("func _draw()")
-	var draw_end := source.find("\nfunc ", draw_start + 1)
-	var draw_body := source.substr(draw_start, draw_end - draw_start)
-	var background_index := draw_body.find("_draw_background()")
-	if background_index < 0 \
-			or background_index >= draw_body.find("_draw_status()") \
-			or background_index >= draw_body.find("_draw_car()"):
-		_fail("car wash bay background must render before HUD and car")
+	# The static backdrop must come from the cached behind-parent layer so it
+	# renders below gameplay/HUD without being repainted by every game frame.
+	var background_layer := root_node.call("get_background_layer_for_test") as CanvasItem
+	if background_layer == null or not background_layer.show_behind_parent \
+			or background_layer.get_parent() != root_node:
+		_fail("static wash bay must render from a behind-parent cached layer")
+		return false
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var draw_start := main_source.find("func _draw()")
+	var draw_end := main_source.find("\nfunc ", draw_start + 1)
+	var draw_body := main_source.substr(draw_start, draw_end - draw_start)
+	if draw_body.find("_draw_background()") >= 0 or draw_body.find("_draw_car_wash_bay()") >= 0:
+		_fail("per-frame _draw must not repaint the static background")
 		return false
 	return true
 
