@@ -1023,14 +1023,15 @@ func _draw() -> void:
 	_draw_background()
 	if game_state == STATE_PLAYING:
 		_draw_status()
-	var transition_offset := _car_transition_offset()
-	_set_gameplay_draw_transform(transition_offset)
-	_draw_car()
-	_set_design_draw_transform(transition_offset)
-	_draw_dirt()
-	_draw_particles()
-	_draw_gleam()
-	_set_design_draw_transform()
+	if game_state != STATE_TITLE:
+		var transition_offset := _car_transition_offset()
+		_set_gameplay_draw_transform(transition_offset)
+		_draw_car()
+		_set_design_draw_transform(transition_offset)
+		_draw_dirt()
+		_draw_particles()
+		_draw_gleam()
+		_set_design_draw_transform()
 	if game_state == STATE_TITLE:
 		_draw_title_screen()
 		if show_upgrade_panel:
@@ -4137,20 +4138,68 @@ func _rotated_rect_points(center: Vector2, half: Vector2, angle: float) -> Packe
 	])
 
 
+func get_title_skin_swatch_colors_for_test() -> Array[Color]:
+	return [
+		_active_skin_color(TOOL_WATER),
+		_active_skin_color(TOOL_AIR),
+		_active_skin_color(TOOL_SOAP),
+		_active_skin_color(TOOL_SPONGE),
+	]
+
+
+func get_title_hero_rect_for_test() -> Rect2:
+	return Rect2(34.0, 138.0, 322.0, 234.0)
+
+
+func _draw_title_hero_car() -> void:
+	var hero_rect := get_title_hero_rect_for_test()
+	draw_style_box(_style("title_hero_shadow", Color(0.02, 0.18, 0.27, 0.24), 26.0),
+		Rect2(hero_rect.position + Vector2(0.0, 5.0), hero_rect.size))
+	draw_style_box(_style("title_hero_bay", Color(0.86, 0.98, 1.0, 0.36), 26.0,
+		Color(1.0, 1.0, 1.0, 0.42), 2), hero_rect)
+	# Soft wash-bay light bars echo the glossy reference without importing an
+	# external image and remain behind the shared procedural car path.
+	for light_index in range(4):
+		var light_x := hero_rect.position.x + 44.0 + float(light_index) * 78.0
+		draw_line(Vector2(light_x, hero_rect.position.y + 16.0),
+			Vector2(light_x - 28.0, hero_rect.end.y - 40.0), Color(1.0, 1.0, 1.0, 0.13), 18.0)
+	var hero_scale := 0.48
+	var hero_origin := Vector2(195.0 - 195.0 * hero_scale, -6.0)
+	draw_set_transform(canvas_origin + hero_origin * canvas_scale, 0.0,
+		Vector2(canvas_scale * hero_scale, canvas_scale * hero_scale))
+	_draw_car()
+	_set_design_draw_transform()
+
+
+func _draw_title_skin_swatches() -> void:
+	var swatch_rect := Rect2(97.0, 330.0, 196.0, 38.0)
+	draw_style_box(_style("title_skin_swatches", Color(0.03, 0.16, 0.24, 0.78), 19.0,
+		Color(1.0, 1.0, 1.0, 0.28), 1), swatch_rect)
+	var tool_keys := [TOOL_WATER, TOOL_AIR, TOOL_SOAP, TOOL_SPONGE]
+	var icon_names := ["tool_water", "tool_air", "tool_soap", "tool_sponge"]
+	for tool_index in range(tool_keys.size()):
+		var center := Vector2(swatch_rect.position.x + 28.0 + float(tool_index) * 47.0,
+			swatch_rect.get_center().y)
+		var skin_color := _active_skin_color(tool_keys[tool_index])
+		draw_circle(center, 13.0, Color(1.0, 1.0, 1.0, 0.92))
+		draw_circle(center, 10.5, skin_color)
+		draw_circle(center, 10.5, Color("#123246"), false, 1.5)
+		_draw_tex_centered(icon_names[tool_index], center, 14.0, Color(1.0, 1.0, 1.0, 0.88))
+
+
 func _draw_title_screen() -> void:
 	var font: Font = _font()
-	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.21, 0.69, 0.74, 0.82))
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.21, 0.69, 0.74, 1.0))
 	for bubble_index in range(8):
 		var bubble_x := 40.0 + float(bubble_index) * 45.0
-		var bubble_y := 120.0 + sin(float(bubble_index) * 1.9) * 50.0
+		var bubble_y := 84.0 + sin(float(bubble_index) * 1.9) * 32.0
 		draw_circle(Vector2(bubble_x, bubble_y), 14.0 + float(bubble_index % 3) * 8.0, Color(1.0, 1.0, 1.0, 0.18))
 
-	draw_circle(Vector2(130.0, 268.0), 44.0, Color(1.0, 1.0, 1.0, 0.35))
-	draw_circle(Vector2(258.0, 252.0), 30.0, Color(1.0, 1.0, 1.0, 0.3))
-	draw_circle(Vector2(220.0, 296.0), 20.0, Color(1.0, 1.0, 1.0, 0.28))
-	draw_string(font, Vector2(2.0, 332.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color("#0d3b55"))
-	draw_string(font, Vector2(0.0, 328.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 52, Color.WHITE)
-	draw_string(font, Vector2(0.0, 368.0), tr("TITLE_SUBTITLE"), HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 18, Color("#0d3b55"))
+	draw_string(font, Vector2(2.0, 98.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 44, Color("#0d3b55"))
+	draw_string(font, Vector2(0.0, 94.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 44, Color.WHITE)
+	draw_string(font, Vector2(0.0, 128.0), tr("TITLE_SUBTITLE"), HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 16, Color("#0d3b55"))
+	_draw_title_hero_car()
+	_draw_title_skin_swatches()
 
 	# 타이틀 데일리 미션 카드 — 시작 전에 오늘 할 일을 보여준다
 	if not daily_mission_type.is_empty():
