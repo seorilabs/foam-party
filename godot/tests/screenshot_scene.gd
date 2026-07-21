@@ -99,6 +99,12 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_upgrade_locked_cues.png")):
 		quit(1)
 		return
+	node.set("_upgrade_panel_tab", 1)
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_upgrade_reach.png")):
+		quit(1)
+		return
+	node.set("_upgrade_panel_tab", 0)
 	node.set("show_upgrade_panel", false)
 	node.set("show_skin_panel", true)
 	await _settle(3)
