@@ -5,11 +5,23 @@ extends RefCounted
 # state strings are passed in from the godot layer (its GRADE_SLOT_* consts).
 
 const GameConfig = preload("res://core/domain/game_config.gd")
+const DirtSpawnPlan = preload("res://core/use_cases/dirt_spawn_plan.gd")
 
 
 static func star_time_threshold(tier: int, level_index: int) -> float:
 	var base := GameConfig.STAR3_TIME if tier == 3 else GameConfig.STAR2_TIME
-	return base * maxf(0.6, 1.0 - float(max(0, level_index - 1)) * 0.015)
+	return base * star_time_scale(level_index)
+
+
+static func star_time_scale(level_index: int) -> float:
+	var baseline_work := float(DirtSpawnPlan.spawn_count(1)) * DirtSpawnPlan.health_scale_for_level(1)
+	var level_work := float(DirtSpawnPlan.spawn_count(level_index)) * DirtSpawnPlan.health_scale_for_level(level_index)
+	var workload_ratio := level_work / maxf(baseline_work, 0.001)
+	return clampf(
+		pow(workload_ratio, GameConfig.STAR_TIME_WORKLOAD_EXPONENT),
+		1.0,
+		GameConfig.STAR_TIME_SCALE_MAX
+	)
 
 
 static func star3_combo_requirement(level_index: int) -> int:

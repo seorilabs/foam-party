@@ -71,6 +71,33 @@ func _run_core_tests() -> void:
 	if int(Scoring.star_time_threshold(3, 1)) != 75:
 		_fail("3-star threshold at level 1 should be 75s")
 		return
+	if int(Scoring.star_time_threshold(2, 1)) != 140:
+		_fail("2-star threshold at level 1 should be 140s")
+		return
+	var level5_star3 := float(Scoring.star_time_threshold(3, 5))
+	var level10_star3 := float(Scoring.star_time_threshold(3, 10))
+	if level5_star3 <= 75.0 * 1.25 or level10_star3 <= level5_star3 * 1.20:
+		_fail("star timers must grow meaningfully with later-level wash work")
+		return
+	var previous_star3_threshold := 0.0
+	for level in range(1, 31):
+		var threshold := float(Scoring.star_time_threshold(3, level))
+		if threshold + 0.001 < previous_star3_threshold:
+			_fail("star time thresholds must be monotonic by level")
+			return
+		if threshold > float(GameConfig.STAR3_TIME) * float(GameConfig.STAR_TIME_SCALE_MAX) + 0.001:
+			_fail("star time threshold exceeded its named cap")
+			return
+		previous_star3_threshold = threshold
+	var level10_combo := int(Scoring.star3_combo_requirement(10))
+	if int(Scoring.calc_stars(level10_star3, level10_combo, 10)) != 3 \
+			or int(Scoring.calc_stars(level10_star3 + 0.01, level10_combo, 10)) != 2:
+		_fail("late-level star calculation must switch at the workload-scaled threshold")
+		return
+	if String(Scoring.grade_slot_state(2, level10_star3, level10_combo, 10, "earned", "target", "locked")) != "earned" \
+			or String(Scoring.grade_slot_state(2, level10_star3 + 0.01, level10_combo, 10, "earned", "target", "locked")) != "locked":
+		_fail("live grade tracker must share the workload-scaled star threshold")
+		return
 	if int(Scoring.calc_stars(60.0, 5, 1)) != 3:
 		_fail("fast clear with combo should be 3 stars")
 		return

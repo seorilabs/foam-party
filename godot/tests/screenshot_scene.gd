@@ -245,6 +245,14 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_scaled_combo_gate_level4.png")):
 		quit(1)
 		return
+	node.call("reset_game", 10, "scaled_star_time_screenshot")
+	var level10_star3 := float(node.call("get_star_time_threshold_for_test", 3))
+	node.set("level_time", level10_star3 - 8.0)
+	node.set("best_combo", int(node.call("get_star3_combo_requirement_for_test", 10)))
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_scaled_star_time_level10.png")):
+		quit(1)
+		return
 	node.call("reset_game", 1, "balance_screenshot_cleanup")
 	await _settle(3)
 	if not await _capture(out_dir.path_join("shot_wheel_dirt.png")):
