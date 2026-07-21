@@ -171,6 +171,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_non_color_accessibility_cues(root_node):
 		return
+	if not await _test_upgrade_panel_residency(root_node):
+		return
 	if not _test_scaled_star3_combo_gate_contract(root_node):
 		return
 	if not await _test_scaled_grade_tracker_prompt_contract(root_node):
@@ -1631,6 +1633,36 @@ func _test_non_color_accessibility_cues(root_node: Node) -> bool:
 			or main_source.count("_draw_unaffordable_lock(buy_rect, affordable") != 2 \
 			or not main_source.contains("_draw_patience_tier_pattern(bar, fill_rect"):
 		_fail("non-color accessibility cues must stay inside existing surface rects")
+		return false
+	return true
+
+
+func _test_upgrade_panel_residency(root_node: Node) -> bool:
+	# Issue 116 AC-4: opening and rendering the data-tuned upgrade panel must not
+	# create a new UI node or alter any persistent HUD residency rectangle.
+	var baseline_node_count := root_node.find_children("*", "Node", true, false).size()
+	var baseline_control_count := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	root_node.set("show_upgrade_panel", true)
+	root_node.queue_redraw()
+	await process_frame
+	await process_frame
+	var residency_changed: bool = \
+		root_node.find_children("*", "Node", true, false).size() != baseline_node_count \
+		or root_node.find_children("*", "Control", true, false).size() != baseline_control_count \
+		or root_node.call("_get_status_rect") != baseline_hud_rects["status"] \
+		or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] \
+		or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] \
+		or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]
+	root_node.set("show_upgrade_panel", false)
+	root_node.queue_redraw()
+	if residency_changed:
+		_fail("upgrade cost tuning must not create a new UI node or HUD residency")
 		return false
 	return true
 

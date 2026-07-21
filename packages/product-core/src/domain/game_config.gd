@@ -126,7 +126,14 @@ const FREE_AD_BOMB_PER_LEVEL := 3
 const GOLD_SPOT_SPAWN_PERCENT := 25
 const GOLD_SPOT_BONUS_COINS := 8
 const GOLD_SPOT_REWARD_CAP_PER_LEVEL := 1
-const UPGRADE_COSTS := [[90, 190, 320], [90, 190, 320], [90, 190, 320]]
+# Preserve the 1,800-coin full-upgrade sink while pricing each tool by its
+# gameplay reach: broad water is premium, setup soap is the baseline, and the
+# narrower finishing sponge is the accessible track.
+const UPGRADE_COSTS := [
+	[110, 230, 380],
+	[90, 190, 320],
+	[70, 150, 260],
+]
 const UPGRADE_MULTS := [1.0, 1.3, 1.6, 2.0]
 const UPGRADE_KEYS := ["water", "soap", "sponge"]
 const UPGRADE_MAX_LEVEL := 3
