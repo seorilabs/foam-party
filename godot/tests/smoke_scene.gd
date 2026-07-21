@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -168,6 +168,8 @@ func _run_smoke() -> void:
 	if not _test_wheel_dirt_contract(root_node):
 		return
 	if not _test_customer_patience_contract(root_node):
+		return
+	if not _test_non_color_accessibility_cues(root_node):
 		return
 	if not _test_scaled_star3_combo_gate_contract(root_node):
 		return
@@ -1599,6 +1601,36 @@ func _test_customer_patience_contract(root_node: Node) -> bool:
 		return false
 	if root_node.call("_get_status_rect") != baseline_hud_rects["status"] or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
 		_fail("progress-aware patience must keep the existing HUD residency unchanged")
+		return false
+	return true
+
+
+func _test_non_color_accessibility_cues(root_node: Node) -> bool:
+	# AC-1 and AC-2: every unavailable purchase surface shares one lock glyph,
+	# while all four patience zones resolve to distinct non-color patterns.
+	var expected_patterns := ["dots", "ticks", "crosses", "alert"]
+	var actual_patterns: Array[String] = []
+	for patience in [0.9, 0.5, 0.2, 0.0]:
+		actual_patterns.append(String(root_node.call("get_customer_patience_pattern_for_test", patience)))
+	if actual_patterns != expected_patterns:
+		_fail("patience zones must expose distinct non-color patterns: %s" % [actual_patterns])
+		return false
+
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if main_source.count("_draw_unaffordable_lock(") < 4:
+		_fail("foam bomb, upgrade, and skin purchase surfaces must all draw the shared lock glyph")
+		return false
+	if not main_source.contains("_draw_patience_tier_pattern(bar, fill_rect, patience_zone)") \
+			or not main_source.contains("_draw_patience_tier_pattern(bar, Rect2(bar.position, Vector2.ZERO), patience_zone)"):
+		_fail("patience gauge must draw a pattern for filled and empty critical states")
+		return false
+
+	# AC-3: every cue receives the rect of its existing purchase surface or gauge;
+	# no separate accessibility control is needed in the persistent HUD.
+	if not main_source.contains("_draw_unaffordable_lock(rect, ad_ready or can_afford") \
+			or main_source.count("_draw_unaffordable_lock(buy_rect, affordable") != 2 \
+			or not main_source.contains("_draw_patience_tier_pattern(bar, fill_rect"):
+		_fail("non-color accessibility cues must stay inside existing surface rects")
 		return false
 	return true
 
