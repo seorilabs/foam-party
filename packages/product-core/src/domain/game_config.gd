@@ -134,6 +134,11 @@ const COIN_REWARD_BASE := 16
 const COIN_REWARD_PER_STAR := 8
 const COIN_REWARD_PER_COMBO := 2
 const COIN_REWARD_COMBO_CAP := 15
+# Customer satisfaction stays a small independent reward axis beside stars and
+# combo. The rate is linear at full payout, while the hard cap protects the
+# economy if the patience model or caller supplies an out-of-range value.
+const PATIENCE_TIP_COINS_PER_FULL_PATIENCE := 12.0
+const PATIENCE_TIP_MAX_COINS := 12
 const BOMB_COST := 80
 # Ten seconds is long enough for one focused rinse pass without becoming a
 # permanent upgrade. The 1.5x radius and power share one readable tuning ratio,
