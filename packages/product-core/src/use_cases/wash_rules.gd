@@ -50,7 +50,14 @@ static func runoff_cleanup_rate(patch: DirtPatch) -> float:
 
 # `lift_y` is the magnitude of the upward lift impulse for light dirt, drawn by
 # the caller (rng.randf_range(10.0, 42.0)) so this stays deterministic/pure.
-static func apply_air(patch: DirtPatch, delta: float, source_point: Vector2, proximity: float, lift_y: float) -> void:
+static func apply_air(
+	patch: DirtPatch,
+	delta: float,
+	source_point: Vector2,
+	proximity: float,
+	lift_y: float,
+	mult: float = 1.0
+) -> void:
 	var push := push_direction(patch, source_point)
 	var profile := _tuning_profile(GameConfig.AIR_WASH_PROFILES, patch.kind)
 	if Coaching.is_light_dirt(patch.kind):
@@ -60,7 +67,7 @@ static func apply_air(patch: DirtPatch, delta: float, source_point: Vector2, pro
 		patch.velocity = patch.velocity.lerp(target_velocity, clamp(delta * float(GameConfig.AIR_MOTION_PROFILE["velocity_response"]), 0.0, 1.0))
 		patch.drift += patch.velocity * delta
 		patch.looseness = min(1.0, patch.looseness + delta * proximity * float(profile["looseness"]))
-		patch.health -= float(profile["damage"]) * proximity * delta * GameConfig.CLEAN_DAMAGE_RATE
+		patch.health -= float(profile["damage"]) * proximity * delta * GameConfig.CLEAN_DAMAGE_RATE * mult
 	else:
 		patch.drift += push * delta * proximity * float(GameConfig.AIR_MOTION_PROFILE["heavy_drift"])
 		patch.drift = patch.drift.limit_length(float(GameConfig.AIR_MOTION_PROFILE["heavy_drift_limit"]))

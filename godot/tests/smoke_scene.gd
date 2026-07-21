@@ -280,7 +280,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "get_level_mistakes_for_test", "get_perfect_wash_bonus_for_test", "get_water_boost_remaining_for_test", "get_water_boost_cost_for_test", "get_tool_radius_for_test", "get_reach_upgrade_level_for_test", "set_reach_upgrade_level_for_test", "get_tool_power_multiplier_for_test", "activate_water_boost", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_initial_dirt_snapshot_for_test", "get_completion_reveal_progress_for_test", "set_completion_reveal_age_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_achievement_definitions_for_test", "get_achievement_counters_for_test", "get_achievement_claimed_for_test", "set_achievement_state_for_test", "record_achievement_progress_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "get_level_mistakes_for_test", "get_perfect_wash_bonus_for_test", "get_water_boost_remaining_for_test", "get_water_boost_cost_for_test", "get_tool_radius_for_test", "get_reach_upgrade_level_for_test", "set_reach_upgrade_level_for_test", "get_tool_power_multiplier_for_test", "get_power_upgrade_level_for_test", "set_power_upgrade_level_for_test", "activate_water_boost", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_initial_dirt_snapshot_for_test", "get_completion_reveal_progress_for_test", "set_completion_reveal_age_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_achievement_definitions_for_test", "get_achievement_counters_for_test", "get_achievement_claimed_for_test", "set_achievement_state_for_test", "record_achievement_progress_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -378,6 +378,8 @@ func _run_smoke() -> void:
 	if not _test_non_color_accessibility_cues(root_node):
 		return
 	if not await _test_upgrade_panel_residency(root_node):
+		return
+	if not await _test_air_power_upgrade_contract(root_node):
 		return
 	if not await _test_reach_upgrade_contract(root_node):
 		return
@@ -2729,10 +2731,165 @@ func _test_upgrade_panel_residency(root_node: Node) -> bool:
 	return true
 
 
+func _test_air_power_upgrade_contract(root_node: Node) -> bool:
+	var original_state := {
+		"active_level": root_node.call("get_active_level_for_test"),
+		"level_index": root_node.get("level_index"),
+		"game_state": root_node.get("game_state"),
+		"coins": root_node.get("coins"),
+		"air": root_node.get("upgrade_air"),
+		"water": root_node.get("upgrade_water"),
+		"soap": root_node.get("upgrade_soap"),
+		"sponge": root_node.get("upgrade_sponge"),
+		"reach_air": root_node.get("reach_upgrade_air"),
+		"reach_water": root_node.get("reach_upgrade_water"),
+		"reach_soap": root_node.get("reach_upgrade_soap"),
+		"reach_sponge": root_node.get("reach_upgrade_sponge"),
+		"tab": root_node.get("_upgrade_panel_tab"),
+		"show": root_node.get("show_upgrade_panel"),
+		"main_save_dirty": root_node.get("_main_save_dirty"),
+	}
+
+	# AC-1: the actual power-tab transaction rejects insufficient coins, then
+	# purchases all three named air tiers for exactly 80 + 160 + 280 coins.
+	for tool_key in GameConfig.UPGRADE_KEYS:
+		root_node.call("set_power_upgrade_level_for_test", tool_key, 0)
+	root_node.set("_upgrade_panel_tab", 0)
+	root_node.set("coins", 79)
+	root_node.call("_try_buy_upgrade", 0)
+	if int(root_node.call("get_power_upgrade_level_for_test", "air")) != 0 \
+			or int(root_node.get("coins")) != 79:
+		_fail("79 coins must not buy the first air power tier")
+		return false
+	root_node.set("coins", 520)
+	for _tier in range(3):
+		root_node.call("_try_buy_upgrade", 0)
+	if int(root_node.call("get_power_upgrade_level_for_test", "air")) != 3 \
+			or int(root_node.get("coins")) != 0:
+		_fail("air power must buy through level three for 80, 160, and 280 coins")
+		return false
+
+	# AC-2/3/6: every named level scales damage on a real level-one leaf through
+	# apply_tool_to_patch_for_test. A maxed sponge must not leak into air lookup.
+	root_node.call("set_power_upgrade_level_for_test", "air", 1)
+	root_node.call("set_power_upgrade_level_for_test", "sponge", 3)
+	if absf(float(root_node.call("get_tool_power_multiplier_for_test", "air")) - 1.3) > 0.001 \
+			or absf(float(root_node.call("get_tool_power_multiplier_for_test", "sponge")) - 2.0) > 0.001:
+		_fail("air power lookup must use upgrade_air instead of the sponge level")
+		return false
+	root_node.call("reset_game", 1, "air_power_upgrade_smoke")
+	var leaf_index := int(root_node.call("get_patch_index_by_kind_for_test", "leaf"))
+	if leaf_index < 0:
+		_fail("air power smoke requires the deterministic level-one leaf")
+		return false
+	var leaf_patch: Variant = root_node.get("dirt_patches")[leaf_index]
+	var initial_health := float(leaf_patch.get("health"))
+	var initial_state := String(leaf_patch.get("state"))
+	var initial_looseness := float(leaf_patch.get("looseness"))
+	var base_damage := 0.0
+	for level in range(GameConfig.UPGRADE_MAX_LEVEL + 1):
+		root_node.call("set_power_upgrade_level_for_test", "air", level)
+		leaf_patch.set("health", initial_health)
+		leaf_patch.set("state", initial_state)
+		leaf_patch.set("looseness", initial_looseness)
+		leaf_patch.set("drift", Vector2.ZERO)
+		leaf_patch.set("velocity", Vector2.ZERO)
+		# One simulation step keeps proximity identical before the air motion moves
+		# the leaf, isolating only the permanent power multiplier.
+		var health_after := float(root_node.call("apply_tool_to_patch_for_test", "air", leaf_index, 0.01))
+		var damage := initial_health - health_after
+		if level == 0:
+			base_damage = damage
+		var expected_damage := base_damage * float(GameConfig.UPGRADE_MULTS[level])
+		if damage <= 0.0 or absf(damage - expected_damage) > 0.01:
+			_fail("air power level must scale actual leaf damage by UPGRADE_MULTS")
+			return false
+
+	# AC-4: round-trip air beside all existing power/reach keys, then load a
+	# legacy config without air and confirm the new level safely defaults to zero.
+	root_node.call("set_power_upgrade_level_for_test", "air", 2)
+	root_node.call("set_power_upgrade_level_for_test", "water", 1)
+	root_node.call("set_power_upgrade_level_for_test", "soap", 2)
+	root_node.call("set_power_upgrade_level_for_test", "sponge", 3)
+	var stored_config := ConfigFile.new()
+	root_node.call("_store_upgrade_progress", stored_config)
+	var roundtrip_path := "user://air_power_upgrade_smoke.cfg"
+	if stored_config.save(roundtrip_path) != OK:
+		_fail("air power smoke could not write its isolated ConfigFile")
+		return false
+	var loaded_config := ConfigFile.new()
+	if loaded_config.load(roundtrip_path) != OK:
+		_fail("air power smoke could not reload its isolated ConfigFile")
+		return false
+	for tool_key in GameConfig.UPGRADE_KEYS:
+		root_node.call("set_power_upgrade_level_for_test", tool_key, 0)
+	root_node.call("_load_upgrade_progress", loaded_config)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(roundtrip_path))
+	if int(root_node.call("get_power_upgrade_level_for_test", "air")) != 2 \
+			or int(root_node.call("get_power_upgrade_level_for_test", "water")) != 1 \
+			or int(root_node.call("get_power_upgrade_level_for_test", "soap")) != 2 \
+			or int(root_node.call("get_power_upgrade_level_for_test", "sponge")) != 3:
+		_fail("all four power levels must round-trip through the upgrade save schema")
+		return false
+	var legacy_config := ConfigFile.new()
+	legacy_config.set_value("upgrades", "water", 3)
+	legacy_config.set_value("upgrades", "soap", 1)
+	legacy_config.set_value("upgrades", "sponge", 2)
+	root_node.call("set_power_upgrade_level_for_test", "air", 3)
+	root_node.call("_load_upgrade_progress", legacy_config)
+	if int(root_node.call("get_power_upgrade_level_for_test", "air")) != 0 \
+			or int(root_node.call("get_power_upgrade_level_for_test", "water")) != 3 \
+			or int(root_node.call("get_power_upgrade_level_for_test", "soap")) != 1 \
+			or int(root_node.call("get_power_upgrade_level_for_test", "sponge")) != 2:
+		_fail("legacy power save without air must preserve old levels and default air to zero")
+		return false
+
+	# AC-1/5: the localized air row and its buy button fit the existing 520px
+	# panel alongside the other three power rows without overlap.
+	root_node.set("_upgrade_panel_tab", 0)
+	root_node.set("show_upgrade_panel", true)
+	root_node.queue_redraw()
+	await process_frame
+	await process_frame
+	if String(root_node.tr("UPG_NAME_AIR")) == "UPG_NAME_AIR":
+		_fail("air power row must have a localized label")
+		return false
+	var panel: Rect2 = root_node.call("_upgrade_panel_rect")
+	var previous_row := Rect2()
+	for index in range(GameConfig.UPGRADE_KEYS.size()):
+		var row_y := float(root_node.call("_upgrade_row_y", panel, index))
+		var row := Rect2(panel.position.x + 14.0, row_y, panel.size.x - 28.0, 78.0)
+		var buy_rect: Rect2 = root_node.call("_upgrade_buy_rect", panel, index)
+		if not panel.encloses(row) or not row.encloses(buy_rect) \
+				or (index > 0 and previous_row.intersects(row)):
+			_fail("four power rows and buy buttons must fit without overlap in the existing panel")
+			return false
+		previous_row = row
+
+	root_node.call("reset_game", int(original_state["active_level"]), "air_power_upgrade_smoke_cleanup")
+	root_node.set("level_index", original_state["level_index"])
+	root_node.set("game_state", original_state["game_state"])
+	root_node.set("coins", original_state["coins"])
+	root_node.set("upgrade_air", original_state["air"])
+	root_node.set("upgrade_water", original_state["water"])
+	root_node.set("upgrade_soap", original_state["soap"])
+	root_node.set("upgrade_sponge", original_state["sponge"])
+	root_node.set("reach_upgrade_air", original_state["reach_air"])
+	root_node.set("reach_upgrade_water", original_state["reach_water"])
+	root_node.set("reach_upgrade_soap", original_state["reach_soap"])
+	root_node.set("reach_upgrade_sponge", original_state["reach_sponge"])
+	root_node.set("_upgrade_panel_tab", original_state["tab"])
+	root_node.set("show_upgrade_panel", original_state["show"])
+	root_node.set("_main_save_dirty", original_state["main_save_dirty"])
+	root_node.queue_redraw()
+	return true
+
+
 func _test_reach_upgrade_contract(root_node: Node) -> bool:
 	var tool_keys := ["air", "water", "soap", "sponge"]
 	var original_state := {
 		"coins": root_node.get("coins"),
+		"upgrade_air": root_node.get("upgrade_air"),
 		"upgrade_water": root_node.get("upgrade_water"),
 		"upgrade_soap": root_node.get("upgrade_soap"),
 		"upgrade_sponge": root_node.get("upgrade_sponge"),
@@ -2784,6 +2941,7 @@ func _test_reach_upgrade_contract(root_node: Node) -> bool:
 	# AC-4/6: round-trip both schemas through an actual ConfigFile. A legacy file
 	# without reach keys preserves its existing power levels and defaults every
 	# new reach level to zero.
+	root_node.set("upgrade_air", 2)
 	root_node.set("upgrade_water", 1)
 	root_node.set("upgrade_soap", 2)
 	root_node.set("upgrade_sponge", 3)
@@ -2799,6 +2957,7 @@ func _test_reach_upgrade_contract(root_node: Node) -> bool:
 	if loaded_config.load(roundtrip_path) != OK:
 		_fail("reach upgrade smoke could not reload its isolated ConfigFile")
 		return false
+	root_node.set("upgrade_air", 0)
 	root_node.set("upgrade_water", 0)
 	root_node.set("upgrade_soap", 0)
 	root_node.set("upgrade_sponge", 0)
@@ -2806,7 +2965,8 @@ func _test_reach_upgrade_contract(root_node: Node) -> bool:
 		root_node.call("set_reach_upgrade_level_for_test", tool_key, 0)
 	root_node.call("_load_upgrade_progress", loaded_config)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(roundtrip_path))
-	if int(root_node.get("upgrade_water")) != 1 \
+	if int(root_node.get("upgrade_air")) != 2 \
+			or int(root_node.get("upgrade_water")) != 1 \
 			or int(root_node.get("upgrade_soap")) != 2 \
 			or int(root_node.get("upgrade_sponge")) != 3:
 		_fail("existing power upgrade levels must round-trip beside reach levels")
@@ -2823,7 +2983,8 @@ func _test_reach_upgrade_contract(root_node: Node) -> bool:
 	for tool_key in tool_keys:
 		root_node.call("set_reach_upgrade_level_for_test", tool_key, 3)
 	root_node.call("_load_upgrade_progress", legacy_config)
-	if int(root_node.get("upgrade_water")) != 3 \
+	if int(root_node.get("upgrade_air")) != 0 \
+			or int(root_node.get("upgrade_water")) != 3 \
 			or int(root_node.get("upgrade_soap")) != 1 \
 			or int(root_node.get("upgrade_sponge")) != 2:
 		_fail("legacy save must preserve all existing power upgrade values")
@@ -2875,6 +3036,7 @@ func _test_reach_upgrade_contract(root_node: Node) -> bool:
 		return false
 
 	root_node.set("coins", original_state["coins"])
+	root_node.set("upgrade_air", original_state["upgrade_air"])
 	root_node.set("upgrade_water", original_state["upgrade_water"])
 	root_node.set("upgrade_soap", original_state["upgrade_soap"])
 	root_node.set("upgrade_sponge", original_state["upgrade_sponge"])

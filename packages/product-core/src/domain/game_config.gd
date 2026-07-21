@@ -160,19 +160,19 @@ const FREE_AD_BOMB_PER_LEVEL := 3
 const GOLD_SPOT_SPAWN_PERCENT := 25
 const GOLD_SPOT_BONUS_COINS := 8
 const GOLD_SPOT_REWARD_CAP_PER_LEVEL := 1
-# Preserve the 1,800-coin full-upgrade sink while pricing each tool by its
-# gameplay reach: broad water is premium, setup soap is the baseline, and the
-# narrower finishing sponge is the accessible track.
+# Price each power track by its gameplay reach. Air joins the existing three
+# tools with the legacy 80/160/280 curve so every equipped tool can progress.
 const UPGRADE_COSTS := [
+	[80, 160, 280],
 	[110, 230, 380],
 	[90, 190, 320],
 	[70, 150, 260],
 ]
 const UPGRADE_MULTS := [1.0, 1.3, 1.6, 2.0]
-const UPGRADE_KEYS := ["water", "soap", "sponge"]
+const UPGRADE_KEYS := ["air", "water", "soap", "sponge"]
 const UPGRADE_MAX_LEVEL := 3
-const UPGRADE_NAMES := ["고압수 강화", "비누 강화", "스펀지 강화"]
-const UPGRADE_DESCS := ["흙탕물·먼지 제거 속도 향상", "얼룩 분리 속도 향상", "닦는 속도 향상"]
+const UPGRADE_NAMES := ["바람 강화", "고압수 강화", "비누 강화", "스펀지 강화"]
+const UPGRADE_DESCS := ["낙엽·먼지 날리기 속도 향상", "흙탕물·먼지 제거 속도 향상", "얼룩 분리 속도 향상", "닦는 속도 향상"]
 # Permanent reach upgrades cover all four tools, including air. The finishing
 # sponge stays the cheapest track because its small base radius asks for the
 # most precision on touch screens; water remains the premium broad-use tool.

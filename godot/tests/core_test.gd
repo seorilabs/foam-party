@@ -648,16 +648,17 @@ func _test_achievement_progress_rule(AchievementProgress: GDScript) -> bool:
 
 
 func _test_tool_specific_upgrade_curves(Economy: GDScript, GameConfig: GDScript) -> bool:
-	# AC-1: each tool owns a distinct three-tier cost curve.
+	# Every equipped tool owns a distinct three-tier cost curve.
+	var expected_upgrade_keys := ["air", "water", "soap", "sponge"]
 	var expected_upgrade_costs := [
+		[80, 160, 280],
 		[110, 230, 380],
 		[90, 190, 320],
 		[70, 150, 260],
 	]
-	if GameConfig.UPGRADE_COSTS[0] == GameConfig.UPGRADE_COSTS[1] \
-			or GameConfig.UPGRADE_COSTS[1] == GameConfig.UPGRADE_COSTS[2] \
-			or GameConfig.UPGRADE_COSTS[0] == GameConfig.UPGRADE_COSTS[2]:
-		_fail("every tool must have a distinct upgrade cost curve")
+	if GameConfig.UPGRADE_KEYS != expected_upgrade_keys \
+			or GameConfig.UPGRADE_COSTS != expected_upgrade_costs:
+		_fail("all four power upgrade keys and cost curves must remain named config")
 		return false
 
 	# AC-2: every valid tool/level pair is positive, increasing, and reads the
@@ -675,13 +676,17 @@ func _test_tool_specific_upgrade_curves(Economy: GDScript, GameConfig: GDScript)
 				return false
 			previous_cost = cost
 			total_upgrade_sink += cost
-	if total_upgrade_sink != 1800:
-		_fail("differentiated upgrade curves must preserve the 1800-coin total sink")
+	if total_upgrade_sink != 2320:
+		_fail("four differentiated power curves must preserve the 2320-coin total sink")
 		return false
-	if not bool(Economy.can_buy_upgrade(0, 0, 110)):
+	if not bool(Economy.can_buy_upgrade(0, 0, 80)) \
+			or bool(Economy.can_buy_upgrade(0, 0, 79)):
+		_fail("the first air upgrade must require exactly 80 coins")
+		return false
+	if not bool(Economy.can_buy_upgrade(1, 0, 110)):
 		_fail("110 coins should afford the first water upgrade tier")
 		return false
-	if bool(Economy.can_buy_upgrade(0, 0, 109)):
+	if bool(Economy.can_buy_upgrade(1, 0, 109)):
 		_fail("109 coins should not afford the first water upgrade tier")
 		return false
 	if bool(Economy.can_buy_upgrade(0, 3, 9999)):
@@ -1060,6 +1065,11 @@ func _test_correct_wash_snapshots(WashRules: GDScript, DirtPatch: GDScript) -> b
 	WashRules.apply_air(leaf, 0.1, Vector2(0.0, 20.0), 1.0, 0.0)
 	if absf(leaf.health - 79.48) > 0.001 or absf(leaf.drift.y + 26.82) > 0.001:
 		_fail("correct leaf air damage or motion timing changed")
+		return false
+	var upgraded_leaf = DirtPatch.new("leaf", Vector2.ZERO, 18.0, 100.0, 0.5)
+	WashRules.apply_air(upgraded_leaf, 0.1, Vector2(0.0, 20.0), 1.0, 0.0, 1.3)
+	if absf((100.0 - upgraded_leaf.health) / (100.0 - leaf.health) - 1.3) > 0.001:
+		_fail("air power multiplier must scale light-dirt damage without changing the base rule")
 		return false
 
 	var oil = DirtPatch.new("oil", Vector2.ZERO, 18.0, 100.0, 0.5)

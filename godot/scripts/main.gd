@@ -309,6 +309,7 @@ var daily_mission_claimed := false
 var daily_mission_date := ""
 var _daily_mission_pop_time := -10.0
 var _daily_progress_dirty := false
+var upgrade_air := 0
 var upgrade_water := 0
 var upgrade_soap := 0
 var upgrade_sponge := 0
@@ -599,6 +600,7 @@ func _store_achievement_progress(config: ConfigFile) -> void:
 
 
 func _load_upgrade_progress(config: ConfigFile) -> void:
+	upgrade_air = clampi(int(config.get_value("upgrades", "air", 0)), 0, UPGRADE_MAX_LEVEL)
 	upgrade_water = clampi(int(config.get_value("upgrades", "water", 0)), 0, UPGRADE_MAX_LEVEL)
 	upgrade_soap = clampi(int(config.get_value("upgrades", "soap", 0)), 0, UPGRADE_MAX_LEVEL)
 	upgrade_sponge = clampi(int(config.get_value("upgrades", "sponge", 0)), 0, UPGRADE_MAX_LEVEL)
@@ -609,6 +611,7 @@ func _load_upgrade_progress(config: ConfigFile) -> void:
 
 
 func _store_upgrade_progress(config: ConfigFile) -> void:
+	config.set_value("upgrades", "air", upgrade_air)
 	config.set_value("upgrades", "water", upgrade_water)
 	config.set_value("upgrades", "soap", upgrade_soap)
 	config.set_value("upgrades", "sponge", upgrade_sponge)
@@ -1501,6 +1504,14 @@ func set_reach_upgrade_level_for_test(tool_id: String, level: int) -> void:
 
 func get_tool_power_multiplier_for_test(tool_id: String) -> float:
 	return _tool_power_multiplier(tool_id)
+
+
+func get_power_upgrade_level_for_test(tool_id: String) -> int:
+	return _power_upgrade_level(tool_id)
+
+
+func set_power_upgrade_level_for_test(tool_id: String, level: int) -> void:
+	_set_power_upgrade_level(tool_id, level)
 
 
 func get_foam_effect_particle_count_for_test() -> int:
@@ -2778,7 +2789,10 @@ func _apply_air_to_patch(patch: DirtPatch, delta: float, source_point: Vector2, 
 	var lift_y := 0.0
 	if _is_light_dirt(patch.kind):
 		lift_y = rng.randf_range(10.0, 42.0)
-	WashRules.apply_air(patch, delta, source_point, proximity, lift_y)
+	WashRules.apply_air(
+		patch, delta, source_point, proximity, lift_y,
+		_tool_power_multiplier(TOOL_AIR)
+	)
 
 
 func _apply_water_to_patch(patch: DirtPatch, delta: float, proximity: float) -> void:
@@ -2806,7 +2820,7 @@ func _update_dirt_motion(delta: float) -> void:
 		if patch.state == STATE_FLYING:
 			patch.drift += patch.velocity * delta
 			patch.velocity *= 0.965
-			patch.health -= patch.max_health * delta * 0.55
+			patch.health -= patch.max_health * delta * 0.55 * _upgrade_mult(TOOL_AIR)
 			if _is_patch_outside_wash_area(patch):
 				_mark_patch_removed(patch)
 		elif patch.state == STATE_RUNOFF:
@@ -3101,7 +3115,7 @@ func _tool_radius(tool_id: String) -> float:
 
 
 func _tool_power_multiplier(tool_id: String) -> float:
-	var power := 1.0 if tool_id == TOOL_AIR else _upgrade_mult(tool_id)
+	var power := _upgrade_mult(tool_id)
 	if tool_id == TOOL_WATER and _water_boost_active():
 		power *= WATER_BOOST_POWER_MULT
 	return power
@@ -6188,6 +6202,8 @@ func _upgrade_mult(key: String) -> float:
 
 
 func _power_upgrade_level(key: String) -> int:
+	if key == TOOL_AIR:
+		return upgrade_air
 	if key == TOOL_WATER:
 		return upgrade_water
 	if key == TOOL_SOAP:
@@ -6199,7 +6215,9 @@ func _power_upgrade_level(key: String) -> int:
 
 func _set_power_upgrade_level(key: String, level: int) -> void:
 	var safe_level: int = clampi(level, 0, UPGRADE_MAX_LEVEL)
-	if key == TOOL_WATER:
+	if key == TOOL_AIR:
+		upgrade_air = safe_level
+	elif key == TOOL_WATER:
 		upgrade_water = safe_level
 	elif key == TOOL_SOAP:
 		upgrade_soap = safe_level
