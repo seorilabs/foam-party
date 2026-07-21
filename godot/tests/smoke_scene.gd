@@ -334,6 +334,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_wash_guide_contract(root_node):
 		return
+	if not _test_text_scale_accessibility_contract(root_node):
+		return
 
 	analytics_recorder.events.clear()
 	root_node.call("reset_game", 2, "smoke_retry")
@@ -2638,6 +2640,114 @@ func _test_non_color_accessibility_cues(root_node: Node) -> bool:
 			or not main_source.contains("_draw_patience_tier_pattern(bar, fill_rect"):
 		_fail("non-color accessibility cues must stay inside existing surface rects")
 		return false
+	return true
+
+
+func _test_text_scale_accessibility_contract(root_node: Node) -> bool:
+	# AC-1/3: the title control cycles every persisted option and changes the
+	# shared font-size helper immediately without waiting for a scene reload.
+	var original_game_state := String(root_node.get("game_state"))
+	root_node.call("set_text_scale_for_test", 1.0)
+	var scale_rect: Rect2 = root_node.call("_get_title_text_scale_rect")
+	var design_rect := Rect2(Vector2.ZERO, Vector2(390.0, 844.0))
+	if not design_rect.encloses(scale_rect) \
+			or scale_rect.intersects(root_node.call("_get_title_sound_rect")) \
+			or scale_rect.intersects(root_node.call("_get_title_help_rect")):
+		_fail("text-scale control must fit the title and stay separate from sound/help")
+		return false
+	root_node.set("game_state", "title")
+	root_node.set("show_tutorial", false)
+	root_node.call("_handle_tap", scale_rect.get_center())
+	if not is_equal_approx(float(root_node.call("get_text_scale_for_test")), 1.25) \
+			or int(root_node.call("get_scaled_font_size_for_test", 24)) != 30:
+		_fail("one title text-scale tap must apply 125% immediately")
+		return false
+	root_node.call("_handle_tap", scale_rect.get_center())
+	if not is_equal_approx(float(root_node.call("get_text_scale_for_test")), 1.5):
+		_fail("second title text-scale tap must apply 150% immediately")
+		return false
+
+	# AC-2/5: every named core surface uses the same scale/fit helpers. The
+	# representative 150% strings grow but remain within their existing max width.
+	var core_samples := [
+		["Foam Party", 44, 374.0],
+		[TranslationServer.translate("TUT_TITLE"), 22, 278.0],
+		["100%", 15, 70.0],
+		["고압수 · 오물을 씻어요", 13, 236.0],
+		[TranslationServer.translate("COMPLETE_TITLE"), 24, 218.0],
+	]
+	for sample in core_samples:
+		var sample_text := String(sample[0])
+		var base_size := int(sample[1])
+		var max_width := float(sample[2])
+		var scaled_size := int(root_node.call(
+			"get_scaled_font_size_for_test", base_size, sample_text, max_width
+		))
+		var fitted_width := float(root_node.call(
+			"get_fitted_text_width_for_test", sample_text, base_size, max_width
+		))
+		if scaled_size <= base_size or fitted_width > max_width + 0.01:
+			_fail("150% core text must grow and fit its existing surface: %s" % sample_text)
+			return false
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	for required_call in [
+		"_fit_fs(title_text, 44",
+		"_fit_fs(tutorial_title, 22",
+		"_fit_fs(progress_text, 15",
+		"_fit_fs(hint_text, 13",
+		"_fit_fs(complete_title, 24",
+	]:
+		if not main_source.contains(required_call):
+			_fail("core readable text must use the shared scale helper: " + required_call)
+			return false
+
+	# AC-1/4: ConfigFile disk round trip preserves 150%; a legacy settings file
+	# with no key resolves to the 100% default. Invalid values snap to an option.
+	var scale_save_path := OS.get_temp_dir().path_join("foam_party_text_scale_smoke.cfg")
+	var stored_config := ConfigFile.new()
+	root_node.call("_store_text_scale_setting", stored_config)
+	if stored_config.save(scale_save_path) != OK:
+		_fail("text-scale fixture failed to save")
+		return false
+	var reloaded_config := ConfigFile.new()
+	if reloaded_config.load(scale_save_path) != OK:
+		_fail("text-scale fixture failed to reload")
+		return false
+	root_node.call("set_text_scale_for_test", 1.0)
+	root_node.call("_load_text_scale_setting", reloaded_config)
+	if not is_equal_approx(float(root_node.call("get_text_scale_for_test")), 1.5):
+		_fail("text scale must survive a ConfigFile disk round trip")
+		return false
+	root_node.set("game_state", "title")
+	root_node.call("_handle_tap", scale_rect.get_center())
+	if not is_equal_approx(float(root_node.call("get_text_scale_for_test")), 1.0):
+		_fail("text-scale title control must wrap from 150% back to 100%")
+		return false
+	var legacy_config := ConfigFile.new()
+	legacy_config.set_value("settings", "sound", true)
+	var reloaded_legacy_config := ConfigFile.new()
+	if legacy_config.save(scale_save_path) != OK or reloaded_legacy_config.load(scale_save_path) != OK:
+		_fail("legacy text-scale fixture failed its ConfigFile disk round trip")
+		return false
+	root_node.call("set_text_scale_for_test", 1.5)
+	root_node.call("_load_text_scale_setting", reloaded_legacy_config)
+	DirAccess.remove_absolute(scale_save_path)
+	if not is_equal_approx(float(root_node.call("get_text_scale_for_test")), 1.0):
+		_fail("legacy settings without text_scale must default to 100%")
+		return false
+	root_node.call("set_text_scale_for_test", 1.42)
+	if not is_equal_approx(float(root_node.call("get_text_scale_for_test")), 1.5):
+		_fail("unsupported text scale must normalize to the nearest persisted option")
+		return false
+
+	# AC-6: at 100% all helper outputs are the original literals, so existing
+	# positions and max-width contracts render unchanged.
+	root_node.call("set_text_scale_for_test", 1.0)
+	for base_size in [10, 13, 15, 16, 22, 24, 44]:
+		if int(root_node.call("get_scaled_font_size_for_test", base_size)) != base_size:
+			_fail("100% text scale must preserve every existing base font size")
+			return false
+	root_node.set("game_state", original_game_state)
 	return true
 
 

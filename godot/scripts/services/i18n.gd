@@ -38,6 +38,7 @@ const STRINGS := {
 	"BTN_SKIN": ["스킨", "Skins"],
 	"BTN_STAGE": ["스테이지", "Stages"],
 	"BTN_ACHIEVEMENT": ["업적  %d/%d", "Achievements  %d/%d"],
+	"TEXT_SCALE_LABEL": ["글자 %d%%", "Text %d%%"],
 	"ACH_TITLE": ["누적 업적", "Lifetime Achievements"],
 	"ACH_SUMMARY": ["완료 %d / %d", "Completed %d / %d"],
 	"ACH_REWARD": ["+%d 코인", "+%d Coins"],

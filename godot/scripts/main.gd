@@ -52,6 +52,7 @@ const BAR_COL_START := Color(0.286, 0.655, 1.0)   # #49a7ff
 const BAR_COL_END   := Color(0.224, 0.851, 0.541)  # #39d98a
 const SAVE_PATH := "user://foam_party_save.cfg"
 const DAILY_SAVE_PATH := "user://foam_party_daily.cfg"
+const TEXT_SCALE_OPTIONS: Array[float] = [1.0, 1.25, 1.5]
 const BOMB_COST := GameConfig.BOMB_COST
 const WATER_BOOST_COST := GameConfig.WATER_BOOST_COST
 const WATER_BOOST_DURATION := GameConfig.WATER_BOOST_DURATION
@@ -258,6 +259,7 @@ const STAR_REVEAL_POP_DUR := 0.5
 const COMPLETION_REVEAL_DELAY := 0.12
 const COMPLETION_REVEAL_DURATION := 0.8
 var sound_enabled := true
+var text_scale := 1.0
 var language_preference := ""
 var tutorial_seen := false
 var show_tutorial := false
@@ -421,6 +423,7 @@ func _load_progress() -> void:
 		var legacy_total_stars: int = max(0, int(config.get_value("game", "total_stars", 0)))
 		total_stars = legacy_total_stars
 		sound_enabled = bool(config.get_value("settings", "sound", true))
+		_load_text_scale_setting(config)
 		_load_language_preference(config)
 		tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
 		_load_upgrade_progress(config)
@@ -629,6 +632,7 @@ func _save_progress() -> Error:
 	config.set_value("game", "coins", coins)
 	config.set_value("game", "total_stars", total_stars)
 	config.set_value("settings", "sound", sound_enabled)
+	_store_text_scale_setting(config)
 	_store_language_preference(config)
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
 	config.set_value("game", "best_times", best_times)
@@ -714,6 +718,25 @@ func _flush_daily_if_dirty() -> void:
 
 func _apply_sound_setting() -> void:
 	audio.apply_sound_setting(sound_enabled)
+
+
+func _normalize_text_scale(value: float) -> float:
+	var nearest: float = TEXT_SCALE_OPTIONS[0]
+	var nearest_distance := absf(value - nearest)
+	for option in TEXT_SCALE_OPTIONS:
+		var distance := absf(value - option)
+		if distance < nearest_distance:
+			nearest = option
+			nearest_distance = distance
+	return nearest
+
+
+func _load_text_scale_setting(config: ConfigFile) -> void:
+	text_scale = _normalize_text_scale(float(config.get_value("settings", "text_scale", 1.0)))
+
+
+func _store_text_scale_setting(config: ConfigFile) -> void:
+	config.set_value("settings", "text_scale", text_scale)
 
 
 func _apply_language_preference() -> void:
@@ -1022,6 +1045,24 @@ func _font() -> Font:
 	if ui_font != null:
 		return ui_font
 	return get_theme_default_font()
+
+
+func _fs(base_size: int) -> int:
+	return maxi(1, roundi(float(base_size) * text_scale))
+
+
+func _fit_fs(text: String, base_size: int, max_width: float) -> int:
+	var size := _fs(base_size)
+	# Preserve every existing 100% draw exactly. At larger settings, fit down only
+	# as far as the original size so accessibility never makes text smaller.
+	if size <= base_size or max_width <= 0.0:
+		return size
+	var font := _font()
+	while size > base_size and font.get_string_size(
+		text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size
+	).x > max_width:
+		size -= 1
+	return size
 
 
 # Lazy texture loader for the flat-vector art assets. Caches the result (including
@@ -1760,6 +1801,27 @@ func get_language_preference_for_test() -> String:
 	return language_preference
 
 
+func get_text_scale_for_test() -> float:
+	return text_scale
+
+
+func set_text_scale_for_test(value: float) -> void:
+	text_scale = _normalize_text_scale(value)
+	queue_redraw()
+
+
+func get_scaled_font_size_for_test(base_size: int, text: String = "", max_width: float = -1.0) -> int:
+	if text.is_empty() or max_width <= 0.0:
+		return _fs(base_size)
+	return _fit_fs(text, base_size, max_width)
+
+
+func get_fitted_text_width_for_test(text: String, base_size: int, max_width: float) -> float:
+	return _font().get_string_size(
+		text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, _fit_fs(text, base_size, max_width)
+	).x
+
+
 func get_active_locale_for_test() -> String:
 	return _active_locale()
 
@@ -2219,6 +2281,8 @@ func _handle_tap(point: Vector2) -> bool:
 		elif _get_title_help_rect().has_point(point):
 			_show_tutorial("title_help")
 			_play_ui_select()
+		elif _get_title_text_scale_rect().has_point(point):
+			_cycle_text_scale()
 		return true
 
 	if completed and _car_transition_phase != CAR_TRANSITION_EXITING and _double_offer_shown and not _double_claimed and ads != null and ads.is_rewarded_ready("level_reward_2x") and _get_double_rect().has_point(point):
@@ -2346,6 +2410,26 @@ func _toggle_sound() -> void:
 	if sound_enabled:
 		_play_ui_select()
 	_save_progress()
+
+
+func _text_scale_percent() -> int:
+	return roundi(text_scale * 100.0)
+
+
+func _text_scale_label() -> String:
+	return tr("TEXT_SCALE_LABEL") % _text_scale_percent()
+
+
+func _cycle_text_scale() -> void:
+	var current_index := 0
+	for index in range(TEXT_SCALE_OPTIONS.size()):
+		if is_equal_approx(text_scale, TEXT_SCALE_OPTIONS[index]):
+			current_index = index
+			break
+	text_scale = TEXT_SCALE_OPTIONS[(current_index + 1) % TEXT_SCALE_OPTIONS.size()]
+	_play_ui_select()
+	_save_progress()
+	queue_redraw()
 
 
 func _select_language(locale: String) -> void:
@@ -3654,7 +3738,9 @@ func _draw_status() -> void:
 		var draw_w := maxf(fill_width, 2.0)
 		_bar_fill_style.set_corner_radius_all(mini(6, int(draw_w * 0.5)))
 		draw_style_box(_bar_fill_style, Rect2(bar_rect.position, Vector2(draw_w, bar_rect.size.y)))
-	draw_string(font, Vector2(236.0, bar_rect.position.y + 18.0), "%.0f%%" % (cp * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 70.0, 15, Color("#0d3b55"))
+	var progress_text := "%.0f%%" % (cp * 100.0)
+	draw_string(font, Vector2(236.0, bar_rect.position.y + 18.0), progress_text,
+		HORIZONTAL_ALIGNMENT_RIGHT, 70.0, _fit_fs(progress_text, 15, 70.0), Color("#0d3b55"))
 
 	if _progress_milestone_time >= 0.0:
 		var age := float(Time.get_ticks_msec()) / 1000.0 - _progress_milestone_time
@@ -3674,7 +3760,9 @@ func _draw_tool_hint() -> void:
 	# buttons, so a bottom safe-area inset never lets the panel overlap this chip.
 	var hint_rect := Rect2(22.0, minf(696.0, _tool_button_y() - 60.0), 244.0, 30.0)
 	draw_style_box(_style("hint_bubble", Color(0.03, 0.14, 0.2, 0.78), 15.0), hint_rect)
-	draw_string(font, Vector2(hint_rect.position.x, hint_rect.position.y + 21.0), "%s · %s" % [tool_labels[selected_tool], _tool_hint()], HORIZONTAL_ALIGNMENT_CENTER, hint_rect.size.x, 13, Color(0.93, 0.99, 1.0))
+	var hint_text := "%s · %s" % [tool_labels[selected_tool], _tool_hint()]
+	draw_string(font, Vector2(hint_rect.position.x, hint_rect.position.y + 21.0), hint_text,
+		HORIZONTAL_ALIGNMENT_CENTER, hint_rect.size.x, _fit_fs(hint_text, 13, hint_rect.size.x - 8.0), Color(0.93, 0.99, 1.0))
 
 
 func _tool_hint() -> String:
@@ -4797,9 +4885,13 @@ func _draw_title_screen() -> void:
 		var bubble_y := 84.0 + sin(float(bubble_index) * 1.9) * 32.0
 		draw_circle(Vector2(bubble_x, bubble_y), 14.0 + float(bubble_index % 3) * 8.0, Color(1.0, 1.0, 1.0, 0.18))
 
-	draw_string(font, Vector2(2.0, 98.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 44, Color("#0d3b55"))
-	draw_string(font, Vector2(0.0, 94.0), "Foam Party", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 44, Color.WHITE)
-	draw_string(font, Vector2(0.0, 128.0), tr("TITLE_SUBTITLE"), HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 16, Color("#0d3b55"))
+	var title_text := "Foam Party"
+	var title_font_size := _fit_fs(title_text, 44, DESIGN_SIZE.x - 16.0)
+	draw_string(font, Vector2(2.0, 98.0), title_text, HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, title_font_size, Color("#0d3b55"))
+	draw_string(font, Vector2(0.0, 94.0), title_text, HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, title_font_size, Color.WHITE)
+	var subtitle_text := tr("TITLE_SUBTITLE")
+	draw_string(font, Vector2(0.0, 128.0), subtitle_text, HORIZONTAL_ALIGNMENT_CENTER,
+		DESIGN_SIZE.x, _fit_fs(subtitle_text, 16, DESIGN_SIZE.x - 24.0), Color("#0d3b55"))
 	_draw_title_hero_car()
 	_draw_title_skin_swatches()
 
@@ -4844,27 +4936,37 @@ func _draw_title_screen() -> void:
 	if level_index > 1:
 		var progress_car_type: String = GameConfig.car_type_for_level(level_index)
 		start_label = tr("CONTINUE") % [car_type_labels[progress_car_type], level_index]
-	draw_string(font, Vector2(start_rect.position.x, start_rect.position.y + 38.0), start_label, HORIZONTAL_ALIGNMENT_CENTER, start_rect.size.x, 19, Color("#0d3b2a"))
+	draw_string(font, Vector2(start_rect.position.x, start_rect.position.y + 38.0), start_label,
+		HORIZONTAL_ALIGNMENT_CENTER, start_rect.size.x, _fit_fs(start_label, 19, start_rect.size.x - 16.0), Color("#0d3b2a"))
 
-	draw_string(font, Vector2(0.0, 578.0), tr("COIN_STAR") % [coins, total_stars], HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 15, Color(1.0, 1.0, 1.0, 0.9))
+	var currency_text := tr("COIN_STAR") % [coins, total_stars]
+	draw_string(font, Vector2(0.0, 578.0), currency_text, HORIZONTAL_ALIGNMENT_CENTER,
+		DESIGN_SIZE.x, _fit_fs(currency_text, 15, DESIGN_SIZE.x - 24.0), Color(1.0, 1.0, 1.0, 0.9))
 	var upg_rect := _get_upgrade_btn_rect()
 	draw_style_box(_style("upg_shadow", Color(0.18, 0.25, 0.55, 0.9), 12.0), Rect2(upg_rect.position + Vector2(0.0, 4.0), upg_rect.size))
 	draw_style_box(_style("upg_btn", Color(0.33, 0.53, 0.95, 1.0), 12.0), upg_rect)
-	draw_string(font, Vector2(upg_rect.position.x, upg_rect.position.y + 28.0), tr("BTN_UPGRADE"), HORIZONTAL_ALIGNMENT_CENTER, upg_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
+	var upgrade_text := tr("BTN_UPGRADE")
+	draw_string(font, Vector2(upg_rect.position.x, upg_rect.position.y + 28.0), upgrade_text,
+		HORIZONTAL_ALIGNMENT_CENTER, upg_rect.size.x, _fit_fs(upgrade_text, 16, upg_rect.size.x - 16.0), Color(1.0, 1.0, 1.0, 0.96))
 	var skin_rect := _get_skin_btn_rect()
 	draw_style_box(_style("skin_shadow", Color(0.28, 0.12, 0.48, 0.9), 12.0), Rect2(skin_rect.position + Vector2(0.0, 4.0), skin_rect.size))
 	draw_style_box(_style("skin_btn", Color(0.58, 0.28, 0.88, 1.0), 12.0), skin_rect)
-	draw_string(font, Vector2(skin_rect.position.x, skin_rect.position.y + 28.0), tr("BTN_SKIN"), HORIZONTAL_ALIGNMENT_CENTER, skin_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
+	var skin_text := tr("BTN_SKIN")
+	draw_string(font, Vector2(skin_rect.position.x, skin_rect.position.y + 28.0), skin_text,
+		HORIZONTAL_ALIGNMENT_CENTER, skin_rect.size.x, _fit_fs(skin_text, 16, skin_rect.size.x - 16.0), Color(1.0, 1.0, 1.0, 0.96))
 	var stage_rect := _get_stage_btn_rect()
 	draw_style_box(_style("stage_shadow", Color(0.09, 0.34, 0.43, 0.9), 12.0), Rect2(stage_rect.position + Vector2(0.0, 4.0), stage_rect.size))
 	draw_style_box(_style("stage_btn", Color(0.18, 0.67, 0.74, 1.0), 12.0), stage_rect)
-	draw_string(font, Vector2(stage_rect.position.x, stage_rect.position.y + 28.0), tr("BTN_STAGE"), HORIZONTAL_ALIGNMENT_CENTER, stage_rect.size.x, 16, Color(1.0, 1.0, 1.0, 0.96))
+	var stage_text := tr("BTN_STAGE")
+	draw_string(font, Vector2(stage_rect.position.x, stage_rect.position.y + 28.0), stage_text,
+		HORIZONTAL_ALIGNMENT_CENTER, stage_rect.size.x, _fit_fs(stage_text, 16, stage_rect.size.x - 16.0), Color(1.0, 1.0, 1.0, 0.96))
 	var achievement_rect := _get_achievement_btn_rect()
 	draw_style_box(_style("achievement_shadow", Color(0.48, 0.25, 0.02, 0.9), 12.0), Rect2(achievement_rect.position + Vector2(0.0, 4.0), achievement_rect.size))
 	draw_style_box(_style("achievement_btn", Color(0.95, 0.58, 0.16, 1.0), 12.0), achievement_rect)
 	var achievement_total := AchievementProgress.DEFINITIONS.size()
 	var achievement_label := tr("BTN_ACHIEVEMENT") % [_achievement_completed_count(), achievement_total]
-	draw_string(font, Vector2(achievement_rect.position.x, achievement_rect.position.y + 28.0), achievement_label, HORIZONTAL_ALIGNMENT_CENTER, achievement_rect.size.x, 15, Color(0.24, 0.12, 0.01, 0.96))
+	draw_string(font, Vector2(achievement_rect.position.x, achievement_rect.position.y + 28.0), achievement_label,
+		HORIZONTAL_ALIGNMENT_CENTER, achievement_rect.size.x, _fit_fs(achievement_label, 15, achievement_rect.size.x - 16.0), Color(0.24, 0.12, 0.01, 0.96))
 	var version_y := minf(826.0, DESIGN_SIZE.y - _safe_area_design_insets().w - 12.0)
 	draw_string(font, Vector2(0.0, version_y), "v0.1", HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, 12, Color(1.0, 1.0, 1.0, 0.5))
 
@@ -4982,8 +5084,9 @@ func _draw_top_buttons() -> void:
 	var font: Font = _font()
 	var sound_rect := _get_title_sound_rect()
 	var help_rect := _get_title_help_rect()
-	for rect in [sound_rect, help_rect]:
-		draw_style_box(_style("round_button", Color(0.03, 0.14, 0.2, 0.68), rect.size.x * 0.5), rect)
+	var text_scale_rect := _get_title_text_scale_rect()
+	for rect in [sound_rect, help_rect, text_scale_rect]:
+		draw_style_box(_style("round_button", Color(0.03, 0.14, 0.2, 0.68), rect.size.y * 0.5), rect)
 	var icon_color := Color(0.93, 0.99, 1.0)
 	var speaker_center := sound_rect.get_center()
 	var icon_scale := sound_rect.size.x / 30.0
@@ -5002,6 +5105,13 @@ func _draw_top_buttons() -> void:
 		font.get_ascent(help_font_size) - font.get_descent(help_font_size)
 	) * 0.5
 	draw_string(font, Vector2(help_rect.position.x, help_baseline_y), "?", HORIZONTAL_ALIGNMENT_CENTER, help_rect.size.x, help_font_size, icon_color)
+	var scale_label := _text_scale_label()
+	var scale_font_size := _fit_fs(scale_label, 11, text_scale_rect.size.x - 8.0)
+	var scale_baseline_y := text_scale_rect.get_center().y + (
+		font.get_ascent(scale_font_size) - font.get_descent(scale_font_size)
+	) * 0.5
+	draw_string(font, Vector2(text_scale_rect.position.x, scale_baseline_y), scale_label,
+		HORIZONTAL_ALIGNMENT_CENTER, text_scale_rect.size.x, scale_font_size, icon_color)
 
 
 func _draw_pause_entry() -> void:
@@ -5020,17 +5130,22 @@ func _draw_tutorial() -> void:
 	var panel: Rect2 = _tutorial_panel_rect()
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 40.0), tr("TUT_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 22, Color("#123246"))
+	var tutorial_title := tr("TUT_TITLE")
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 40.0), tutorial_title,
+		HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, _fit_fs(tutorial_title, 22, panel.size.x - 72.0), Color("#123246"))
 	var close_rect: Rect2 = _tutorial_close_rect()
 	draw_style_box(_style("tutorial_close", Color("#e0e9f5"), 10.0), close_rect)
-	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 25.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 17, Color("#123246"))
+	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 25.0), "X",
+		HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, _fit_fs("X", 17, close_rect.size.x - 8.0), Color("#123246"))
 
 	for tab in [TUTORIAL_TAB_TOOLS, TUTORIAL_TAB_DIRT]:
 		var tab_rect: Rect2 = _tutorial_tab_rect(tab)
 		var selected: bool = tab == _tutorial_tab
 		var tab_style_key: String = "tutorial_tab_%d_%s" % [tab, "selected" if selected else "idle"]
 		draw_style_box(_style(tab_style_key, Color("#3a9ef0") if selected else Color("#d5e3f1"), 10.0), tab_rect)
-		draw_string(font, Vector2(tab_rect.position.x, tab_rect.position.y + 23.0), tr("TUT_TAB_TOOLS") if tab == TUTORIAL_TAB_TOOLS else tr("TUT_TAB_DIRT"), HORIZONTAL_ALIGNMENT_CENTER, tab_rect.size.x, 14, Color.WHITE if selected else Color("#49677c"))
+		var tab_text := tr("TUT_TAB_TOOLS") if tab == TUTORIAL_TAB_TOOLS else tr("TUT_TAB_DIRT")
+		draw_string(font, Vector2(tab_rect.position.x, tab_rect.position.y + 23.0), tab_text,
+			HORIZONTAL_ALIGNMENT_CENTER, tab_rect.size.x, _fit_fs(tab_text, 14, tab_rect.size.x - 12.0), Color.WHITE if selected else Color("#49677c"))
 
 	if _tutorial_tab == TUTORIAL_TAB_DIRT:
 		_draw_wash_guide_rows(panel, font)
@@ -5039,7 +5154,9 @@ func _draw_tutorial() -> void:
 
 	var done_rect: Rect2 = _tutorial_done_rect()
 	draw_style_box(_style("tutorial_done", Color("#39d98a"), 12.0), done_rect)
-	draw_string(font, Vector2(done_rect.position.x, done_rect.position.y + 27.0), tr("TUT_START"), HORIZONTAL_ALIGNMENT_CENTER, done_rect.size.x, 15, Color("#123246"))
+	var done_text := tr("TUT_START")
+	draw_string(font, Vector2(done_rect.position.x, done_rect.position.y + 27.0), done_text,
+		HORIZONTAL_ALIGNMENT_CENTER, done_rect.size.x, _fit_fs(done_text, 15, done_rect.size.x - 12.0), Color("#123246"))
 
 
 func _draw_tool_guide_rows(panel: Rect2, font: Font) -> void:
@@ -5055,15 +5172,24 @@ func _draw_tool_guide_rows(panel: Rect2, font: Font) -> void:
 		var row_y: float = panel.position.y + 154.0 + float(row_index) * 94.0
 		draw_style_box(_style("tutorial_tool_row_%d" % row_index, Color("#e8f3f8"), 14.0), Rect2(panel.position.x + 18.0, row_y - 30.0, panel.size.x - 36.0, 72.0))
 		_draw_tool_icon(row[0], Vector2(panel.position.x + 55.0, row_y + 5.0))
-		draw_string(font, Vector2(panel.position.x + 96.0, row_y - 3.0), row[1], HORIZONTAL_ALIGNMENT_LEFT, 200.0, 17, Color("#123246"))
-		draw_string(font, Vector2(panel.position.x + 96.0, row_y + 21.0), row[2], HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 120.0, 12, Color("#2c6b78"))
+		draw_string(font, Vector2(panel.position.x + 96.0, row_y - 3.0), row[1],
+			HORIZONTAL_ALIGNMENT_LEFT, 200.0, _fit_fs(row[1], 17, 200.0), Color("#123246"))
+		draw_string(font, Vector2(panel.position.x + 96.0, row_y + 21.0), row[2],
+			HORIZONTAL_ALIGNMENT_LEFT, panel.size.x - 120.0,
+			_fit_fs(row[2], 12, panel.size.x - 128.0), Color("#2c6b78"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 548.0), tr("TUT_TIP") % [BOMB_COST, WATER_BOOST_COST], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 12, Color("#2c6b78"))
+	var tip_text := tr("TUT_TIP") % [BOMB_COST, WATER_BOOST_COST]
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 548.0), tip_text,
+		HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, _fit_fs(tip_text, 12, panel.size.x - 24.0), Color("#2c6b78"))
 
 
 func _draw_wash_guide_rows(panel: Rect2, font: Font) -> void:
-	draw_string(font, Vector2(panel.position.x + 56.0, panel.position.y + 122.0), tr("GUIDE_HEADER_DIRT"), HORIZONTAL_ALIGNMENT_LEFT, 82.0, 11, Color("#6a8294"))
-	draw_string(font, Vector2(panel.position.x + 144.0, panel.position.y + 122.0), tr("GUIDE_HEADER_PATH"), HORIZONTAL_ALIGNMENT_LEFT, 180.0, 11, Color("#6a8294"))
+	var dirt_header := tr("GUIDE_HEADER_DIRT")
+	var path_header := tr("GUIDE_HEADER_PATH")
+	draw_string(font, Vector2(panel.position.x + 56.0, panel.position.y + 122.0), dirt_header,
+		HORIZONTAL_ALIGNMENT_LEFT, 82.0, _fit_fs(dirt_header, 11, 78.0), Color("#6a8294"))
+	draw_string(font, Vector2(panel.position.x + 144.0, panel.position.y + 122.0), path_header,
+		HORIZONTAL_ALIGNMENT_LEFT, 180.0, _fit_fs(path_header, 11, 176.0), Color("#6a8294"))
 	var entries: Array = Coaching.wash_guide_entries()
 	for row_index in range(entries.size()):
 		var entry: Dictionary = entries[row_index]
@@ -5071,14 +5197,22 @@ func _draw_wash_guide_rows(panel: Rect2, font: Font) -> void:
 		var row_rect: Rect2 = _tutorial_dirt_row_rect(row_index)
 		draw_style_box(_style("tutorial_dirt_row_%d" % row_index, Color("#e8f3f8") if row_index % 2 == 0 else Color("#edf6fa"), 12.0), row_rect)
 		_draw_wash_guide_dirt_icon(kind, Vector2(row_rect.position.x + 24.0, row_rect.position.y + 26.0))
-		draw_string(font, Vector2(row_rect.position.x + 45.0, row_rect.position.y + 23.0), tr("GUIDE_DIRT_" + kind.to_upper()), HORIZONTAL_ALIGNMENT_LEFT, 82.0, 12, Color("#123246"))
+		var dirt_name := tr("GUIDE_DIRT_" + kind.to_upper())
+		draw_string(font, Vector2(row_rect.position.x + 45.0, row_rect.position.y + 23.0), dirt_name,
+			HORIZONTAL_ALIGNMENT_LEFT, 82.0, _fit_fs(dirt_name, 12, 78.0), Color("#123246"))
 		var primary_text: String = _localized_tool_list(entry["primary"] as Array)
 		var follow_up_text: String = _localized_tool_list(entry["follow_up"] as Array)
 		if follow_up_text.is_empty():
 			follow_up_text = tr("GUIDE_NONE")
 		var path_text: String = "%s  →  %s" % [primary_text, follow_up_text]
-		draw_string(font, Vector2(row_rect.position.x + 132.0, row_rect.position.y + 23.0), path_text, HORIZONTAL_ALIGNMENT_LEFT, row_rect.size.x - 142.0, 11, Color("#155879"))
-		draw_string(font, Vector2(row_rect.position.x + 45.0, row_rect.position.y + 45.0), tr(String(entry["description_key"])), HORIZONTAL_ALIGNMENT_LEFT, row_rect.size.x - 55.0, 10, Color("#49677c"))
+		var path_width := row_rect.size.x - 142.0
+		draw_string(font, Vector2(row_rect.position.x + 132.0, row_rect.position.y + 23.0), path_text,
+			HORIZONTAL_ALIGNMENT_LEFT, path_width, _fit_fs(path_text, 11, path_width - 4.0), Color("#155879"))
+		var description := tr(String(entry["description_key"]))
+		var description_width := row_rect.size.x - 55.0
+		draw_string(font, Vector2(row_rect.position.x + 45.0, row_rect.position.y + 45.0), description,
+			HORIZONTAL_ALIGNMENT_LEFT, description_width,
+			_fit_fs(description, 10, description_width - 4.0), Color("#49677c"))
 
 
 func _localized_tool_list(tool_ids_to_join: Array) -> String:
@@ -5772,8 +5906,12 @@ func _draw_completion_panel() -> void:
 		elif index >= earned_stars or reveal_age < 0.0:
 			_draw_star(star_center, 15.0, Color("#dde4e8"), Color("#b4c0c7"))
 
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), tr("COMPLETE_TITLE"), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 24, Color("#123246"))
-	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), tr("COMPLETE_SUB") % [car_type_labels[car_type], active_level_index, _format_time(level_time), best_combo], HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#2c6b78"))
+	var complete_title := tr("COMPLETE_TITLE")
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 84.0), complete_title,
+		HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, _fit_fs(complete_title, 24, panel.size.x - 96.0), Color("#123246"))
+	var complete_summary := tr("COMPLETE_SUB") % [car_type_labels[car_type], active_level_index, _format_time(level_time), best_combo]
+	draw_string(font, Vector2(panel.position.x, panel.position.y + 108.0), complete_summary,
+		HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, _fit_fs(complete_summary, 14, panel.size.x - 20.0), Color("#2c6b78"))
 
 	var record_seconds: float = _best_time_for_level(active_level_index)
 	if is_new_record:
@@ -5781,9 +5919,15 @@ func _draw_completion_panel() -> void:
 		var record_color := Color("#e0a818").lerp(Color("#fff3cf"), 0.5 + 0.5 * sin(time_now * 6.0))
 		_draw_star(Vector2(panel.position.x + 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
 		_draw_star(Vector2(panel.position.x + panel.size.x - 96.0, panel.position.y + 132.0), 7.0 * record_pulse, record_color, Color("#9a7400"))
-		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), tr("NEW_RECORD") % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
+		var record_text := tr("NEW_RECORD") % _format_time(record_seconds)
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), record_text,
+			HORIZONTAL_ALIGNMENT_CENTER, panel.size.x,
+			_fit_fs(record_text, int(17.0 * record_pulse), panel.size.x - 80.0), Color("#d98a00"))
 	elif record_seconds > 0.0:
-		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), tr("BEST_RECORD") % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
+		var best_record_text := tr("BEST_RECORD") % _format_time(record_seconds)
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), best_record_text,
+			HORIZONTAL_ALIGNMENT_CENTER, panel.size.x,
+			_fit_fs(best_record_text, 14, panel.size.x - 80.0), Color("#6b7d86"))
 	_draw_completion_reveal_cards(panel, time_now)
 
 	var reward_chip := Rect2(panel.position.x + panel.size.x - 106.0, panel.position.y - 14.0, 96.0, 30.0)
@@ -5792,31 +5936,45 @@ func _draw_completion_panel() -> void:
 		draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#fff3cf"))
 		draw_circle(reward_chip.position + Vector2(16.0, 15.0), 8.0, Color("#9a7400"), false, 1.5)
 	if _completion_reward_reduced:
+		var reduced_reward_text := "+%d" % coin_reward
 		draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 14.0),
-			"+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 12, Color("#6b5200"))
+			reduced_reward_text, HORIZONTAL_ALIGNMENT_LEFT, 64.0,
+			_fit_fs(reduced_reward_text, 12, 62.0), Color("#6b5200"))
+		var rewash_text := tr("REWASH_REWARD")
 		draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 26.0),
-			tr("REWASH_REWARD"), HORIZONTAL_ALIGNMENT_LEFT, 64.0, 8, Color("#6b5200"))
+			rewash_text, HORIZONTAL_ALIGNMENT_LEFT, 64.0,
+			_fit_fs(rewash_text, 8, 62.0), Color("#6b5200"))
 	else:
+		var reward_text := "+%d" % coin_reward
 		draw_string(font, Vector2(reward_chip.position.x + 28.0, reward_chip.position.y + 21.0),
-			"+%d" % coin_reward, HORIZONTAL_ALIGNMENT_LEFT, 64.0, 15, Color("#6b5200"))
+			reward_text, HORIZONTAL_ALIGNMENT_LEFT, 64.0,
+			_fit_fs(reward_text, 15, 62.0), Color("#6b5200"))
 
 	var tip_chip := _customer_tip_chip_rect(panel)
 	draw_style_box(_style("tip_chip", Color("#f7d8ff"), 14.0), tip_chip)
-	draw_string(font, Vector2(tip_chip.position.x, tip_chip.position.y + 20.0), tr("PATIENCE_TIP_CHIP") % customer_tip_reward, HORIZONTAL_ALIGNMENT_CENTER, tip_chip.size.x, 13, Color("#70407d"))
+	var tip_text := tr("PATIENCE_TIP_CHIP") % customer_tip_reward
+	draw_string(font, Vector2(tip_chip.position.x, tip_chip.position.y + 20.0), tip_text,
+		HORIZONTAL_ALIGNMENT_CENTER, tip_chip.size.x, _fit_fs(tip_text, 13, tip_chip.size.x - 10.0), Color("#70407d"))
 
 	if _level_milestone_bonus > 0:
 		var time_now2 := float(Time.get_ticks_msec()) / 1000.0
 		var milestone_chip := Rect2(panel.position.x + 10.0, panel.position.y - 14.0, 106.0, 30.0)
 		var chip_color := Color("#a855f7").lerp(Color("#ec4899"), 0.5 + 0.5 * sin(time_now2 * 3.0))
 		draw_style_box(_style("milestone_chip", chip_color, 15.0), milestone_chip)
-		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), tr("MILESTONE_CHIP") % [active_level_index, _level_milestone_bonus], HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x, 13, Color("#fff0ff"))
+		var milestone_text := tr("MILESTONE_CHIP") % [active_level_index, _level_milestone_bonus]
+		draw_string(font, Vector2(milestone_chip.position.x, milestone_chip.position.y + 21.0), milestone_text,
+			HORIZONTAL_ALIGNMENT_CENTER, milestone_chip.size.x,
+			_fit_fs(milestone_text, 13, milestone_chip.size.x - 8.0), Color("#fff0ff"))
 
 	if level_mistakes == 0 and _perfect_wash_bonus > 0:
 		var perfect_chip := _perfect_chip_rect(panel)
 		var perfect_color := Color("#1fba82").lerp(Color("#f0b92f"), 0.42 + 0.18 * sin(time_now * 3.4))
 		draw_style_box(_style("milestone_chip", perfect_color, 15.0), perfect_chip)
 		var perfect_font_size := 11 if _level_milestone_bonus > 0 else 13
-		draw_string(font, Vector2(perfect_chip.position.x, perfect_chip.position.y + 21.0), tr("PERFECT_CHIP") % _perfect_wash_bonus, HORIZONTAL_ALIGNMENT_CENTER, perfect_chip.size.x, perfect_font_size, Color("#fffdf2"))
+		var perfect_text := tr("PERFECT_CHIP") % _perfect_wash_bonus
+		draw_string(font, Vector2(perfect_chip.position.x, perfect_chip.position.y + 21.0), perfect_text,
+			HORIZONTAL_ALIGNMENT_CENTER, perfect_chip.size.x,
+			_fit_fs(perfect_text, perfect_font_size, perfect_chip.size.x - 8.0), Color("#fffdf2"))
 
 	# B: level-end "watch ad → double coins" CTA. Active (green + play triangle)
 	# until claimed; after a watched ad it flips to a claimed/disabled state so the
@@ -5841,17 +5999,23 @@ func _draw_completion_panel() -> void:
 			var dtx := dbl.position.x + 26.0
 			var dty := dbl.position.y + dbl.size.y * 0.5
 			draw_colored_polygon(PackedVector2Array([Vector2(dtx, dty - 7.0), Vector2(dtx, dty + 7.0), Vector2(dtx + 11.0, dty)]), Color("#0d3b2a"))
-		draw_string(font, Vector2(dbl.position.x, dbl.position.y + 27.0), tr("DOUBLE_DONE") if claimed else tr("DOUBLE_COINS"), HORIZONTAL_ALIGNMENT_CENTER, dbl.size.x, 16, Color("#4a565c") if not active else Color("#0d3b2a"))
+		var double_text := tr("DOUBLE_DONE") if claimed else tr("DOUBLE_COINS")
+		draw_string(font, Vector2(dbl.position.x, dbl.position.y + 27.0), double_text,
+			HORIZONTAL_ALIGNMENT_CENTER, dbl.size.x, _fit_fs(double_text, 16, dbl.size.x - 16.0), Color("#4a565c") if not active else Color("#0d3b2a"))
 
 	var retry_rect := _get_retry_rect()
 	draw_style_box(_style("retry_shadow", Color("#246076"), 14.0), Rect2(retry_rect.position + Vector2(0.0, 4.0), retry_rect.size))
 	draw_style_box(_style("retry_button", Color("#7fd6e6"), 14.0), retry_rect)
-	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), tr("RETRY"), HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, 16, Color("#0d3b55"))
+	var retry_text := tr("RETRY")
+	draw_string(font, Vector2(retry_rect.position.x, retry_rect.position.y + 30.0), retry_text,
+		HORIZONTAL_ALIGNMENT_CENTER, retry_rect.size.x, _fit_fs(retry_text, 16, retry_rect.size.x - 12.0), Color("#0d3b55"))
 
 	var next_rect := _get_next_rect()
 	draw_style_box(_style("next_shadow", Color("#1f8a55"), 14.0), Rect2(next_rect.position + Vector2(0.0, 4.0), next_rect.size))
 	draw_style_box(_style("next_button", Color("#39d98a"), 14.0), next_rect)
-	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), tr("NEXT"), HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
+	var next_text := tr("NEXT")
+	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), next_text,
+		HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, _fit_fs(next_text, 16, next_rect.size.x - 12.0), Color("#0d3b2a"))
 
 
 func _draw_completion_reveal_cards(panel: Rect2, time_now: float) -> void:
@@ -5862,10 +6026,14 @@ func _draw_completion_reveal_cards(panel: Rect2, time_now: float) -> void:
 	draw_style_box(_style("completion_after_card", Color("#e9fbff"), 14.0,
 		Color("#55b8cf"), 2), after_card)
 	var font := _font()
+	var before_text := tr("BEFORE_WASH")
 	draw_string(font, Vector2(before_card.position.x, before_card.position.y + 19.0),
-		tr("BEFORE_WASH"), HORIZONTAL_ALIGNMENT_CENTER, before_card.size.x, 12, Color("#76521d"))
+		before_text, HORIZONTAL_ALIGNMENT_CENTER, before_card.size.x,
+		_fit_fs(before_text, 12, before_card.size.x - 8.0), Color("#76521d"))
+	var after_text := tr("AFTER_WASH")
 	draw_string(font, Vector2(after_card.position.x, after_card.position.y + 19.0),
-		tr("AFTER_WASH"), HORIZONTAL_ALIGNMENT_CENTER, after_card.size.x, 12, Color("#176175"))
+		after_text, HORIZONTAL_ALIGNMENT_CENTER, after_card.size.x,
+		_fit_fs(after_text, 12, after_card.size.x - 8.0), Color("#176175"))
 
 	_draw_completion_car_preview(before_card, true)
 	_draw_completion_car_preview(after_card, false)
@@ -6173,6 +6341,10 @@ func _get_title_sound_rect() -> Rect2:
 
 func _get_title_help_rect() -> Rect2:
 	return Rect2(50.0, _title_button_y(), 30.0, 30.0)
+
+
+func _get_title_text_scale_rect() -> Rect2:
+	return Rect2(288.0, _title_button_y(), 88.0, 30.0)
 
 
 func _get_booster_rect() -> Rect2:

@@ -39,6 +39,13 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_title.png")):
 		quit(1)
 		return
+	node.call("_handle_tap", node.call("_get_title_text_scale_rect").get_center())
+	node.call("_handle_tap", node.call("_get_title_text_scale_rect").get_center())
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_text_scale_title_150.png")):
+		quit(1)
+		return
+	node.call("_handle_tap", node.call("_get_title_text_scale_rect").get_center())
 	node.set("skin_water", "coral")
 	node.set("skin_air", "violet")
 	node.set("skin_soap", "pink")
@@ -153,6 +160,12 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_tutorial.png")):
 		quit(1)
 		return
+	node.call("set_text_scale_for_test", 1.5)
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_text_scale_tutorial_150.png")):
+		quit(1)
+		return
+	node.call("set_text_scale_for_test", 1.0)
 	node.call("_handle_tap", node.call("_tutorial_tab_rect", 1).get_center())
 	await _settle(3)
 	if not await _capture(out_dir.path_join("shot_wash_guide.png")):
@@ -184,6 +197,12 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_default.png")):
 		quit(1)
 		return
+	node.call("set_text_scale_for_test", 1.5)
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_text_scale_gameplay_150.png")):
+		quit(1)
+		return
+	node.call("set_text_scale_for_test", 1.0)
 	var droplet_points := [
 		Vector2(118.0, 500.0), Vector2(154.0, 474.0), Vector2(195.0, 488.0),
 		Vector2(236.0, 476.0), Vector2(274.0, 506.0), Vector2(104.0, 548.0),
@@ -436,6 +455,12 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_complete.png")):
 		quit(1)
 		return
+	node.call("set_text_scale_for_test", 1.5)
+	await _settle(2)
+	if not await _capture(out_dir.path_join("shot_text_scale_complete_150.png")):
+		quit(1)
+		return
+	node.call("set_text_scale_for_test", 1.0)
 	node.set("_double_offer_shown", true)
 	await _settle(2)
 	if not await _capture(out_dir.path_join("shot_complete_with_double_offer.png")):
