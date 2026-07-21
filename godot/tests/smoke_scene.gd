@@ -92,7 +92,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -327,6 +327,8 @@ func _run_smoke() -> void:
 	if not _test_stage_selection_and_retry_contract(root_node):
 		return
 	if not _test_tool_scoped_skin_ownership(root_node):
+		return
+	if not _test_title_hero_customization(root_node):
 		return
 	if not _test_license_plate_customization(root_node):
 		return
@@ -1149,6 +1151,65 @@ func _test_tool_scoped_skin_ownership(root_node: Node) -> bool:
 	return true
 
 
+func _test_title_hero_customization(root_node: Node) -> bool:
+	var persistent_hud_before := _capture_persistent_hud_state(root_node)
+	var original_skins := {
+		"water": root_node.get("skin_water"),
+		"air": root_node.get("skin_air"),
+		"soap": root_node.get("skin_soap"),
+		"sponge": root_node.get("skin_sponge"),
+	}
+	root_node.set("skin_water", "coral")
+	root_node.set("skin_air", "violet")
+	root_node.set("skin_soap", "pink")
+	root_node.set("skin_sponge", "lime")
+	var swatch_colors: Array = root_node.call("get_title_skin_swatch_colors_for_test")
+	var expected_colors := [
+		Color(1.0, 0.42, 0.32),
+		Color(0.62, 0.22, 0.90),
+		Color(1.0, 0.58, 0.78),
+		Color(0.42, 0.90, 0.28),
+	]
+	if swatch_colors.size() != expected_colors.size():
+		_fail("title must expose one equipped-skin swatch for every tool")
+		return false
+	for color_index in range(expected_colors.size()):
+		if not (swatch_colors[color_index] as Color).is_equal_approx(expected_colors[color_index]):
+			_fail("title skin swatch must use the equipped tool skin color")
+			return false
+
+	var hero_rect: Rect2 = root_node.call("get_title_hero_rect_for_test")
+	if hero_rect.intersects(Rect2(18.0, 382.0, 354.0, 82.0)) \
+			or hero_rect.intersects(root_node.call("_get_start_rect")):
+		_fail("title hero car and swatches must stay above existing mission and start surfaces")
+		return false
+
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var hero_start := main_source.find("func _draw_title_hero_car() -> void:")
+	var hero_end := main_source.find("\nfunc ", hero_start + 1)
+	var title_start := main_source.find("func _draw_title_screen() -> void:")
+	var title_end := main_source.find("\nfunc ", title_start + 1)
+	if hero_start < 0 or hero_end < 0 or title_start < 0 or title_end < 0:
+		_fail("title hero draw functions must remain discoverable")
+		return false
+	var hero_body := main_source.substr(hero_start, hero_end - hero_start)
+	var title_body := main_source.substr(title_start, title_end - title_start)
+	if not hero_body.contains("_draw_car()") \
+			or not title_body.contains("_draw_title_hero_car()") \
+			or not title_body.contains("_draw_title_skin_swatches()"):
+		_fail("title must reuse the existing car renderer and draw equipped skin swatches in-place")
+		return false
+
+	root_node.set("skin_water", original_skins["water"])
+	root_node.set("skin_air", original_skins["air"])
+	root_node.set("skin_soap", original_skins["soap"])
+	root_node.set("skin_sponge", original_skins["sponge"])
+	if _capture_persistent_hud_state(root_node) != persistent_hud_before:
+		_fail("title hero preview must not add a persistent Control or move gameplay HUD residency")
+		return false
+	return true
+
+
 func _capture_persistent_hud_state(root_node: Node) -> Dictionary:
 	return {
 		"control_count": root_node.find_children("*", "Control", true, false).size(),
@@ -1227,9 +1288,13 @@ func _test_car_paint_customization(root_node: Node) -> bool:
 		return false
 	var draw_body := main_source.substr(draw_start, draw_end - draw_start)
 	var car_draw_body := main_source.substr(car_draw_start, car_draw_end - car_draw_start)
-	if draw_body.count("\n\t_draw_car()\n") != 1 \
+	var title_hero_start := main_source.find("func _draw_title_hero_car() -> void:")
+	var title_hero_end := main_source.find("\nfunc ", title_hero_start + 1)
+	var title_hero_body := main_source.substr(title_hero_start, title_hero_end - title_hero_start)
+	if draw_body.count("_draw_car()") != 1 \
+			or title_hero_body.count("_draw_car()") != 1 \
 			or not car_draw_body.contains("draw_colored_polygon(silhouette, car_color)"):
-		_fail("title, gameplay, and completion must share one unconditional car_color render path")
+		_fail("title hero, gameplay, and completion must share the same car_color render path")
 		return false
 	for paint_index in range(paints.size()):
 		if not panel.encloses(root_node.call("_skin_card_rect", panel, paint_index)):

@@ -39,6 +39,22 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_title.png")):
 		quit(1)
 		return
+	node.set("skin_water", "coral")
+	node.set("skin_air", "violet")
+	node.set("skin_soap", "pink")
+	node.set("skin_sponge", "lime")
+	node.set("selected_car_paint", "paint_violet")
+	node.call("_set_car_palette")
+	await _settle(3)
+	if not await _capture(out_dir.path_join("shot_title_hero_customized.png")):
+		quit(1)
+		return
+	node.set("skin_water", "classic")
+	node.set("skin_air", "classic")
+	node.set("skin_soap", "classic")
+	node.set("skin_sponge", "classic")
+	node.set("selected_car_paint", "")
+	node.call("_set_car_palette")
 	node.set("daily_mission_type", "road_grime")
 	node.set("daily_mission_target", 8)
 	node.set("daily_mission_reward", 85)
