@@ -1576,6 +1576,10 @@ func get_star3_combo_requirement_for_test(level: int) -> int:
 	return Scoring.star3_combo_requirement(level)
 
 
+func get_star_time_threshold_for_test(tier: int, level: int = -1) -> float:
+	return Scoring.star_time_threshold(tier, active_level_index if level < 0 else level)
+
+
 func is_star3_combo_unlocked_for_test() -> bool:
 	return _star3_combo_unlocked
 
@@ -3877,7 +3881,8 @@ func _update_stalled_dirt_highlight(delta: float) -> void:
 	)
 
 
-# Star time threshold tightens 1.5% per level after the first (floor at 60% of base).
+# Star time thresholds grow with the estimated patch-count and durability work.
+# Scoring owns the shared formula used by results, live grade UI, and warnings.
 # This ensures experienced players face a gradually rising skill ceiling.
 func _star_time_threshold(tier: int) -> float:
 	return Scoring.star_time_threshold(tier, active_level_index)

@@ -11,6 +11,11 @@ const STAR3_COMBO := 4
 const STAR3_COMBO_LEVEL_STEP := 3
 const STAR3_COMBO_MAX := 10
 const STAR2_TIME := 140.0
+# Star timers follow estimated wash work sublinearly: patch count times dirt
+# durability, square-rooted so late levels remain fair without making time goals
+# trivial. The cap matches the finite mobile density/durability curve.
+const STAR_TIME_WORKLOAD_EXPONENT := 0.5
+const STAR_TIME_SCALE_MAX := 1.75
 # Washing progress offsets this fraction of elapsed-time pressure at 100%
 # cleanliness. The customer still reaches zero patience after a longer idle.
 const PATIENCE_PROGRESS_WEIGHT := 0.65

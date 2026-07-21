@@ -280,6 +280,9 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
+	if not root_node.has_method("get_star_time_threshold_for_test"):
+		_fail("star time threshold test API missing")
+		return
 	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "get_level_mistakes_for_test", "get_perfect_wash_bonus_for_test", "get_water_boost_remaining_for_test", "get_water_boost_cost_for_test", "get_tool_radius_for_test", "get_reach_upgrade_level_for_test", "set_reach_upgrade_level_for_test", "get_tool_power_multiplier_for_test", "get_power_upgrade_level_for_test", "set_power_upgrade_level_for_test", "activate_water_boost", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_initial_dirt_snapshot_for_test", "get_completion_reveal_progress_for_test", "set_completion_reveal_age_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_achievement_definitions_for_test", "get_achievement_counters_for_test", "get_achievement_claimed_for_test", "set_achievement_state_for_test", "record_achievement_progress_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
@@ -396,6 +399,8 @@ func _run_smoke() -> void:
 	if not _test_scaled_star3_combo_gate_contract(root_node):
 		return
 	if not await _test_scaled_grade_tracker_prompt_contract(root_node):
+		return
+	if not _test_workload_scaled_star_time_contract(root_node):
 		return
 	if not _test_oil_sheen_contract(root_node):
 		return
@@ -3777,6 +3782,60 @@ func _test_scaled_grade_tracker_prompt_contract(root_node: Node) -> bool:
 		_fail("scaled grade tracker prompt must keep existing HUD residency unchanged")
 		return false
 	root_node.call("reset_game", 1, "scaled_grade_tracker_prompt_smoke_cleanup")
+	return true
+
+
+func _test_workload_scaled_star_time_contract(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var levels := [1, 5, 10]
+	var dirt_totals: Array[float] = []
+	var star3_thresholds: Array[float] = []
+	var star2_thresholds: Array[float] = []
+	for level in levels:
+		root_node.call("reset_game", level, "workload_star_time_smoke")
+		dirt_totals.append(float(root_node.call("get_initial_dirt_total_for_test")))
+		star3_thresholds.append(float(root_node.call("get_star_time_threshold_for_test", 3)))
+		star2_thresholds.append(float(root_node.call("get_star_time_threshold_for_test", 2)))
+	if absf(star3_thresholds[0] - 75.0) > 0.001 or absf(star2_thresholds[0] - 140.0) > 0.001:
+		_fail("level one must preserve the shipped 75 and 140 second star timers")
+		return false
+	if not (dirt_totals[0] < dirt_totals[1] and dirt_totals[1] < dirt_totals[2]) \
+			or not (star3_thresholds[0] < star3_thresholds[1] and star3_thresholds[1] < star3_thresholds[2]) \
+			or not (star2_thresholds[0] < star2_thresholds[1] and star2_thresholds[1] < star2_thresholds[2]):
+		_fail("levels 1, 5, and 10 must grow both wash work and star time allowances")
+		return false
+	if star3_thresholds[1] <= star3_thresholds[0] * 1.25 \
+			or star3_thresholds[2] <= star3_thresholds[1] * 1.20:
+		_fail("late-level star time growth must be meaningful rather than nominal")
+		return false
+
+	root_node.call("reset_game", 10, "workload_star_boundary_smoke")
+	var level10_star3 := star3_thresholds[2]
+	var level10_combo := int(root_node.call("get_star3_combo_requirement_for_test", 10))
+	root_node.set("best_combo", level10_combo)
+	root_node.set("level_time", level10_star3)
+	if int(root_node.call("calc_stars_for_test")) != 3 \
+			or String(root_node.call("get_grade_slot_state_for_test", 2)) != "earned":
+		_fail("results and live grade tracker must earn star three at the shared late threshold")
+		return false
+	root_node.set("level_time", level10_star3 + 0.01)
+	if int(root_node.call("calc_stars_for_test")) != 2 \
+			or String(root_node.call("get_grade_slot_state_for_test", 2)) != "locked":
+		_fail("results and live grade tracker must lose star three together after the threshold")
+		return false
+	root_node.set("level_time", level10_star3 - 5.0)
+	if absf(float(root_node.call("get_grade_time_to_downgrade_for_test")) - 5.0) > 0.001:
+		_fail("live countdown must use the same workload-scaled threshold")
+		return false
+	var scoring_source := FileAccess.get_file_as_string("res://core/use_cases/scoring.gd")
+	if not scoring_source.contains("DirtSpawnPlan.spawn_count(level_index)") \
+			or not scoring_source.contains("DirtSpawnPlan.health_scale_for_level(level_index)"):
+		_fail("star time scale must remain tied to patch count and dirt durability")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("workload star timers must reuse the existing result and grade UI")
+		return false
+	root_node.call("reset_game", 1, "workload_star_time_smoke_cleanup")
 	return true
 
 
