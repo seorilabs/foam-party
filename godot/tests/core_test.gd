@@ -131,19 +131,48 @@ func _run_core_tests() -> void:
 	if int(Economy.calc_level_milestone_bonus(3)) != 0:
 		_fail("non-milestone level should give no bonus")
 		return
-	if int(Economy.upgrade_cost(0, 0)) != 90 or int(Economy.upgrade_cost(0, 2)) != 320:
-		_fail("upgrade costs should read from the config table")
+	var expected_upgrade_costs := [
+		[110, 230, 380],
+		[90, 190, 320],
+		[70, 150, 260],
+	]
+	if GameConfig.UPGRADE_COSTS[0] == GameConfig.UPGRADE_COSTS[1] \
+			or GameConfig.UPGRADE_COSTS[1] == GameConfig.UPGRADE_COSTS[2] \
+			or GameConfig.UPGRADE_COSTS[0] == GameConfig.UPGRADE_COSTS[2]:
+		_fail("every tool must have a distinct upgrade cost curve")
 		return
-	if not bool(Economy.can_buy_upgrade(0, 0, 90)):
-		_fail("90 coins should afford the first upgrade tier")
+	var total_upgrade_sink := 0
+	for tool_idx in range(expected_upgrade_costs.size()):
+		var previous_cost := 0
+		for upgrade_level in range(GameConfig.UPGRADE_MAX_LEVEL):
+			var cost := int(Economy.upgrade_cost(tool_idx, upgrade_level))
+			if cost != int(expected_upgrade_costs[tool_idx][upgrade_level]):
+				_fail("upgrade cost should read the tool-specific config curve")
+				return
+			if cost <= previous_cost:
+				_fail("upgrade costs must stay positive and increase by level")
+				return
+			previous_cost = cost
+			total_upgrade_sink += cost
+	if total_upgrade_sink != 1800:
+		_fail("differentiated upgrade curves must preserve the 1800-coin total sink")
 		return
-	if bool(Economy.can_buy_upgrade(0, 0, 89)):
-		_fail("89 coins should not afford the first upgrade tier")
+	if not bool(Economy.can_buy_upgrade(0, 0, 110)):
+		_fail("110 coins should afford the first water upgrade tier")
+		return
+	if bool(Economy.can_buy_upgrade(0, 0, 109)):
+		_fail("109 coins should not afford the first water upgrade tier")
 		return
 	if bool(Economy.can_buy_upgrade(0, 3, 9999)):
 		_fail("a maxed upgrade should never be buyable")
 		return
-	if absf(float(Economy.upgrade_mult(0)) - 1.0) > 0.0001 or absf(float(Economy.upgrade_mult(3)) - 2.0) > 0.0001:
+	for upgrade_level in range(GameConfig.UPGRADE_MAX_LEVEL + 1):
+		var multiplier := float(Economy.upgrade_mult(upgrade_level))
+		if multiplier < 1.0 or multiplier > 2.0:
+			_fail("upgrade multipliers must stay in the supported 1x to 2x range")
+			return
+	if absf(float(Economy.upgrade_mult(0)) - 1.0) > 0.0001 \
+			or absf(float(Economy.upgrade_mult(3)) - 2.0) > 0.0001:
 		_fail("upgrade multipliers should map level to the config table")
 		return
 
