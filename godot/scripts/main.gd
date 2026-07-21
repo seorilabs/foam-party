@@ -1620,6 +1620,26 @@ func get_audio_player_bus_map_for_test() -> Dictionary:
 	return audio.get_player_bus_map_for_test()
 
 
+func get_bgm_variant_count_for_test() -> int:
+	return audio.get_bgm_variant_count_for_test()
+
+
+func get_bgm_variant_index_for_test() -> int:
+	return audio.get_bgm_variant_index_for_test()
+
+
+func get_bgm_playback_state_for_test() -> Dictionary:
+	return audio.get_bgm_playback_state_for_test()
+
+
+func get_bgm_variant_signatures_for_test() -> Array[int]:
+	return audio.get_bgm_variant_signatures_for_test()
+
+
+func advance_bgm_variant_for_test() -> void:
+	audio.advance_bgm_variant_for_test()
+
+
 func get_music_enabled_for_test() -> bool:
 	return music_enabled
 

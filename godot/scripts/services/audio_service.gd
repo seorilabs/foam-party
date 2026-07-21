@@ -15,6 +15,7 @@ const TOOL_SOAP := "soap"
 const TOOL_SPONGE := "sponge"
 const MUSIC_BUS := "Music"
 const SFX_BUS := "SFX"
+const BGM_VARIANT_COUNT := 3
 const OPTIONAL_SFX_PLAYERS := {
 	"combo_break_player": "ComboBreakSfx",
 	"_hint_sfx_player": "HintSfx",
@@ -32,6 +33,8 @@ const OPTIONAL_SFX_PLAYERS := {
 }
 
 var bgm_player: AudioStreamPlayer
+var bgm_streams: Array[AudioStreamWAV] = []
+var bgm_variant_index := 0
 var tool_loop_player: AudioStreamPlayer
 var ui_sfx_player: AudioStreamPlayer
 var completion_sfx_player: AudioStreamPlayer
@@ -145,9 +148,13 @@ func setup() -> void:
 		add_child(_star_earn_sfx)
 	_ensure_optional_sfx_players()
 
+	bgm_streams.clear()
+	for variant_index in range(BGM_VARIANT_COUNT):
+		bgm_streams.append(_make_bgm_stream(variant_index))
+	bgm_variant_index = 0
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
-	bgm_player.stream = _make_bgm_stream()
+	bgm_player.stream = bgm_streams[bgm_variant_index]
 	bgm_player.volume_db = -23.0
 	bgm_player.finished.connect(_on_bgm_finished)
 	add_child(bgm_player)
@@ -367,7 +374,15 @@ func _scale_pop(t: float, rate: float, width: float, note_shift: int, amp: float
 
 
 func _on_bgm_finished() -> void:
-	if bgm_player != null and audio_playback_enabled:
+	_advance_bgm_variant()
+
+
+func _advance_bgm_variant() -> void:
+	if bgm_player == null or bgm_streams.is_empty():
+		return
+	bgm_variant_index = (bgm_variant_index + 1) % bgm_streams.size()
+	bgm_player.stream = bgm_streams[bgm_variant_index]
+	if audio_playback_enabled:
 		bgm_player.play()
 
 
@@ -717,27 +732,60 @@ func _make_completion_stream() -> AudioStreamWAV:
 	return _make_wav(data)
 
 
-func _make_bgm_stream() -> AudioStreamWAV:
+func _bgm_melody_for_variant(variant_index: int) -> Array[float]:
+	match posmod(variant_index, BGM_VARIANT_COUNT):
+		1:
+			return [329.63, 392.0, 440.0, 493.88, 440.0, 392.0, 349.23, 392.0, 329.63]
+		2:
+			return [440.0, 523.25, 659.25, 587.33, 523.25, 493.88]
+		_:
+			return [392.0, 440.0, 493.88, 587.33, 523.25, 493.88, 440.0, 392.0]
+
+
+func _bgm_bass_for_variant(variant_index: int) -> Array[float]:
+	match posmod(variant_index, BGM_VARIANT_COUNT):
+		1:
+			return [110.0, 130.81, 146.83, 164.81]
+		2:
+			return [146.83, 174.61, 196.0, 164.81]
+		_:
+			return [130.81, 146.83, 164.81, 196.0]
+
+
+func _bgm_step_duration_for_variant(variant_index: int) -> float:
+	match posmod(variant_index, BGM_VARIANT_COUNT):
+		1:
+			return 0.32
+		2:
+			return 0.48
+		_:
+			return 0.36
+
+
+func _make_bgm_stream(variant_index: int) -> AudioStreamWAV:
 	var duration := 5.76
 	var total_samples: int = int(duration * float(AUDIO_MIX_RATE))
 	var data := PackedByteArray()
-	var melody := [392.0, 440.0, 493.88, 587.33, 523.25, 493.88, 440.0, 392.0]
-	var bass := [130.81, 146.83, 164.81, 196.0]
+	var normalized_variant := posmod(variant_index, BGM_VARIANT_COUNT)
+	var melody := _bgm_melody_for_variant(normalized_variant)
+	var bass := _bgm_bass_for_variant(normalized_variant)
+	var step_duration := _bgm_step_duration_for_variant(normalized_variant)
+	var shimmer_frequency: float = [880.0, 659.25, 1046.5][normalized_variant]
 	var hat_rng := RandomNumberGenerator.new()
-	hat_rng.seed = 7707
+	hat_rng.seed = 7707 + normalized_variant * 101
 	for sample_index in range(total_samples):
 		var t: float = float(sample_index) / float(AUDIO_MIX_RATE)
-		var step: int = int(floor(t / 0.36)) % melody.size()
+		var step: int = int(floor(t / step_duration)) % melody.size()
 		var bass_step: int = int(floor(t / 1.44)) % bass.size()
-		var beat_phase: float = fmod(t, 0.36) / 0.36
+		var beat_phase: float = fmod(t, step_duration) / step_duration
 		var pluck: float = pow(1.0 - beat_phase, 1.8)
 		var melody_sample: float = (sin(TAU * melody[step] * t) * 0.10 + sin(TAU * melody[step] * 2.0 * t) * 0.025) * pluck
 		var harmony_sample: float = sin(TAU * melody[step] * 1.5 * t) * 0.03 * pluck
 		var bass_phase: float = fmod(t, 0.72) / 0.72
 		var bass_sample: float = sin(TAU * bass[bass_step] * t) * 0.075 * (0.6 + 0.4 * pow(1.0 - bass_phase, 1.2))
-		var hat_phase: float = fmod(t + 0.18, 0.36) / 0.36
+		var hat_phase: float = fmod(t + step_duration * 0.5, step_duration) / step_duration
 		var hat: float = hat_rng.randf_range(-1.0, 1.0) * 0.02 * pow(max(0.0, 1.0 - hat_phase * 5.0), 2.0)
-		var shimmer: float = sin(TAU * 880.0 * t) * 0.012 * max(0.0, sin(TAU * 2.0 * t))
+		var shimmer: float = sin(TAU * shimmer_frequency * t) * 0.012 * max(0.0, sin(TAU * (2.0 + float(normalized_variant) * 0.25) * t))
 		var loop_fade: float = min(1.0, float(sample_index) / 1800.0, float(total_samples - sample_index) / 1800.0)
 		_append_i16_sample(data, (melody_sample + harmony_sample + bass_sample + hat + shimmer) * loop_fade)
 	return _make_wav(data)
@@ -796,3 +844,29 @@ func get_player_bus_map_for_test() -> Dictionary:
 	for player in _sfx_players():
 		result[String(player.name)] = player.bus
 	return result
+
+
+func get_bgm_variant_count_for_test() -> int:
+	return bgm_streams.size()
+
+
+func get_bgm_variant_index_for_test() -> int:
+	return bgm_variant_index
+
+
+func get_bgm_playback_state_for_test() -> Dictionary:
+	return {
+		"enabled": audio_playback_enabled,
+		"playing": bgm_player.playing,
+	}
+
+
+func get_bgm_variant_signatures_for_test() -> Array[int]:
+	var signatures: Array[int] = []
+	for stream in bgm_streams:
+		signatures.append(hash(stream.data))
+	return signatures
+
+
+func advance_bgm_variant_for_test() -> void:
+	_on_bgm_finished()
