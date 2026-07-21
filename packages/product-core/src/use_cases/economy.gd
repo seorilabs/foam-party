@@ -52,6 +52,18 @@ static func can_buy_upgrade(idx: int, level: int, coins: int) -> bool:
 	return level < GameConfig.UPGRADE_MAX_LEVEL and coins >= GameConfig.UPGRADE_COSTS[idx][level]
 
 
+static func reach_upgrade_mult(level: int) -> float:
+	return GameConfig.REACH_UPGRADE_MULTS[clampi(level, 0, GameConfig.REACH_UPGRADE_MAX_LEVEL)]
+
+
+static func reach_upgrade_cost(idx: int, level: int) -> int:
+	return GameConfig.REACH_UPGRADE_COSTS[idx][level]
+
+
+static func can_buy_reach_upgrade(idx: int, level: int, coins: int) -> bool:
+	return level < GameConfig.REACH_UPGRADE_MAX_LEVEL and coins >= GameConfig.REACH_UPGRADE_COSTS[idx][level]
+
+
 # Decide what a tap on a skin card should do without touching any state.
 # Returns an intent dict {action: "buy"|"select"|"deny", cost: int, id: String}.
 static func resolve_skin_purchase(catalog: Dictionary, tool: String, skin_idx: int, owned_skins: Dictionary, coins: int) -> Dictionary:

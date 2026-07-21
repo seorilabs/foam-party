@@ -61,6 +61,12 @@ const UPGRADE_COSTS := GameConfig.UPGRADE_COSTS
 const UPGRADE_MULTS := GameConfig.UPGRADE_MULTS
 const UPGRADE_KEYS := GameConfig.UPGRADE_KEYS
 const UPGRADE_MAX_LEVEL := GameConfig.UPGRADE_MAX_LEVEL
+const REACH_UPGRADE_COSTS := GameConfig.REACH_UPGRADE_COSTS
+const REACH_UPGRADE_MULTS := GameConfig.REACH_UPGRADE_MULTS
+const REACH_UPGRADE_KEYS := GameConfig.REACH_UPGRADE_KEYS
+const REACH_UPGRADE_MAX_LEVEL := GameConfig.REACH_UPGRADE_MAX_LEVEL
+const UPGRADE_TAB_POWER := 0
+const UPGRADE_TAB_REACH := 1
 const STATE_TITLE := "title"
 const STATE_PLAYING := "playing"
 const GAMEPLAY_SCALE := 1.16
@@ -282,6 +288,11 @@ var _daily_progress_dirty := false
 var upgrade_water := 0
 var upgrade_soap := 0
 var upgrade_sponge := 0
+var reach_upgrade_air := 0
+var reach_upgrade_water := 0
+var reach_upgrade_soap := 0
+var reach_upgrade_sponge := 0
+var _upgrade_panel_tab := UPGRADE_TAB_POWER
 var show_upgrade_panel := false
 var show_skin_panel := false
 var show_stage_panel := false
@@ -386,9 +397,7 @@ func _load_progress() -> void:
 		sound_enabled = bool(config.get_value("settings", "sound", true))
 		_load_language_preference(config)
 		tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
-		upgrade_water = clampi(int(config.get_value("upgrades", "water", 0)), 0, UPGRADE_MAX_LEVEL)
-		upgrade_soap = clampi(int(config.get_value("upgrades", "soap", 0)), 0, UPGRADE_MAX_LEVEL)
-		upgrade_sponge = clampi(int(config.get_value("upgrades", "sponge", 0)), 0, UPGRADE_MAX_LEVEL)
+		_load_upgrade_progress(config)
 		_load_nozzle_skin_customization(config)
 		_load_car_paint_customization(config)
 		license_plate_text = LicensePlate.safe_selection(String(config.get_value("customization", "license_plate", LicensePlate.DEFAULT_TEXT)))
@@ -536,6 +545,26 @@ func _store_achievement_progress(config: ConfigFile) -> void:
 	config.set_value("achievements", "claimed", achievement_claimed)
 
 
+func _load_upgrade_progress(config: ConfigFile) -> void:
+	upgrade_water = clampi(int(config.get_value("upgrades", "water", 0)), 0, UPGRADE_MAX_LEVEL)
+	upgrade_soap = clampi(int(config.get_value("upgrades", "soap", 0)), 0, UPGRADE_MAX_LEVEL)
+	upgrade_sponge = clampi(int(config.get_value("upgrades", "sponge", 0)), 0, UPGRADE_MAX_LEVEL)
+	reach_upgrade_air = clampi(int(config.get_value("upgrades", "reach_air", 0)), 0, REACH_UPGRADE_MAX_LEVEL)
+	reach_upgrade_water = clampi(int(config.get_value("upgrades", "reach_water", 0)), 0, REACH_UPGRADE_MAX_LEVEL)
+	reach_upgrade_soap = clampi(int(config.get_value("upgrades", "reach_soap", 0)), 0, REACH_UPGRADE_MAX_LEVEL)
+	reach_upgrade_sponge = clampi(int(config.get_value("upgrades", "reach_sponge", 0)), 0, REACH_UPGRADE_MAX_LEVEL)
+
+
+func _store_upgrade_progress(config: ConfigFile) -> void:
+	config.set_value("upgrades", "water", upgrade_water)
+	config.set_value("upgrades", "soap", upgrade_soap)
+	config.set_value("upgrades", "sponge", upgrade_sponge)
+	config.set_value("upgrades", "reach_air", reach_upgrade_air)
+	config.set_value("upgrades", "reach_water", reach_upgrade_water)
+	config.set_value("upgrades", "reach_soap", reach_upgrade_soap)
+	config.set_value("upgrades", "reach_sponge", reach_upgrade_sponge)
+
+
 func _save_progress() -> Error:
 	if not persistence_enabled:
 		return OK
@@ -549,9 +578,7 @@ func _save_progress() -> Error:
 	config.set_value("game", "best_times", best_times)
 	config.set_value("game", "best_stars", best_stars)
 	config.set_value("daily", "claimed_date", daily_mission_date if daily_mission_claimed else "")
-	config.set_value("upgrades", "water", upgrade_water)
-	config.set_value("upgrades", "soap", upgrade_soap)
-	config.set_value("upgrades", "sponge", upgrade_sponge)
+	_store_upgrade_progress(config)
 	_store_nozzle_skin_customization(config)
 	_store_car_paint_customization(config)
 	config.set_value("customization", "license_plate", license_plate_text)
@@ -1380,6 +1407,14 @@ func get_water_boost_cost_for_test() -> int:
 
 func get_tool_radius_for_test(tool_id: String) -> float:
 	return _tool_radius(tool_id)
+
+
+func get_reach_upgrade_level_for_test(tool_id: String) -> int:
+	return _reach_upgrade_level(tool_id)
+
+
+func set_reach_upgrade_level_for_test(tool_id: String, level: int) -> void:
+	_set_reach_upgrade_level(tool_id, level)
 
 
 func get_tool_power_multiplier_for_test(tool_id: String) -> float:
@@ -2894,7 +2929,7 @@ func _draw_wash_trail() -> void:
 
 
 func _tool_radius(tool_id: String) -> float:
-	var radius := Coaching.tool_radius(tool_id)
+	var radius := Coaching.tool_radius(tool_id) * _reach_upgrade_mult(tool_id)
 	if tool_id == TOOL_WATER and _water_boost_active():
 		radius *= WATER_BOOST_RADIUS_MULT
 	return radius
@@ -5663,60 +5698,122 @@ func _get_upgrade_btn_rect() -> Rect2:
 
 
 func _upgrade_mult(key: String) -> float:
-	var lvl := 0
-	if key == "water":
-		lvl = upgrade_water
-	elif key == "soap":
-		lvl = upgrade_soap
-	else:
-		lvl = upgrade_sponge
-	return Economy.upgrade_mult(lvl)
+	return Economy.upgrade_mult(_power_upgrade_level(key))
+
+
+func _power_upgrade_level(key: String) -> int:
+	if key == TOOL_WATER:
+		return upgrade_water
+	if key == TOOL_SOAP:
+		return upgrade_soap
+	if key == TOOL_SPONGE:
+		return upgrade_sponge
+	return 0
+
+
+func _set_power_upgrade_level(key: String, level: int) -> void:
+	var safe_level: int = clampi(level, 0, UPGRADE_MAX_LEVEL)
+	if key == TOOL_WATER:
+		upgrade_water = safe_level
+	elif key == TOOL_SOAP:
+		upgrade_soap = safe_level
+	elif key == TOOL_SPONGE:
+		upgrade_sponge = safe_level
+
+
+func _reach_upgrade_level(key: String) -> int:
+	if key == TOOL_AIR:
+		return reach_upgrade_air
+	if key == TOOL_WATER:
+		return reach_upgrade_water
+	if key == TOOL_SOAP:
+		return reach_upgrade_soap
+	if key == TOOL_SPONGE:
+		return reach_upgrade_sponge
+	return 0
+
+
+func _set_reach_upgrade_level(key: String, level: int) -> void:
+	var safe_level: int = clampi(level, 0, REACH_UPGRADE_MAX_LEVEL)
+	if key == TOOL_AIR:
+		reach_upgrade_air = safe_level
+	elif key == TOOL_WATER:
+		reach_upgrade_water = safe_level
+	elif key == TOOL_SOAP:
+		reach_upgrade_soap = safe_level
+	elif key == TOOL_SPONGE:
+		reach_upgrade_sponge = safe_level
+
+
+func _reach_upgrade_mult(key: String) -> float:
+	return Economy.reach_upgrade_mult(_reach_upgrade_level(key))
+
+
+func _upgrade_panel_rect() -> Rect2:
+	return Rect2(20.0, 100.0, 350.0, 520.0)
+
+
+func _upgrade_tab_rect(tab: int) -> Rect2:
+	var panel: Rect2 = _upgrade_panel_rect()
+	var gap: float = 8.0
+	var width: float = (panel.size.x - 40.0 - gap) * 0.5
+	return Rect2(panel.position.x + 20.0 + float(tab) * (width + gap), panel.position.y + 82.0, width, 34.0)
 
 
 func _upgrade_row_y(panel: Rect2, idx: int) -> float:
-	return panel.position.y + 110.0 + float(idx) * 118.0
+	return panel.position.y + 128.0 + float(idx) * 86.0
 
 
 func _upgrade_buy_rect(panel: Rect2, idx: int) -> Rect2:
-	return Rect2(panel.position.x + panel.size.x - 124.0, _upgrade_row_y(panel, idx) + 32.0, 100.0, 38.0)
+	return Rect2(panel.position.x + panel.size.x - 114.0, _upgrade_row_y(panel, idx) + 20.0, 90.0, 38.0)
 
 
 func _handle_upgrade_panel_tap(point: Vector2) -> void:
-	var panel := Rect2(20.0, 100.0, 350.0, 520.0)
+	var panel: Rect2 = _upgrade_panel_rect()
 	var close_rect := Rect2(panel.position.x + panel.size.x - 48.0, panel.position.y + 10.0, 38.0, 38.0)
 	if close_rect.has_point(point):
 		show_upgrade_panel = false
 		queue_redraw()
 		_play_ui_select()
 		return
-	for idx in range(UPGRADE_KEYS.size()):
+	for tab in [UPGRADE_TAB_POWER, UPGRADE_TAB_REACH]:
+		if _upgrade_tab_rect(tab).has_point(point):
+			_upgrade_panel_tab = tab
+			queue_redraw()
+			_play_ui_select()
+			return
+	var keys: Array = UPGRADE_KEYS if _upgrade_panel_tab == UPGRADE_TAB_POWER else REACH_UPGRADE_KEYS
+	for idx in range(keys.size()):
 		if _upgrade_buy_rect(panel, idx).has_point(point):
 			_try_buy_upgrade(idx)
 			return
 
 
 func _try_buy_upgrade(idx: int) -> void:
-	var lvl := upgrade_water if idx == 0 else (upgrade_soap if idx == 1 else upgrade_sponge)
-	if not Economy.can_buy_upgrade(idx, lvl, coins):
+	var is_reach: bool = _upgrade_panel_tab == UPGRADE_TAB_REACH
+	var keys: Array = REACH_UPGRADE_KEYS if is_reach else UPGRADE_KEYS
+	if idx < 0 or idx >= keys.size():
 		return
-	var cost: int = Economy.upgrade_cost(idx, lvl)
+	var key: String = String(keys[idx])
+	var lvl: int = _reach_upgrade_level(key) if is_reach else _power_upgrade_level(key)
+	var can_buy: bool = Economy.can_buy_reach_upgrade(idx, lvl, coins) if is_reach else Economy.can_buy_upgrade(idx, lvl, coins)
+	if not can_buy:
+		return
+	var cost: int = Economy.reach_upgrade_cost(idx, lvl) if is_reach else Economy.upgrade_cost(idx, lvl)
 	coins -= cost
-	if idx == 0:
-		upgrade_water += 1
-	elif idx == 1:
-		upgrade_soap += 1
+	if is_reach:
+		_set_reach_upgrade_level(key, lvl + 1)
 	else:
-		upgrade_sponge += 1
+		_set_power_upgrade_level(key, lvl + 1)
 	if _save_progress() != OK:
 		coins += cost
-		if idx == 0:
-			upgrade_water -= 1
-		elif idx == 1:
-			upgrade_soap -= 1
+		if is_reach:
+			_set_reach_upgrade_level(key, lvl)
 		else:
-			upgrade_sponge -= 1
+			_set_power_upgrade_level(key, lvl)
 		return
-	_emit_analytics(ContentEvents.upgrade_purchase(UPGRADE_KEYS[idx], lvl + 1, cost))
+	var analytics_key: String = "reach_" + key if is_reach else key
+	_emit_analytics(ContentEvents.upgrade_purchase(analytics_key, lvl + 1, cost))
 	_play_ui_select()
 	queue_redraw()
 
@@ -5724,7 +5821,7 @@ func _try_buy_upgrade(idx: int) -> void:
 func _draw_upgrade_panel() -> void:
 	var font: Font = _font()
 	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.05, 0.18, 0.72))
-	var panel := Rect2(20.0, 100.0, 350.0, 520.0)
+	var panel: Rect2 = _upgrade_panel_rect()
 	draw_style_box(_style("upg_panel_shadow", Color(0.02, 0.06, 0.22, 0.5), 22.0), Rect2(panel.position + Vector2(0.0, 6.0), panel.size))
 	draw_style_box(_style("upg_panel", Color("#f0f6ff"), 22.0), panel)
 
@@ -5735,39 +5832,62 @@ func _draw_upgrade_panel() -> void:
 	draw_style_box(_style("upg_close_bg", Color("#e0e9f5"), 10.0), close_rect)
 	draw_string(font, Vector2(close_rect.position.x, close_rect.position.y + 26.0), "X", HORIZONTAL_ALIGNMENT_CENTER, close_rect.size.x, 18, Color("#0d2a50"))
 
-	var tool_col := [Color("#49a7ff"), Color("#f8f4a6"), Color("#ff9f5a")]
-	var upgrade_lvls := [upgrade_water, upgrade_soap, upgrade_sponge]
+	for tab in [UPGRADE_TAB_POWER, UPGRADE_TAB_REACH]:
+		var tab_rect: Rect2 = _upgrade_tab_rect(tab)
+		var selected: bool = tab == _upgrade_panel_tab
+		draw_style_box(_style("upg_tab_%d" % tab, Color("#3a9ef0") if selected else Color("#d5e3f1"), 10.0), tab_rect)
+		draw_string(font, Vector2(tab_rect.position.x, tab_rect.position.y + 23.0), tr("UPG_TAB_POWER") if tab == UPGRADE_TAB_POWER else tr("UPG_TAB_REACH"), HORIZONTAL_ALIGNMENT_CENTER, tab_rect.size.x, 14, Color.WHITE if selected else Color("#49677c"))
 
-	for idx in range(UPGRADE_KEYS.size()):
-		var lvl: int = upgrade_lvls[idx]
-		var row_y := _upgrade_row_y(panel, idx)
-		var row_rect := Rect2(panel.position.x + 14.0, row_y, panel.size.x - 28.0, 106.0)
+	var is_reach: bool = _upgrade_panel_tab == UPGRADE_TAB_REACH
+	var keys: Array = REACH_UPGRADE_KEYS if is_reach else UPGRADE_KEYS
+	var max_level: int = REACH_UPGRADE_MAX_LEVEL if is_reach else UPGRADE_MAX_LEVEL
+	for idx in range(keys.size()):
+		var key: String = String(keys[idx])
+		var lvl: int = _reach_upgrade_level(key) if is_reach else _power_upgrade_level(key)
+		var row_y: float = _upgrade_row_y(panel, idx)
+		var row_rect := Rect2(panel.position.x + 14.0, row_y, panel.size.x - 28.0, 78.0)
 		draw_style_box(_style("upg_row_%d" % idx, Color("#ddeaf8"), 14.0), row_rect)
 
-		draw_circle(Vector2(panel.position.x + 48.0, row_y + 53.0), 22.0, tool_col[idx])
-		var upg_key: String = String(UPGRADE_KEYS[idx]).to_upper()
-		draw_string(font, Vector2(panel.position.x + 80.0, row_y + 28.0), tr("UPG_NAME_" + upg_key), HORIZONTAL_ALIGNMENT_LEFT, 200.0, 16, Color("#0d2a50"))
-		draw_string(font, Vector2(panel.position.x + 80.0, row_y + 50.0), tr("UPG_DESC_" + upg_key), HORIZONTAL_ALIGNMENT_LEFT, 190.0, 12, Color("#2c6b78"))
+		draw_circle(Vector2(panel.position.x + 43.0, row_y + 39.0), 17.0, _upgrade_tool_color(key))
+		var upg_key: String = key.to_upper()
+		var name_key: String = "UPG_REACH_NAME_" + upg_key if is_reach else "UPG_NAME_" + upg_key
+		draw_string(font, Vector2(panel.position.x + 70.0, row_y + 23.0), tr(name_key), HORIZONTAL_ALIGNMENT_LEFT, 156.0, 14, Color("#0d2a50"))
+		var description: String = tr("UPG_DESC_" + upg_key)
+		if is_reach:
+			var preview_level: int = mini(lvl + 1, REACH_UPGRADE_MAX_LEVEL)
+			var increase_percent: int = roundi((Economy.reach_upgrade_mult(preview_level) - 1.0) * 100.0)
+			description = tr("UPG_REACH_DESC") % increase_percent
+		draw_string(font, Vector2(panel.position.x + 70.0, row_y + 43.0), description, HORIZONTAL_ALIGNMENT_LEFT, 156.0, 10, Color("#2c6b78"))
 
-		for dot_idx in range(UPGRADE_MAX_LEVEL):
-			var dot_x := panel.position.x + 80.0 + float(dot_idx) * 22.0
-			var dot_y := row_y + 72.0
+		for dot_idx in range(max_level):
+			var dot_x: float = panel.position.x + 76.0 + float(dot_idx) * 18.0
+			var dot_y: float = row_y + 62.0
 			if dot_idx < lvl:
-				draw_circle(Vector2(dot_x, dot_y), 7.0, Color("#3a9ef0"))
+				draw_circle(Vector2(dot_x, dot_y), 5.0, Color("#3a9ef0"))
 			else:
-				draw_circle(Vector2(dot_x, dot_y), 7.0, Color("#b8cfe0"))
+				draw_circle(Vector2(dot_x, dot_y), 5.0, Color("#b8cfe0"))
 
-		var buy_rect := _upgrade_buy_rect(panel, idx)
-		if lvl >= UPGRADE_MAX_LEVEL:
+		var buy_rect: Rect2 = _upgrade_buy_rect(panel, idx)
+		if lvl >= max_level:
 			draw_style_box(_style("upg_max_bg", Color("#b8cfe0"), 10.0), buy_rect)
 			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), tr("MAX"), HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 15, Color("#6a8aaa"))
 		else:
-			var cost: int = UPGRADE_COSTS[idx][lvl]
+			var cost: int = REACH_UPGRADE_COSTS[idx][lvl] if is_reach else UPGRADE_COSTS[idx][lvl]
 			var affordable: bool = coins >= cost
-			var btn_col := Color("#39d98a") if affordable else Color("#8fc4b4")
+			var btn_col: Color = Color("#39d98a") if affordable else Color("#8fc4b4")
 			draw_style_box(_style("upg_buy_%d" % idx, btn_col, 10.0), buy_rect)
 			draw_string(font, Vector2(buy_rect.position.x, buy_rect.position.y + 26.0), tr("COST_COIN") % cost, HORIZONTAL_ALIGNMENT_CENTER, buy_rect.size.x, 14, Color("#0d2a3b") if affordable else Color("#4a7a6a"))
 			_draw_unaffordable_lock(buy_rect, affordable, Color("#264d45"))
+
+
+func _upgrade_tool_color(key: String) -> Color:
+	if key == TOOL_AIR:
+		return Color("#d8eef5")
+	if key == TOOL_WATER:
+		return Color("#49a7ff")
+	if key == TOOL_SOAP:
+		return Color("#f8f4a6")
+	return Color("#ff9f5a")
 
 
 func _get_skin_btn_rect() -> Rect2:

@@ -180,6 +180,8 @@ func _run_core_tests() -> void:
 		return
 	if not _test_tool_specific_upgrade_curves(Economy, GameConfig):
 		return
+	if not _test_reach_upgrade_curves(Economy, GameConfig):
+		return
 
 	# --- Economy: skin purchase intents ---
 	var SkinCatalog: GDScript = load("res://core/domain/skin_catalog.gd")
@@ -632,9 +634,52 @@ func _test_tool_specific_upgrade_curves(Economy: GDScript, GameConfig: GDScript)
 	# AC-3 and AC-4: the existing panel binds its existing buy_rect directly to
 	# the data table, so differentiated values need no new UI surface.
 	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
-	if not main_source.contains("var cost: int = UPGRADE_COSTS[idx][lvl]") \
-			or not main_source.contains("var buy_rect := _upgrade_buy_rect(panel, idx)"):
+	if not main_source.contains("UPGRADE_COSTS[idx][lvl]") \
+			or not main_source.contains("_upgrade_buy_rect(panel, idx)"):
 		_fail("upgrade panel must render tool-specific costs in its existing buy rect")
+		return false
+	return true
+
+
+func _test_reach_upgrade_curves(Economy: GDScript, GameConfig: GDScript) -> bool:
+	var expected_keys := ["air", "water", "soap", "sponge"]
+	var expected_costs := [
+		[70, 160, 280],
+		[80, 180, 300],
+		[75, 170, 290],
+		[60, 140, 240],
+	]
+	var expected_mults := [1.0, 1.12, 1.24, 1.36]
+	if GameConfig.REACH_UPGRADE_KEYS != expected_keys \
+			or int(GameConfig.REACH_UPGRADE_MAX_LEVEL) != 3 \
+			or GameConfig.REACH_UPGRADE_COSTS != expected_costs \
+			or GameConfig.REACH_UPGRADE_MULTS != expected_mults:
+		_fail("reach upgrade keys, costs, multipliers, and max level must remain named config")
+		return false
+	var total_reach_sink := 0
+	for tool_idx in range(expected_keys.size()):
+		var previous_cost := 0
+		for level in range(GameConfig.REACH_UPGRADE_MAX_LEVEL):
+			var cost := int(Economy.reach_upgrade_cost(tool_idx, level))
+			if cost != int(expected_costs[tool_idx][level]) or cost <= previous_cost:
+				_fail("every reach cost curve must stay positive, increasing, and tool-specific")
+				return false
+			previous_cost = cost
+			total_reach_sink += cost
+	if total_reach_sink != 2045:
+		_fail("four reach upgrade tracks must preserve the named 2045-coin sink")
+		return false
+	var previous_mult := 0.0
+	for level in range(GameConfig.REACH_UPGRADE_MAX_LEVEL + 1):
+		var multiplier := float(Economy.reach_upgrade_mult(level))
+		if absf(multiplier - float(expected_mults[level])) > 0.0001 or multiplier <= previous_mult:
+			_fail("reach multiplier must increase at every level through the 1.36 cap")
+			return false
+		previous_mult = multiplier
+	if not bool(Economy.can_buy_reach_upgrade(0, 0, 70)) \
+			or bool(Economy.can_buy_reach_upgrade(0, 0, 69)) \
+			or bool(Economy.can_buy_reach_upgrade(0, 3, 9999)):
+		_fail("reach purchase intent must enforce cost and maximum level")
 		return false
 	return true
 

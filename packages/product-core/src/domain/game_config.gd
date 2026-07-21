@@ -168,6 +168,18 @@ const UPGRADE_KEYS := ["water", "soap", "sponge"]
 const UPGRADE_MAX_LEVEL := 3
 const UPGRADE_NAMES := ["고압수 강화", "비누 강화", "스펀지 강화"]
 const UPGRADE_DESCS := ["흙탕물·먼지 제거 속도 향상", "얼룩 분리 속도 향상", "닦는 속도 향상"]
+# Permanent reach upgrades cover all four tools, including air. The finishing
+# sponge stays the cheapest track because its small base radius asks for the
+# most precision on touch screens; water remains the premium broad-use tool.
+const REACH_UPGRADE_COSTS := [
+	[70, 160, 280],
+	[80, 180, 300],
+	[75, 170, 290],
+	[60, 140, 240],
+]
+const REACH_UPGRADE_MULTS := [1.0, 1.12, 1.24, 1.36]
+const REACH_UPGRADE_KEYS := ["air", "water", "soap", "sponge"]
+const REACH_UPGRADE_MAX_LEVEL := 3
 const DAILY_MISSION_REWARD := 50
 const DAILY_MISSION_POOL := [
 	{"type": "leaf", "label": "낙엽 %d개 날리기", "target": 20, "reward": 50},

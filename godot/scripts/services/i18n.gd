@@ -143,6 +143,8 @@ const STRINGS := {
 	"NEXT": ["다음 차 ▶", "Next Car ▶"],
 	# upgrade panel
 	"UPG_SHOP_TITLE": ["업그레이드 상점", "Upgrade Shop"],
+	"UPG_TAB_POWER": ["세기", "Power"],
+	"UPG_TAB_REACH": ["반경", "Reach"],
 	"COINS_LABEL": ["코인: %d", "Coins: %d"],
 	"MAX": ["최대", "MAX"],
 	"COST_COIN": ["%d 코인", "%d Coins"],
@@ -152,6 +154,11 @@ const STRINGS := {
 	"UPG_DESC_WATER": ["흙탕물ㆍ먼지 제거 속도 향상", "Faster mud & dust removal"],
 	"UPG_DESC_SOAP": ["얼룩 분리 속도 향상", "Faster stain loosening"],
 	"UPG_DESC_SPONGE": ["닦는 속도 향상", "Faster scrubbing"],
+	"UPG_REACH_NAME_AIR": ["바람 반경", "Air Reach"],
+	"UPG_REACH_NAME_WATER": ["고압수 반경", "Jet Reach"],
+	"UPG_REACH_NAME_SOAP": ["비누 반경", "Soap Reach"],
+	"UPG_REACH_NAME_SPONGE": ["스펀지 반경", "Sponge Reach"],
+	"UPG_REACH_DESC": ["적용 범위 +%d%%", "Coverage +%d%%"],
 	# skin panel
 	"SKIN_TITLE": ["차량 꾸미기", "Car Customization"],
 	"CAR_PAINT_TAB": ["차량", "Car"],
