@@ -280,7 +280,7 @@ func _run_smoke() -> void:
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
-	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "get_level_mistakes_for_test", "get_perfect_wash_bonus_for_test", "get_water_boost_remaining_for_test", "get_water_boost_cost_for_test", "get_tool_radius_for_test", "get_reach_upgrade_level_for_test", "set_reach_upgrade_level_for_test", "get_tool_power_multiplier_for_test", "activate_water_boost", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_achievement_definitions_for_test", "get_achievement_counters_for_test", "get_achievement_claimed_for_test", "set_achievement_state_for_test", "record_achievement_progress_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
+	for method_name in ["get_combo_for_test", "is_combo_protection_available_for_test", "is_combo_grace_active_for_test", "get_best_combo_for_test", "get_level_time_for_test", "get_level_mistakes_for_test", "get_perfect_wash_bonus_for_test", "get_water_boost_remaining_for_test", "get_water_boost_cost_for_test", "get_tool_radius_for_test", "get_reach_upgrade_level_for_test", "set_reach_upgrade_level_for_test", "get_tool_power_multiplier_for_test", "activate_water_boost", "calc_stars_for_test", "get_star3_combo_requirement_for_test", "is_star3_combo_unlocked_for_test", "get_last_grade_tracker_text_for_test", "get_car_type_for_test", "get_car_color_for_test", "get_selected_car_paint_for_test", "get_car_paint_options_for_test", "get_title_skin_swatch_colors_for_test", "get_title_hero_rect_for_test", "get_wheel_specs_for_test", "get_wheel_dirt_indices_for_test", "get_initial_dirt_total_for_test", "get_initial_dirt_snapshot_for_test", "get_completion_reveal_progress_for_test", "set_completion_reveal_age_for_test", "get_customer_profile_for_test", "get_customer_reaction_strength_for_test", "get_completion_customer_rect_for_test", "get_customer_patience_for_test", "get_customer_patience_zone_for_test", "get_customer_patience_pattern_for_test", "should_customer_patience_warn_for_test", "get_achievement_definitions_for_test", "get_achievement_counters_for_test", "get_achievement_claimed_for_test", "set_achievement_state_for_test", "record_achievement_progress_for_test", "get_daily_mission_reward_for_test", "prepare_daily_mission_for_test", "configure_daily_mission_for_test", "claim_daily_mission_for_test", "grant_daily_mission_retroactive_for_test", "get_license_plate_text_for_test", "get_license_plate_options_for_test", "get_car_transition_phase_for_test", "get_car_transition_offset_for_test"]:
 		if not root_node.has_method(method_name):
 			_fail("test helper API missing: " + method_name)
 			return
@@ -359,6 +359,8 @@ func _run_smoke() -> void:
 	if not _test_dirt_health_cap_contract(root_node):
 		return
 	if not _test_wheel_dirt_contract(root_node):
+		return
+	if not await _test_completion_reveal_contract(root_node):
 		return
 	if not _test_customer_patience_contract(root_node):
 		return
@@ -1767,7 +1769,7 @@ func _test_car_paint_customization(root_node: Node) -> bool:
 		return false
 	var draw_start := main_source.find("func _draw() -> void:")
 	var draw_end := main_source.find("\nfunc ", draw_start + 1)
-	var car_draw_start := main_source.find("func _draw_car() -> void:")
+	var car_draw_start := main_source.find("func _draw_car(")
 	var car_draw_end := main_source.find("\nfunc ", car_draw_start + 1)
 	if draw_start < 0 or draw_end < 0 or car_draw_start < 0 or car_draw_end < 0:
 		_fail("shared car render functions must remain discoverable")
@@ -2135,7 +2137,7 @@ func _test_wheel_dirt_contract(root_node: Node) -> bool:
 	var draw_start := main_source.find("func _draw() -> void:")
 	var draw_end := main_source.find("\nfunc ", draw_start + 1)
 	var draw_body := main_source.substr(draw_start, draw_end - draw_start)
-	var car_start := main_source.find("func _draw_car() -> void:")
+	var car_start := main_source.find("func _draw_car(")
 	var car_end := main_source.find("\nfunc ", car_start + 1)
 	var car_body := main_source.substr(car_start, car_end - car_start)
 	if draw_body.find("_draw_dirt()") <= draw_body.find("_draw_car()") \
@@ -2154,6 +2156,94 @@ func _test_wheel_dirt_contract(root_node: Node) -> bool:
 	root_node.set("best_times", original_best_times)
 	root_node.set("best_stars", original_best_stars)
 	root_node.call("reset_game", 1, "wheel_dirt_smoke_cleanup")
+	return true
+
+
+func _test_completion_reveal_contract(root_node: Node) -> bool:
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var baseline_hud_rects := {
+		"status": root_node.call("_get_status_rect"),
+		"grade": root_node.call("_get_grade_rect"),
+		"customer": root_node.call("_get_customer_rect"),
+		"mission": root_node.call("_get_daily_mission_rect"),
+	}
+	root_node.call("reset_game", 1, "completion_reveal_snapshot_smoke")
+	var level_one_snapshot: Array[Dictionary] = root_node.call("get_initial_dirt_snapshot_for_test")
+	var level_one_patches: Array = root_node.get("dirt_patches")
+	if level_one_snapshot.size() != level_one_patches.size() or level_one_snapshot.is_empty():
+		_fail("initial dirt snapshot must contain every freshly spawned patch")
+		return false
+	for index in range(level_one_patches.size()):
+		var patch = level_one_patches[index]
+		var snapshot := level_one_snapshot[index]
+		var expected_position: Vector2 = root_node.call("_gameplay_local_point", patch.get("position"))
+		if String(snapshot["kind"]) != String(patch.get("kind")) \
+				or (snapshot["position"] as Vector2).distance_to(expected_position) > 0.001 \
+				or absf(float(root_node.call("_gameplay_length", snapshot["radius"])) - float(patch.get("radius"))) > 0.001 \
+				or absf(float(snapshot["max_health"]) - float(patch.get("max_health"))) > 0.001:
+			_fail("completion snapshot must preserve kind, local position, radius, and max health")
+			return false
+
+	root_node.call("reset_game", 2, "completion_reveal_snapshot_refresh_smoke")
+	var level_two_snapshot: Array[Dictionary] = root_node.call("get_initial_dirt_snapshot_for_test")
+	if level_two_snapshot.size() != root_node.get("dirt_patches").size() \
+			or level_two_snapshot.size() == level_one_snapshot.size():
+		_fail("reset_game must replace the completion snapshot with the new level spawn")
+		return false
+
+	var progress_at_completion := float(root_node.call("get_completion_reveal_progress_for_test", 0.0))
+	var progress_during_wipe := float(root_node.call("get_completion_reveal_progress_for_test", 0.52))
+	var progress_after_wipe := float(root_node.call("get_completion_reveal_progress_for_test", 1.0))
+	if progress_at_completion != 0.0 or progress_during_wipe <= 0.0 \
+			or progress_during_wipe >= 1.0 or progress_after_wipe != 1.0:
+		_fail("completion before-to-after reveal must start within one second and finish after 0.8 seconds")
+		return false
+
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var snapshot_draw_start := main_source.find("func _draw_initial_dirt_snapshot() -> void:")
+	var snapshot_draw_end := main_source.find("\nfunc ", snapshot_draw_start + 1)
+	var snapshot_draw_body := main_source.substr(snapshot_draw_start, snapshot_draw_end - snapshot_draw_start)
+	for dirt_kind in ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime", "sap"]:
+		if not snapshot_draw_body.contains('kind == "' + dirt_kind + '"'):
+			_fail("completion before card renderer missing dirt kind: " + dirt_kind)
+			return false
+	if not snapshot_draw_body.contains("for snapshot in initial_dirt_snapshot"):
+		_fail("completion before card must render exactly from the captured snapshot")
+		return false
+	var save_start := main_source.find("func _save_progress() -> Error:")
+	var save_end := main_source.find("\nfunc ", save_start + 1)
+	if main_source.substr(save_start, save_end - save_start).contains("initial_dirt_snapshot"):
+		_fail("runtime completion snapshot must not change the persisted save payload")
+		return false
+
+	root_node.call("reset_game", 1, "completion_reveal_draw_smoke")
+	root_node.set("level_time", 30.0)
+	root_node.set("best_combo", 4)
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	if not bool(root_node.get("completed")):
+		_fail("completion reveal fixture must enter the real completion state")
+		return false
+	root_node.call("set_completion_reveal_age_for_test", 0.52)
+	root_node.queue_redraw()
+	await process_frame
+	await process_frame
+	var completion_panel: Rect2 = root_node.call("_completion_panel_rect")
+	var before_card: Rect2 = root_node.call("_completion_card_rect", completion_panel, 0)
+	var after_card: Rect2 = root_node.call("_completion_card_rect", completion_panel, 1)
+	if not completion_panel.encloses(before_card) or not completion_panel.encloses(after_card) \
+			or before_card.intersects(after_card):
+		_fail("both completion reveal cards must fit side by side inside the existing panel")
+		return false
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children \
+			or root_node.call("_get_status_rect") != baseline_hud_rects["status"] \
+			or root_node.call("_get_grade_rect") != baseline_hud_rects["grade"] \
+			or root_node.call("_get_customer_rect") != baseline_hud_rects["customer"] \
+			or root_node.call("_get_daily_mission_rect") != baseline_hud_rects["mission"]:
+		_fail("completion reveal must not add or move a persistent playing HUD element")
+		return false
+	root_node.call("reset_game", 1, "completion_reveal_smoke_cleanup")
 	return true
 
 
@@ -3226,7 +3316,7 @@ func _test_body_foam_coverage_contract(root_node: Node) -> bool:
 		return false
 
 	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
-	var car_start := source.find("func _draw_car() -> void:")
+	var car_start := source.find("func _draw_car(")
 	var car_end := source.find("\nfunc ", car_start + 1)
 	var car_body := source.substr(car_start, car_end - car_start)
 	if car_body.find("_draw_body_foam(silhouette)") < 0:
@@ -3284,7 +3374,7 @@ func _test_clean_shine_progression_contract(root_node: Node) -> bool:
 	if draw_body.find("_draw_car()") < 0 or draw_body.find("_draw_dirt()") <= draw_body.find("_draw_car()"):
 		_fail("dirt must render after the car shine so grime masks reflection")
 		return false
-	var car_start := source.find("func _draw_car() -> void:")
+	var car_start := source.find("func _draw_car(")
 	var car_end := source.find("\nfunc ", car_start + 1)
 	var car_body := source.substr(car_start, car_end - car_start)
 	if car_body.find("_draw_clean_shine()") < 0:

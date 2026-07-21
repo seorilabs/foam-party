@@ -155,6 +155,8 @@ const STRINGS := {
 	# completion panel
 	"COMPLETE_TITLE": ["완전 청소!", "All Clean!"],
 	"COMPLETE_SUB": ["%s %02d ㆍ %s ㆍ 최고 콤보 x%d", "%s %02d ㆍ %s ㆍ Best Combo x%d"],
+	"BEFORE_WASH": ["세차 전", "Before"],
+	"AFTER_WASH": ["세차 후", "After"],
 	"NEW_RECORD": ["신기록! %s", "New Record! %s"],
 	"BEST_RECORD": ["최고 기록 %s", "Best %s"],
 	"MILESTONE_CHIP": ["Lv.%d 이정표! +%d", "Lv.%d milestone! +%d"],

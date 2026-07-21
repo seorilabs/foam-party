@@ -151,6 +151,10 @@ const DAILY_MISSION_REWARD := GameConfig.DAILY_MISSION_REWARD
 
 var selected_tool: String = TOOL_WATER
 var dirt_patches: Array = []
+# Runtime-only copy of the freshly spawned dirt. Completion previews use local
+# car coordinates so the same snapshot can be redrawn at card scale without
+# changing the save schema or keeping removed DirtPatch instances alive.
+var initial_dirt_snapshot: Array[Dictionary] = []
 var _wheel_dirt_indices: Array[int] = []
 var particles: Array = []
 var rng := RandomNumberGenerator.new()
@@ -217,6 +221,7 @@ var _combo_milestone_count := 0
 var _customer_cheer_text := ""
 var _customer_cheer_time := -10.0
 var _customer_completion_time := -10.0
+var _completion_reveal_time := -10.0
 var _last_grade_tracker_text := ""
 var best_times: Dictionary = {}
 var best_stars: Dictionary = {}
@@ -246,6 +251,8 @@ var _double_offer_shown := false
 var _star_reveal_times: Array[float] = [-10.0, -10.0, -10.0]
 const STAR_REVEAL_DELAYS: Array[float] = [0.3, 0.75, 1.25]
 const STAR_REVEAL_POP_DUR := 0.5
+const COMPLETION_REVEAL_DELAY := 0.12
+const COMPLETION_REVEAL_DURATION := 0.8
 var sound_enabled := true
 var language_preference := ""
 var tutorial_seen := false
@@ -1265,6 +1272,7 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_customer_cheer_text = ""
 	_customer_cheer_time = -10.0
 	_customer_completion_time = -10.0
+	_completion_reveal_time = -10.0
 	is_new_record = false
 	record_pop_time = -10.0
 	_progress_milestone_hit = 0
@@ -1314,6 +1322,19 @@ func get_wheel_dirt_indices_for_test() -> Array[int]:
 
 func get_initial_dirt_total_for_test() -> float:
 	return initial_dirt_total
+
+
+func get_initial_dirt_snapshot_for_test() -> Array[Dictionary]:
+	return initial_dirt_snapshot.duplicate(true)
+
+
+func get_completion_reveal_progress_for_test(age: float) -> float:
+	return _completion_reveal_progress(age)
+
+
+func set_completion_reveal_age_for_test(age: float) -> void:
+	_completion_reveal_time = float(Time.get_ticks_msec()) / 1000.0 - maxf(age, 0.0)
+	queue_redraw()
 
 
 func get_dirt_spawn_pool_size_for_test() -> int:
@@ -2516,11 +2537,25 @@ func _spawn_dirt() -> void:
 		var patch := DirtPatch.new(kind, base_position, radius, health, rng.randf_range(0.0, 10.0), index == gold_spot_index)
 		dirt_patches.append(patch)
 	_spawn_wheel_dirt(spawn_seed)
+	_capture_initial_dirt_snapshot()
 
 	initial_dirt_total = 0.0
 	for patch in dirt_patches:
 		initial_dirt_total += (patch as DirtPatch).max_health
 	initial_dirt_total = max(1.0, initial_dirt_total)
+
+
+func _capture_initial_dirt_snapshot() -> void:
+	initial_dirt_snapshot.clear()
+	for raw_patch in dirt_patches:
+		var patch := raw_patch as DirtPatch
+		initial_dirt_snapshot.append({
+			"kind": patch.kind,
+			"position": _gameplay_local_point(patch.position),
+			"radius": patch.radius / GAMEPLAY_SCALE,
+			"max_health": patch.max_health,
+			"seed_offset": patch.seed_offset,
+		})
 
 
 func _spawn_wheel_dirt(spawn_seed: int) -> void:
@@ -3283,6 +3318,7 @@ func _update_clean_progress() -> void:
 		is_washing = false
 		earned_stars = _calc_stars()
 		_customer_completion_time = float(Time.get_ticks_msec()) / 1000.0
+		_completion_reveal_time = _customer_completion_time
 		coin_reward = _calc_coin_reward(earned_stars)
 		customer_tip_reward = Economy.calc_customer_tip(_current_customer_patience())
 		coin_reward += customer_tip_reward
@@ -3698,7 +3734,7 @@ func _build_car_shapes() -> void:
 	}
 
 
-func _draw_car() -> void:
+func _draw_car(include_clean_shine: bool = true, include_surface_effects: bool = true) -> void:
 	var outline := Color("#123246")
 	var shapes: Dictionary = car_shapes[car_type]
 	_draw_ellipse_shape(Vector2(195.0, 668.0), Vector2(168.0, 20.0), Color(0.0, 0.0, 0.0, 0.16))
@@ -3711,7 +3747,8 @@ func _draw_car() -> void:
 
 	var silhouette: PackedVector2Array = shapes["silhouette"]
 	draw_colored_polygon(silhouette, car_color)
-	_draw_clean_shine()
+	if include_clean_shine:
+		_draw_clean_shine()
 	_draw_closed_outline(silhouette, outline, 5.0)
 
 	var bumper: PackedVector2Array = shapes["bumper"]
@@ -3749,8 +3786,9 @@ func _draw_car() -> void:
 	draw_rect(plate, Color("#f7fbff"))
 	draw_rect(plate, outline, false, 2.5)
 	draw_string(_font(), Vector2(plate.position.x, plate.position.y + 16.0), license_plate_text, HORIZONTAL_ALIGNMENT_CENTER, plate.size.x, 12, outline)
-	_draw_body_foam(silhouette)
-	_draw_surface_droplets(silhouette)
+	if include_surface_effects:
+		_draw_body_foam(silhouette)
+		_draw_surface_droplets(silhouette)
 
 
 func _wheel_specs() -> Array[Dictionary]:
@@ -5661,6 +5699,7 @@ func _draw_completion_panel() -> void:
 		draw_string(font, Vector2(panel.position.x, panel.position.y + 138.0), tr("NEW_RECORD") % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, int(17.0 * record_pulse), Color("#d98a00"))
 	elif record_seconds > 0.0:
 		draw_string(font, Vector2(panel.position.x, panel.position.y + 136.0), tr("BEST_RECORD") % _format_time(record_seconds), HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 14, Color("#6b7d86"))
+	_draw_completion_reveal_cards(panel, time_now)
 
 	var reward_chip := Rect2(panel.position.x + panel.size.x - 106.0, panel.position.y - 14.0, 96.0, 30.0)
 	draw_style_box(_style("reward_chip", Color("#ffce3d"), 15.0), reward_chip)
@@ -5723,12 +5762,108 @@ func _draw_completion_panel() -> void:
 	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), tr("NEXT"), HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, 16, Color("#0d3b2a"))
 
 
+func _draw_completion_reveal_cards(panel: Rect2, time_now: float) -> void:
+	var before_card := _completion_card_rect(panel, 0)
+	var after_card := _completion_card_rect(panel, 1)
+	draw_style_box(_style("completion_before_card", Color("#fff1d5"), 14.0,
+		Color("#d5a65b"), 2), before_card)
+	draw_style_box(_style("completion_after_card", Color("#e9fbff"), 14.0,
+		Color("#55b8cf"), 2), after_card)
+	var font := _font()
+	draw_string(font, Vector2(before_card.position.x, before_card.position.y + 19.0),
+		tr("BEFORE_WASH"), HORIZONTAL_ALIGNMENT_CENTER, before_card.size.x, 12, Color("#76521d"))
+	draw_string(font, Vector2(after_card.position.x, after_card.position.y + 19.0),
+		tr("AFTER_WASH"), HORIZONTAL_ALIGNMENT_CENTER, after_card.size.x, 12, Color("#176175"))
+
+	_draw_completion_car_preview(before_card, true)
+	_draw_completion_car_preview(after_card, false)
+	var reveal_progress := _completion_reveal_progress(
+		maxf(time_now - _completion_reveal_time, 0.0)
+	)
+	var after_content := _completion_card_content_rect(after_card)
+	var wipe_x := lerpf(after_content.position.x, after_content.end.x, reveal_progress)
+	if reveal_progress < 1.0:
+		draw_rect(
+			Rect2(Vector2(wipe_x, after_content.position.y),
+				Vector2(after_content.end.x - wipe_x, after_content.size.y)),
+			Color("#e9fbff")
+		)
+	if reveal_progress > 0.0 and reveal_progress < 1.0:
+		draw_line(Vector2(wipe_x, after_content.position.y + 2.0),
+			Vector2(wipe_x, after_content.end.y - 2.0), Color(1.0, 1.0, 1.0, 0.9), 3.0)
+	if reveal_progress >= 0.82:
+		var sparkle_alpha := clampf((reveal_progress - 0.82) / 0.18, 0.0, 1.0)
+		_draw_sparkle(after_content.position + Vector2(18.0, 16.0), 4.5,
+			Color(1.0, 0.88, 0.25, sparkle_alpha))
+		_draw_sparkle(after_content.end - Vector2(17.0, 14.0), 3.5,
+			Color(0.45, 0.86, 1.0, sparkle_alpha))
+
+
+func _completion_reveal_progress(age: float) -> float:
+	return clampf(
+		(age - COMPLETION_REVEAL_DELAY) / maxf(COMPLETION_REVEAL_DURATION, 0.001),
+		0.0,
+		1.0
+	)
+
+
+func _completion_card_rect(panel: Rect2, index: int) -> Rect2:
+	var gap := 10.0
+	var margin := 12.0
+	var width := (panel.size.x - margin * 2.0 - gap) * 0.5
+	return Rect2(
+		panel.position + Vector2(margin + float(clampi(index, 0, 1)) * (width + gap), 148.0),
+		Vector2(width, 112.0)
+	)
+
+
+func _completion_card_content_rect(card: Rect2) -> Rect2:
+	return Rect2(card.position + Vector2(6.0, 24.0), card.size - Vector2(12.0, 30.0))
+
+
+func _draw_completion_car_preview(card: Rect2, show_initial_dirt: bool) -> void:
+	var content := _completion_card_content_rect(card)
+	var source := Rect2(34.0, 360.0, 322.0, 330.0)
+	var preview_scale := minf(content.size.x / source.size.x, content.size.y / source.size.y)
+	var preview_origin := content.get_center() - source.get_center() * preview_scale
+	draw_set_transform(canvas_origin + preview_origin * canvas_scale, 0.0,
+		Vector2(canvas_scale * preview_scale, canvas_scale * preview_scale))
+	_draw_car(not show_initial_dirt, false)
+	if show_initial_dirt:
+		_draw_initial_dirt_snapshot()
+	_set_design_draw_transform()
+
+
+func _draw_initial_dirt_snapshot() -> void:
+	for snapshot in initial_dirt_snapshot:
+		var kind := String(snapshot["kind"])
+		var center: Vector2 = snapshot["position"]
+		var radius := float(snapshot["radius"])
+		var seed_value := float(snapshot["seed_offset"])
+		if kind == "mud":
+			_draw_mud_patch(center, radius, 1.0, seed_value)
+		elif kind == "dust":
+			_draw_dust_patch(center, radius, 1.0, seed_value)
+		elif kind == "leaf":
+			_draw_leaf_patch(center, radius, 1.0)
+		elif kind == "oil":
+			_draw_oil_patch(center, radius, 1.0, seed_value)
+		elif kind == "bug":
+			_draw_bug_patch(center, radius, 1.0, seed_value)
+		elif kind == "poop":
+			_draw_poop_patch(center, radius, 1.0, seed_value)
+		elif kind == "road_grime":
+			_draw_road_grime_patch(center, radius, 1.0, seed_value)
+		elif kind == "sap":
+			_draw_sap_patch(center, radius, 1.0, seed_value)
+
+
 func _completion_panel_rect() -> Rect2:
 	return Rect2(38.0, 198.0, 314.0, 272.0 + _completion_extra())
 
 
 func _customer_tip_chip_rect(panel: Rect2) -> Rect2:
-	return Rect2(panel.position.x + 76.0, panel.position.y + 148.0, 162.0, 28.0)
+	return Rect2(panel.position.x + 76.0, panel.position.y + 148.0 + COMPLETION_PREVIEW_EXTRA, 162.0, 28.0)
 
 
 func _perfect_chip_rect(panel: Rect2) -> Rect2:
@@ -5803,17 +5938,18 @@ func _get_tool_rect(index: int) -> Rect2:
 	return Rect2(margin + float(index) * (width + gap), _tool_button_y(), width, TOOL_BUTTON_HEIGHT)
 
 
-# B: when the level-end double-coins offer is shown, the completion panel grows by
-# this much and the retry/next row slides down to make room for the 2x button.
+# Completion-only preview cards reserve one stable block. The optional rewarded
+# row adds its own space below them so every completion action keeps its hit rect.
+const COMPLETION_PREVIEW_EXTRA := 138.0
 const COMPLETION_DOUBLE_EXTRA := 56.0
 
 
 func _completion_extra() -> float:
-	return COMPLETION_DOUBLE_EXTRA if _double_offer_shown else 0.0
+	return COMPLETION_PREVIEW_EXTRA + (COMPLETION_DOUBLE_EXTRA if _double_offer_shown else 0.0)
 
 
 func _get_double_rect() -> Rect2:
-	return Rect2(58.0, 392.0, 274.0, 42.0)
+	return Rect2(58.0, 392.0 + COMPLETION_PREVIEW_EXTRA, 274.0, 42.0)
 
 
 # Pause/settings sheet: resume / restart / sound / language / guide / home / quit.
