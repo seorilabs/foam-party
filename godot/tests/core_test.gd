@@ -856,6 +856,28 @@ func _test_dirt_spawn_plan(DirtSpawnPlan: GDScript, GameConfig: GDScript) -> boo
 	if DirtSpawnPlan.spawn_count(10, 30) != 30:
 		_fail("spawn count must respect the validated silhouette slot budget")
 		return false
+	if absf(float(GameConfig.DIRT_HEALTH_SCALE_PER_LEVEL) - 0.06) > 0.0001 \
+			or absf(float(GameConfig.DIRT_HEALTH_SCALE_MAX) - 1.5) > 0.0001:
+		_fail("dirt health growth and ceiling must remain named GameConfig tuning")
+		return false
+	var previous_health_scale := 0.0
+	for level in range(1, 10):
+		var expected_scale := 1.0 + float(level - 1) * 0.06
+		var actual_scale: float = DirtSpawnPlan.health_scale_for_level(level)
+		if absf(actual_scale - expected_scale) > 0.0001 or actual_scale <= previous_health_scale:
+			_fail("dirt health must preserve the existing +6 percent curve through level 9")
+			return false
+		previous_health_scale = actual_scale
+	for capped_level in [10, 20, 50]:
+		if absf(float(DirtSpawnPlan.health_scale_for_level(capped_level)) - 1.5) > 0.0001:
+			_fail("dirt health scale must stay at the 1.5 ceiling from level 10 onward")
+			return false
+	var capped_oil_health: float = DirtSpawnPlan.scaled_health(100.0, "oil", 10)
+	if absf(capped_oil_health - 187.5) > 0.0001 \
+			or absf(float(DirtSpawnPlan.scaled_health(100.0, "oil", 20)) - capped_oil_health) > 0.0001 \
+			or absf(float(DirtSpawnPlan.scaled_health(100.0, "oil", 50)) - capped_oil_health) > 0.0001:
+		_fail("same dirt base health must remain identical across capped late levels")
+		return false
 	if absf(float(DirtSpawnPlan.radius_scale_for_count(24)) - 1.0) > 0.001 or absf(float(DirtSpawnPlan.radius_scale_for_count(40)) - 0.72) > 0.001:
 		_fail("dense spawn radius scaling snapshots changed")
 		return false

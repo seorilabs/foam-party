@@ -1311,6 +1311,14 @@ func get_dirt_spawn_min_center_distance_for_test() -> float:
 	return _gameplay_length(DirtSpawnPlan.MIN_CENTER_DISTANCE)
 
 
+func get_dirt_health_scale_for_test(level: int) -> float:
+	return DirtSpawnPlan.health_scale_for_level(level)
+
+
+func get_scaled_dirt_health_for_test(kind: String, base_health: float, level: int) -> float:
+	return DirtSpawnPlan.scaled_health(base_health, kind, level)
+
+
 func get_clean_progress_for_test() -> float:
 	return clean_progress
 
@@ -2445,20 +2453,16 @@ func _spawn_dirt() -> void:
 	var body_spawn_count := maxi(0, spawn_count - _wheel_specs().size())
 	var gold_spot_index := GoldSpot.spawn_index(active_level_index, body_spawn_count, spawn_seed)
 	var density_radius_scale: float = DirtSpawnPlan.radius_scale_for_count(spawn_count)
-	var health_scale := 1.0 + float(active_level_index - 1) * 0.06
+	var health_scale: float = DirtSpawnPlan.health_scale_for_level(active_level_index)
 	for index in range(body_spawn_count):
 		var kind: String = type_pool[index % type_pool.size()]
 		var base_position: Vector2 = _gameplay_point(pool[index])
 		var radius := _gameplay_length(rng.randf_range(radius_min, radius_max) * density_radius_scale)
-		var health := rng.randf_range(health_base_min, health_base_max) * health_scale
-		if kind == "oil" or kind == "bug":
-			health += 25.0 * health_scale
-		elif kind == "poop":
-			health += 15.0 * health_scale
-		elif kind == "road_grime":
-			health += 20.0 * health_scale
-		elif kind == "sap":
-			health += 20.0 * health_scale
+		var health: float = DirtSpawnPlan.scaled_health(
+			rng.randf_range(health_base_min, health_base_max),
+			kind,
+			active_level_index
+		)
 		var patch := DirtPatch.new(kind, base_position, radius, health, rng.randf_range(0.0, 10.0), index == gold_spot_index)
 		dirt_patches.append(patch)
 	_spawn_wheel_dirt(health_scale, spawn_seed)
