@@ -350,6 +350,8 @@ func _run_core_tests() -> void:
 		return
 	if not _test_correct_wash_snapshots(WashRules, DirtPatch):
 		return
+	if not _test_sap_wash_path(WashRules, Coaching, DirtPatch):
+		return
 
 	# --- Analytics seam: port no-op contract + adapter buffer/flush (no Firebase) ---
 	var AnalyticsPort: GDScript = load("res://core/ports/analytics_port.gd")
@@ -688,11 +690,11 @@ func _test_dirt_spawn_plan(DirtSpawnPlan: GDScript, GameConfig: GDScript) -> boo
 		_fail("sports dirt weights or level gate changed")
 		return false
 	var compact_pool: Array[String] = DirtSpawnPlan.type_pool_for_level("compact", 6)
-	var expected_compact_pool: Array[String] = ["dust", "leaf", "poop", "dust", "leaf", "road_grime", "poop", "dust", "leaf", "mud", "oil", "bug"]
+	var expected_compact_pool: Array[String] = ["dust", "leaf", "poop", "dust", "leaf", "road_grime", "poop", "dust", "leaf", "sap", "mud", "oil", "bug"]
 	if compact_pool != expected_compact_pool:
 		_fail("compact city dirt profile changed: " + str(compact_pool))
 		return false
-	var city_bias_count := compact_pool.count("dust") + compact_pool.count("leaf") + compact_pool.count("poop") + compact_pool.count("road_grime")
+	var city_bias_count := compact_pool.count("dust") + compact_pool.count("leaf") + compact_pool.count("poop") + compact_pool.count("road_grime") + compact_pool.count("sap")
 	var secondary_count := compact_pool.count("mud") + compact_pool.count("oil") + compact_pool.count("bug")
 	if city_bias_count <= secondary_count:
 		_fail("compact city dirt must favor dust, leaves, droppings, and road residue")
@@ -748,7 +750,7 @@ func _test_misapplied_tool_damage(WashRules: GDScript, Coaching: GDScript, DirtP
 			_fail("correct tool must be at least 10x faster: %s/%s" % [kind, wrong_tool])
 			return false
 
-	for kind in ["mud", "oil", "bug", "poop", "road_grime"]:
+	for kind in ["mud", "oil", "bug", "poop", "road_grime", "sap"]:
 		var heavy = DirtPatch.new(kind, Vector2.ZERO, 18.0, 100.0, 0.5)
 		WashRules.apply_air(heavy, 1.0, Vector2(0.0, 20.0), 1.0, 20.0)
 		if absf(heavy.health - 100.0) > 0.0001:
@@ -804,6 +806,33 @@ func _test_correct_wash_snapshots(WashRules: GDScript, DirtPatch: GDScript) -> b
 	return true
 
 
+func _test_sap_wash_path(WashRules: GDScript, Coaching: GDScript, DirtPatch: GDScript) -> bool:
+	var sap = DirtPatch.new("sap", Vector2.ZERO, 18.0, 100.0, 0.5)
+	if String(Coaching.recommended_tool(sap)) != "soap" \
+			or not bool(Coaching.tool_misapplied("water", sap)) \
+			or not bool(Coaching.tool_misapplied("sponge", sap)):
+		_fail("dry sap must reject water and sponge while recommending soap")
+		return false
+	WashRules.apply_water(sap, 1.0, 1.0, 1.0)
+	if absf(sap.health - 100.0) > 0.0001 or sap.soap > 0.0 or sap.looseness > 0.0:
+		_fail("water alone must not clean or prepare sap")
+		return false
+	WashRules.apply_soap(sap, 0.5, 1.0, 1.0)
+	if sap.soap <= 0.25 or sap.looseness <= 0.45 or String(sap.state) != "loosened" \
+			or absf(sap.health - 100.0) > 0.0001:
+		_fail("soap must soften sap without removing it")
+		return false
+	if String(Coaching.recommended_tool(sap)) != "sponge" \
+			or bool(Coaching.tool_misapplied("sponge", sap)):
+		_fail("softened sap must switch coaching to sponge")
+		return false
+	WashRules.apply_sponge(sap, 0.5, Vector2(0.0, 20.0), 1.0, 1.0)
+	if sap.health >= 100.0:
+		_fail("sponge must remove health from soaped sap")
+		return false
+	return true
+
+
 func _test_wash_tuning_profiles(GameConfig: GDScript) -> bool:
 	var profile_tables := [
 		GameConfig.RUNOFF_CLEANUP_PROFILES,
@@ -821,6 +850,8 @@ func _test_wash_tuning_profiles(GameConfig: GDScript) -> bool:
 		or absf(float(GameConfig.WATER_WASH_PROFILES["mud"]["damage"]) - 2.25) > 0.0001 \
 		or absf(float(GameConfig.SOAP_WASH_PROFILES["oil"]["damage"]) - 0.05) > 0.0001 \
 		or absf(float(GameConfig.SPONGE_WASH_PROFILES["road_grime"]["prepared_base"]) - 1.2) > 0.0001 \
+		or absf(float(GameConfig.SOAP_WASH_PROFILES["sap"]["damage"])) > 0.0001 \
+		or absf(float(GameConfig.SPONGE_WASH_PROFILES["sap"]["prepared_base"]) - 1.15) > 0.0001 \
 		or absf(float(GameConfig.MISAPPLIED_DAMAGE_COEFFICIENT) - 0.002) > 0.0001:
 		_fail("central wash tuning values changed during extraction")
 		return false

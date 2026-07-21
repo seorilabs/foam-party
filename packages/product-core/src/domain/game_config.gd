@@ -31,6 +31,7 @@ const RUNOFF_CLEANUP_PROFILES := {
 	"bug": {"soap": 0.18, "looseness": 0.32},
 	"poop": {"soap": 0.22, "looseness": 0.28},
 	"road_grime": {"soap": 0.10, "looseness": 0.14},
+	"sap": {"base": 0.0},
 	"leaf": {"base": 0.08},
 	"_default": {"base": 0.08},
 }
@@ -42,6 +43,7 @@ const AIR_WASH_PROFILES := {
 	"bug": {"looseness": 0.08},
 	"poop": {"looseness": 0.08},
 	"road_grime": {"looseness": 0.08},
+	"sap": {"looseness": 0.0},
 	"_default": {"looseness": 0.08},
 }
 const AIR_MOTION_PROFILE := {
@@ -74,6 +76,8 @@ const WATER_WASH_PROFILES := {
 		"prepared_looseness": 0.45, "prepared_soap_decay": 0.55, "dry_damage": 0.04,
 	},
 	"road_grime": {"looseness": 0.75, "damage": 0.28},
+	# Water beads on the resin but cannot soften or remove it.
+	"sap": {"damage": 0.0},
 	"_default": {"damage": 0.45},
 }
 const SOAP_WASH_PROFILES := {
@@ -84,6 +88,7 @@ const SOAP_WASH_PROFILES := {
 	"bug": {"loosened_threshold": 0.65, "soap_build": 1.65, "looseness": 0.95, "damage": 0.05},
 	"poop": {"loosened_threshold": 0.5, "soap_build": 2.0, "looseness": 1.2, "damage": 0.06},
 	"road_grime": {"loosened_threshold": 0.45, "soap_build": 1.25, "looseness": 0.8, "damage": 0.06},
+	"sap": {"loosened_threshold": 0.45, "soap_build": 1.5, "looseness": 1.0, "damage": 0.0},
 	"_default": {"soap_build": 0.25, "soap_cap": 0.45},
 }
 const SPONGE_WASH_PROFILES := {
@@ -110,6 +115,11 @@ const SPONGE_WASH_PROFILES := {
 		"prepared_looseness": 1.25, "prepared_base": 1.2,
 		"soap_bonus": 0.55, "wetness_bonus": 0.25, "soap_decay": 0.18,
 		"dry_damage": 0.12,
+	},
+	"sap": {
+		"soap_threshold": 0.25, "looseness_threshold": 0.45,
+		"prepared_looseness": 1.1, "prepared_base": 1.15,
+		"soap_bonus": 0.75, "soap_decay": 0.20, "dry_damage": 0.0,
 	},
 	"_default": {},
 }
@@ -153,9 +163,9 @@ const DAILY_MISSION_POOL := [
 	{"type": "perfect3", "label": "별 3개 세차 %d회", "target": 2, "requirement": 3, "reward": 100},
 ]
 const COMBO_BONUS_AMOUNTS := {5: 5, 10: 10, 15: 15, 20: 20}
-const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"]
+const DIRT_TYPES := ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime", "sap"]
 # Early levels introduce tool-matching rules gradually. The value is the first
-# playable level where each dirt kind may appear; level 4 converges to the full
+# playable level where each dirt kind may appear; level 5 converges to the full
 # catalog used by the existing per-car weighted pools.
 const DIRT_UNLOCK_LEVELS := {
 	"mud": 1,
@@ -165,6 +175,7 @@ const DIRT_UNLOCK_LEVELS := {
 	"bug": 3,
 	"poop": 3,
 	"road_grime": 4,
+	"sap": 5,
 }
 const CAR_TYPES := ["compact", "sports", "truck", "van", "offroad"]
 

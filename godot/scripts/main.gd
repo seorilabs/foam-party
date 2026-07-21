@@ -1994,6 +1994,8 @@ func apply_foam_bomb(free := false) -> bool:
 			patch.state = STATE_LOOSENED
 		elif patch.kind == "road_grime":
 			patch.state = STATE_LOOSENED
+		elif patch.kind == "sap":
+			patch.state = STATE_LOOSENED
 		var center := _patch_center(patch)
 		for bubble_index in range(3):
 			var offset := Vector2(rng.randf_range(-patch.radius, patch.radius), rng.randf_range(-patch.radius, patch.radius))
@@ -2184,6 +2186,8 @@ func _spawn_dirt() -> void:
 		elif kind == "poop":
 			health += 15.0 * health_scale
 		elif kind == "road_grime":
+			health += 20.0 * health_scale
+		elif kind == "sap":
 			health += 20.0 * health_scale
 		var patch := DirtPatch.new(kind, base_position, radius, health, rng.randf_range(0.0, 10.0), index == gold_spot_index)
 		dirt_patches.append(patch)
@@ -3633,6 +3637,8 @@ func _draw_dirt() -> void:
 			_draw_poop_patch(center, patch.radius, strength, patch.seed_offset)
 		elif patch.kind == "road_grime":
 			_draw_road_grime_patch(center, patch.radius, strength, patch.seed_offset)
+		elif patch.kind == "sap":
+			_draw_sap_patch(center, patch.radius, strength, patch.seed_offset)
 
 		if patch.wetness > 0.18:
 			_draw_wet_gloss(center, patch.radius, patch.wetness)
@@ -3891,6 +3897,30 @@ func _draw_road_grime_patch(center: Vector2, radius: float, strength: float, see
 		).rotated(rotation)
 		var fleck_radius: float = maxf(1.3, radius * (0.055 + 0.045 * absf(cos(seed_value * 1.4 + float(index)))))
 		draw_circle(center + fleck_local, fleck_radius, Color(0.20, 0.18, 0.14, 0.36 * s))
+
+
+func _draw_sap_patch(center: Vector2, radius: float, strength: float, seed_value: float) -> void:
+	var s := clampf(strength, 0.0, 1.0)
+	var rotation := fposmod(seed_value * 0.71, TAU)
+	var amber_edge := Color(0.42, 0.20, 0.03, 0.82 * s)
+	var amber_body := Color(0.94, 0.52, 0.08, 0.72 * s)
+	var amber_glow := Color(1.0, 0.75, 0.20, 0.48 * s)
+	var lobe_centers := PackedVector2Array()
+	for index in range(3):
+		var angle := rotation + float(index) * TAU / 3.0
+		var lobe_center := center + Vector2.from_angle(angle) * radius * (0.26 + float(index) * 0.04)
+		var lobe_radius := radius * (0.46 - float(index) * 0.055)
+		lobe_centers.append(lobe_center)
+		draw_circle(lobe_center, lobe_radius + 2.0, amber_edge)
+		draw_circle(lobe_center, lobe_radius, amber_body)
+		draw_circle(lobe_center + Vector2(-lobe_radius * 0.24, -lobe_radius * 0.28),
+			lobe_radius * 0.24, amber_glow)
+	# Thin resin strings make the patch readable as sticky sap rather than oil.
+	for index in range(lobe_centers.size()):
+		var next_index := (index + 1) % lobe_centers.size()
+		draw_line(lobe_centers[index], lobe_centers[next_index], amber_edge, maxf(1.5, radius * 0.10))
+	draw_arc(center, radius * 0.78, rotation - 2.45, rotation - 0.78, 12,
+		Color(1.0, 0.91, 0.56, 0.76 * s), maxf(1.5, radius * 0.09))
 
 
 func _draw_flying_trail(patch: DirtPatch, center: Vector2, strength: float) -> void:

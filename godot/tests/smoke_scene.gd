@@ -148,6 +148,7 @@ func _run_smoke() -> void:
 		2: ["mud", "dust", "leaf", "oil"],
 		3: ["mud", "dust", "leaf", "oil", "bug", "poop"],
 		4: ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"],
+		5: ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime", "sap"],
 	}
 	var level_one_sequence: Array[String] = []
 	for gated_level in expected_dirt_by_level:
@@ -178,6 +179,8 @@ func _run_smoke() -> void:
 	if not await _test_scaled_grade_tracker_prompt_contract(root_node):
 		return
 	if not _test_oil_sheen_contract(root_node):
+		return
+	if not _test_sap_dirt_contract(root_node):
 		return
 	root_node.call("reset_game", 1, "dirt_density_smoke_cleanup")
 
@@ -1891,7 +1894,7 @@ func _test_compact_city_dirt_profile(root_node: Node) -> bool:
 		_fail("level 6 should exercise the full-catalog compact city profile")
 		return false
 	var city_bias_count := 0
-	for kind in ["dust", "leaf", "poop", "road_grime"]:
+	for kind in ["dust", "leaf", "poop", "road_grime", "sap"]:
 		city_bias_count += int(root_node.call("get_patch_count_by_kind_for_test", kind))
 	var secondary_count := 0
 	for kind in ["mud", "oil", "bug"]:
@@ -1899,7 +1902,7 @@ func _test_compact_city_dirt_profile(root_node: Node) -> bool:
 	if city_bias_count <= secondary_count:
 		_fail("compact city profile must spawn more themed dirt than secondary dirt")
 		return false
-	for kind in ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime"]:
+	for kind in ["mud", "dust", "leaf", "oil", "bug", "poop", "road_grime", "sap"]:
 		if int(root_node.call("get_patch_count_by_kind_for_test", kind)) <= 0:
 			_fail("compact city profile omitted dirt kind: " + kind)
 			return false
@@ -2395,6 +2398,59 @@ func _test_oil_sheen_contract(root_node: Node) -> bool:
 	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
 		_fail("oil sheen must not add persistent HUD controls")
 		return false
+	return true
+
+
+func _test_sap_dirt_contract(root_node: Node) -> bool:
+	var persistent_hud_before := _capture_persistent_hud_state(root_node)
+	var sap_index: int = root_node.call("spawn_patch_for_test", "sap")
+	if sap_index < 0:
+		_fail("sap test patch failed to spawn")
+		return false
+	var health_before: float = root_node.call("get_patch_health_for_test", sap_index)
+	if String(root_node.call("get_recommended_tool_for_test", sap_index)) != "soap" \
+			or not bool(root_node.call("is_tool_misapplied_for_test", "water", sap_index)) \
+			or not bool(root_node.call("is_tool_misapplied_for_test", "sponge", sap_index)):
+		_fail("dry sap must coach soap before sponge and reject water")
+		return false
+	var health_after_water: float = root_node.call("apply_tool_to_patch_for_test", "water", sap_index, 1.0)
+	if absf(health_after_water - health_before) > 0.0001 \
+			or float(root_node.call("get_patch_soap_for_test", sap_index)) > 0.0:
+		_fail("water alone must leave sap health and preparation unchanged")
+		return false
+	root_node.call("apply_tool_to_patch_for_test", "soap", sap_index, 0.5)
+	if float(root_node.call("get_patch_soap_for_test", sap_index)) <= 0.25 \
+			or String(root_node.call("get_patch_state_for_test", sap_index)) != "loosened" \
+			or String(root_node.call("get_recommended_tool_for_test", sap_index)) != "sponge" \
+			or bool(root_node.call("is_tool_misapplied_for_test", "sponge", sap_index)):
+		_fail("soap must soften sap and switch coaching to sponge")
+		return false
+	var health_before_sponge: float = root_node.call("get_patch_health_for_test", sap_index)
+	var health_after_sponge: float = root_node.call("apply_tool_to_patch_for_test", "sponge", sap_index, 0.5)
+	if health_after_sponge >= health_before_sponge:
+		_fail("sponge must clean softened sap")
+		return false
+
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	var dirt_start := source.find("func _draw_dirt() -> void:")
+	var dirt_end := source.find("\nfunc ", dirt_start + 1)
+	var sap_start := source.find("func _draw_sap_patch(")
+	var sap_end := source.find("\nfunc ", sap_start + 1)
+	if dirt_start < 0 or dirt_end < 0 or sap_start < 0 or sap_end < 0:
+		_fail("sap draw functions must remain discoverable")
+		return false
+	var dirt_body := source.substr(dirt_start, dirt_end - dirt_start)
+	var sap_body := source.substr(sap_start, sap_end - sap_start)
+	if not dirt_body.contains("_draw_sap_patch(center, patch.radius, strength, patch.seed_offset)") \
+			or not sap_body.contains("draw_circle") \
+			or not sap_body.contains("draw_line") \
+			or not sap_body.contains("draw_arc"):
+		_fail("sap must dispatch through the existing dirt pass with a distinct resin renderer")
+		return false
+	if _capture_persistent_hud_state(root_node) != persistent_hud_before:
+		_fail("sap must not add a persistent HUD control or move gameplay HUD residency")
+		return false
+	root_node.call("reset_game", 1, "sap_contract_cleanup")
 	return true
 
 
