@@ -14,6 +14,24 @@ const TOOL_SPONGE := "sponge"
 const STATE_LOOSENED := "loosened"
 const STATE_RUNOFF := "runoff"
 
+# One catalog shared by the persistent wash guide and rule tests. Primary tools
+# are valid on a dry patch; follow-up tools are valid after the first step has
+# prepared it. The first primary tool is the one returned by recommended_tool.
+const WASH_GUIDE_ENTRIES := [
+	{"kind": "mud", "primary": [TOOL_WATER, TOOL_SOAP], "follow_up": [TOOL_SPONGE], "description_key": "GUIDE_DESC_MUD"},
+	{"kind": "dust", "primary": [TOOL_WATER, TOOL_AIR], "follow_up": [], "description_key": "GUIDE_DESC_DUST"},
+	{"kind": "leaf", "primary": [TOOL_AIR], "follow_up": [], "description_key": "GUIDE_DESC_LEAF"},
+	{"kind": "oil", "primary": [TOOL_SOAP], "follow_up": [TOOL_SPONGE, TOOL_WATER], "description_key": "GUIDE_DESC_OIL"},
+	{"kind": "bug", "primary": [TOOL_SOAP], "follow_up": [TOOL_SPONGE, TOOL_WATER], "description_key": "GUIDE_DESC_BUG"},
+	{"kind": "poop", "primary": [TOOL_SOAP], "follow_up": [TOOL_WATER, TOOL_SPONGE], "description_key": "GUIDE_DESC_POOP"},
+	{"kind": "road_grime", "primary": [TOOL_WATER, TOOL_SOAP], "follow_up": [TOOL_SPONGE], "description_key": "GUIDE_DESC_ROAD_GRIME"},
+	{"kind": "sap", "primary": [TOOL_SOAP], "follow_up": [TOOL_SPONGE], "description_key": "GUIDE_DESC_SAP"},
+]
+
+
+static func wash_guide_entries() -> Array:
+	return WASH_GUIDE_ENTRIES.duplicate(true)
+
 
 static func tool_misapplied(tool_id: String, patch: DirtPatch) -> bool:
 	match patch.kind:

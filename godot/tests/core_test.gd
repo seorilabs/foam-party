@@ -244,6 +244,8 @@ func _run_core_tests() -> void:
 	if String(Coaching.active_hint_tool(null, true)) != "":
 		_fail("a null hint patch should report no active hint")
 		return
+	if not _test_wash_guide_catalog(Coaching, DirtPatch, GameConfig):
+		return
 
 	# --- Daily mission: deterministic in the date string ---
 	var mission: Dictionary = DailyMission.mission_for("2026-07-06")
@@ -523,6 +525,42 @@ func _run_core_tests() -> void:
 
 	print("CORE TESTS PASSED")
 	quit(0)
+
+
+func _test_wash_guide_catalog(Coaching: GDScript, DirtPatch: GDScript, GameConfig: GDScript) -> bool:
+	var entries: Array = Coaching.wash_guide_entries()
+	var guide_kinds: Array = []
+	for entry_value in entries:
+		var entry: Dictionary = entry_value
+		var kind: String = String(entry.get("kind", ""))
+		var primary: Array = entry.get("primary", [])
+		var follow_up: Array = entry.get("follow_up", [])
+		if kind.is_empty() or primary.is_empty() or String(entry.get("description_key", "")).is_empty():
+			_fail("every wash guide row must name its dirt, primary tool, and description")
+			return false
+		guide_kinds.append(kind)
+		var dry_patch = DirtPatch.new(kind, Vector2.ZERO, 18.0, 100.0, 0.5)
+		if String(Coaching.recommended_tool(dry_patch)) != String(primary[0]):
+			_fail("wash guide primary tool must match dry coaching for " + kind)
+			return false
+		for tool_id in primary:
+			if bool(Coaching.tool_misapplied(String(tool_id), dry_patch)):
+				_fail("wash guide must not list a misapplied dry tool for " + kind)
+				return false
+		if kind in ["mud", "road_grime"]:
+			dry_patch.wetness = 1.0
+		elif not follow_up.is_empty():
+			dry_patch.soap = 1.0
+		if kind == "poop":
+			dry_patch.state = "loosened"
+		for tool_id in follow_up:
+			if bool(Coaching.tool_misapplied(String(tool_id), dry_patch)):
+				_fail("wash guide follow-up must match prepared coaching for " + kind)
+				return false
+	if guide_kinds != GameConfig.DIRT_TYPES:
+		_fail("wash guide must cover every current dirt type in catalog order")
+		return false
+	return true
 
 
 func _test_achievement_progress_rule(AchievementProgress: GDScript) -> bool:
