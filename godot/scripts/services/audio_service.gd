@@ -13,6 +13,23 @@ const TOOL_AIR := "air"
 const TOOL_WATER := "water"
 const TOOL_SOAP := "soap"
 const TOOL_SPONGE := "sponge"
+const MUSIC_BUS := "Music"
+const SFX_BUS := "SFX"
+const OPTIONAL_SFX_PLAYERS := {
+	"combo_break_player": "ComboBreakSfx",
+	"_hint_sfx_player": "HintSfx",
+	"_milestone_sfx_player": "MilestoneSfx",
+	"_record_sfx": "RecordSfx",
+	"_combo_milestone_player": "ComboMilestoneSfx",
+	"_star_lost_sfx": "StarLostSfx",
+	"_star3_gate_sfx": "StarGateSfx",
+	"_star_warn_sfx": "StarWarnSfx",
+	"_patience_warn_sfx": "PatienceWarnSfx",
+	"_bomb_sfx": "BombSfx",
+	"_bomb_deny_sfx": "BombDenySfx",
+	"_coin_bonus_sfx": "CoinBonusSfx",
+	"_star_earn_sfx": "StarEarnSfx",
+}
 
 var bgm_player: AudioStreamPlayer
 var tool_loop_player: AudioStreamPlayer
@@ -60,6 +77,7 @@ func _init() -> void:
 
 
 func setup() -> void:
+	_ensure_audio_buses()
 	audio_playback_enabled = DisplayServer.get_name() != "headless"
 	tool_audio_streams = {
 		TOOL_AIR: _make_tool_loop_stream(TOOL_AIR),
@@ -125,6 +143,7 @@ func setup() -> void:
 		_star_earn_sfx = AudioStreamPlayer.new()
 		_star_earn_sfx.volume_db = -6.0
 		add_child(_star_earn_sfx)
+	_ensure_optional_sfx_players()
 
 	bgm_player = AudioStreamPlayer.new()
 	bgm_player.name = "BackgroundMusic"
@@ -155,6 +174,47 @@ func setup() -> void:
 	removal_sfx_player.name = "RemovalSfx"
 	removal_sfx_player.volume_db = -9.0
 	add_child(removal_sfx_player)
+	_route_audio_players()
+
+
+func _ensure_audio_buses() -> void:
+	for bus_name in [MUSIC_BUS, SFX_BUS]:
+		if AudioServer.get_bus_index(bus_name) >= 0:
+			continue
+		AudioServer.add_bus()
+		AudioServer.set_bus_name(AudioServer.bus_count - 1, bus_name)
+
+
+func _ensure_optional_sfx_players() -> void:
+	# Native playback builds create these players with their synthesized streams
+	# above. Headless creates silent nodes too so routing is fully testable.
+	for property_name in OPTIONAL_SFX_PLAYERS:
+		var player := get(property_name) as AudioStreamPlayer
+		if player == null:
+			player = AudioStreamPlayer.new()
+			set(property_name, player)
+			add_child(player)
+		player.name = String(OPTIONAL_SFX_PLAYERS[property_name])
+
+
+func _sfx_players() -> Array[AudioStreamPlayer]:
+	var players: Array[AudioStreamPlayer] = [
+		tool_loop_player,
+		ui_sfx_player,
+		completion_sfx_player,
+		removal_sfx_player,
+	]
+	for property_name in OPTIONAL_SFX_PLAYERS:
+		var player := get(property_name) as AudioStreamPlayer
+		if player != null:
+			players.append(player)
+	return players
+
+
+func _route_audio_players() -> void:
+	bgm_player.bus = MUSIC_BUS
+	for player in _sfx_players():
+		player.bus = SFX_BUS
 
 
 # Was _update_audio() in main.gd. The leading three lines cache the gameplay
@@ -712,5 +772,27 @@ func _append_i16_sample(data: PackedByteArray, value: float) -> void:
 	data.append((sample >> 8) & 0xff)
 
 
-func apply_sound_setting(sound_enabled: bool) -> void:
-	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), not sound_enabled)
+func apply_bus_settings(music_enabled: bool, sfx_enabled: bool) -> void:
+	_ensure_audio_buses()
+	AudioServer.set_bus_mute(AudioServer.get_bus_index(MUSIC_BUS), not music_enabled)
+	AudioServer.set_bus_mute(AudioServer.get_bus_index(SFX_BUS), not sfx_enabled)
+
+
+func get_bus_state_for_test() -> Dictionary:
+	var music_index := AudioServer.get_bus_index(MUSIC_BUS)
+	var sfx_index := AudioServer.get_bus_index(SFX_BUS)
+	var master_index := AudioServer.get_bus_index("Master")
+	return {
+		"music_index": music_index,
+		"sfx_index": sfx_index,
+		"master_muted": AudioServer.is_bus_mute(master_index),
+		"music_muted": AudioServer.is_bus_mute(music_index),
+		"sfx_muted": AudioServer.is_bus_mute(sfx_index),
+	}
+
+
+func get_player_bus_map_for_test() -> Dictionary:
+	var result := {String(bgm_player.name): bgm_player.bus}
+	for player in _sfx_players():
+		result[String(player.name)] = player.bus
+	return result

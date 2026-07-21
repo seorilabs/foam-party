@@ -357,6 +357,11 @@ func _run() -> void:
 	if not await _capture(out_dir.path_join("shot_pause.png")):
 		quit(1)
 		return
+	node.call("_handle_tap", node.call("_pause_audio_option_rect", "music").get_center())
+	if not await _capture(out_dir.path_join("shot_audio_music_off.png")):
+		quit(1)
+		return
+	node.call("_handle_tap", node.call("_pause_audio_option_rect", "music").get_center())
 	node.call("_handle_tap", node.call("_pause_reduce_motion_rect").get_center())
 	if not await _capture(out_dir.path_join("shot_reduced_motion_settings.png")):
 		quit(1)
