@@ -1553,11 +1553,15 @@ func set_completion_reveal_age_for_test(age: float) -> void:
 
 
 func get_dirt_spawn_pool_size_for_test() -> int:
-	return _dirt_spawn_positions().size()
+	return _dirt_spawn_positions(42690 + int(active_level_index) * 97).size()
 
 
 func get_dirt_spawn_min_center_distance_for_test() -> float:
 	return _gameplay_length(DirtSpawnPlan.MIN_CENTER_DISTANCE)
+
+
+func get_dirt_spawn_radius_sum_ratio_for_test() -> float:
+	return DirtSpawnPlan.MIN_RADIUS_SUM_SPACING_RATIO
 
 
 func get_dirt_health_scale_for_test(level: int) -> float:
@@ -2961,7 +2965,7 @@ func _spawn_dirt() -> void:
 	var spawn_seed := 42690 + int(active_level_index) * 97
 	rng.seed = spawn_seed
 
-	var pool: Array[Vector2] = _dirt_spawn_positions()
+	var pool: Array[Vector2] = _dirt_spawn_positions(spawn_seed)
 	for index in range(pool.size() - 1, 0, -1):
 		var swap_index := rng.randi_range(0, index)
 		var swap_value: Vector2 = pool[index]
@@ -2998,12 +3002,14 @@ func _spawn_dirt() -> void:
 
 	var spawn_count: int = DirtSpawnPlan.spawn_count(active_level_index, pool.size())
 	var body_spawn_count := maxi(0, spawn_count - _wheel_specs().size())
+	pool = _spread_spawn_positions(pool, body_spawn_count)
 	var gold_spot_index := GoldSpot.spawn_index(active_level_index, body_spawn_count, spawn_seed)
 	var density_radius_scale: float = DirtSpawnPlan.radius_scale_for_count(spawn_count)
 	for index in range(body_spawn_count):
 		var kind: String = type_pool[index % type_pool.size()]
 		var base_position: Vector2 = _gameplay_point(pool[index])
-		var radius := _gameplay_length(rng.randf_range(radius_min, radius_max) * density_radius_scale)
+		var desired_radius := _gameplay_length(rng.randf_range(radius_min, radius_max) * density_radius_scale)
+		var radius := _radius_limited_by_spawn_spacing(base_position, desired_radius)
 		var health: float = DirtSpawnPlan.scaled_health(
 			rng.randf_range(health_base_min, health_base_max),
 			kind,
@@ -3049,12 +3055,12 @@ func _spawn_wheel_dirt(spawn_seed: int) -> void:
 		dirt_patches.append(patch)
 
 
-func _dirt_spawn_positions() -> Array[Vector2]:
+func _dirt_spawn_positions(spawn_seed: int = 0) -> Array[Vector2]:
 	var shapes: Dictionary = car_shapes[car_type]
 	var silhouette: PackedVector2Array = shapes["silhouette"]
 	var bounds := _polygon_bounds(silhouette)
 	var positions: Array[Vector2] = []
-	for uv in DirtSpawnPlan.normalized_candidates():
+	for uv in DirtSpawnPlan.normalized_candidates(spawn_seed):
 		var candidate := bounds.position + Vector2(bounds.size.x * uv.x, bounds.size.y * uv.y)
 		if not _spawn_candidate_fits_silhouette(candidate, silhouette):
 			continue
@@ -3066,6 +3072,36 @@ func _dirt_spawn_positions() -> Array[Vector2]:
 		if separated:
 			positions.append(candidate)
 	return positions
+
+
+func _spread_spawn_positions(candidates: Array[Vector2], target_count: int) -> Array[Vector2]:
+	var remaining: Array[Vector2] = candidates.duplicate()
+	var selected: Array[Vector2] = []
+	while not remaining.is_empty() and selected.size() < target_count:
+		var best_index := 0
+		var best_clearance := -1.0
+		for candidate_index in range(remaining.size()):
+			var clearance := INF
+			for accepted in selected:
+				clearance = minf(clearance, remaining[candidate_index].distance_to(accepted))
+			if selected.is_empty():
+				clearance = 0.0
+			if clearance > best_clearance:
+				best_clearance = clearance
+				best_index = candidate_index
+		selected.append(remaining[best_index])
+		remaining.remove_at(best_index)
+	return selected
+
+
+func _radius_limited_by_spawn_spacing(center: Vector2, desired_radius: float) -> float:
+	var limited_radius := desired_radius
+	for raw_patch in dirt_patches:
+		var existing := raw_patch as DirtPatch
+		var allowed_radius := center.distance_to(existing.position) / DirtSpawnPlan.MIN_RADIUS_SUM_SPACING_RATIO - existing.radius
+		limited_radius = minf(limited_radius, allowed_radius)
+	# MIN_CENTER_DISTANCE keeps this positive even beside the largest early patch.
+	return maxf(limited_radius, _gameplay_length(1.0))
 
 
 func _spawn_candidate_fits_silhouette(candidate: Vector2, silhouette: PackedVector2Array) -> bool:

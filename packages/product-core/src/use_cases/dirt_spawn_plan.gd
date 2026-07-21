@@ -18,6 +18,9 @@ const CANDIDATE_COLUMNS := 9
 const CANDIDATE_ROWS := 9
 const CANDIDATE_JITTER := 0.10
 const MIN_CENTER_DISTANCE := 25.0
+# Body patches may overlap slightly for a hand-painted look, but never enough to
+# merge into one unreadable mass. Runtime radius clamping enforces this ratio.
+const MIN_RADIUS_SUM_SPACING_RATIO := 0.72
 const SILHOUETTE_EDGE_MARGIN := 8.0
 
 const HEALTH_BONUS_BY_KIND := {
@@ -66,14 +69,16 @@ static func scaled_health(base_health: float, kind: String, level: int) -> float
 	return (maxf(base_health, 0.0) + bonus) * health_scale_for_level(level)
 
 
-static func normalized_candidates() -> Array[Vector2]:
+static func normalized_candidates(seed: int = 0) -> Array[Vector2]:
 	var candidates: Array[Vector2] = []
+	var seed_phase := float(abs(seed) % 100000) * 1.61803398875
 	for row in range(CANDIDATE_ROWS):
 		for column in range(CANDIDATE_COLUMNS):
-			# Fixed trig jitter breaks the visible grid while remaining deterministic.
+			# Seeded trig jitter breaks both the visible grid and the repeated layout
+			# while preserving exact retry reproduction for the same level.
 			var phase := float(row * CANDIDATE_COLUMNS + column)
-			var jitter_x := sin(phase * 2.17 + float(row) * 0.41) * CANDIDATE_JITTER
-			var jitter_y := cos(phase * 1.73 + float(column) * 0.37) * CANDIDATE_JITTER
+			var jitter_x := sin(phase * 2.17 + float(row) * 0.41 + seed_phase) * CANDIDATE_JITTER
+			var jitter_y := cos(phase * 1.73 + float(column) * 0.37 + seed_phase * 1.37) * CANDIDATE_JITTER
 			candidates.append(Vector2(
 				(float(column) + 0.5 + jitter_x) / float(CANDIDATE_COLUMNS),
 				(float(row) + 0.5 + jitter_y) / float(CANDIDATE_ROWS)
