@@ -66,6 +66,11 @@ flowchart LR
 - `.ait` 생성 성공은 AppsInToss 콘솔 등록, 이미지, 광고, sandbox QA 완료를 의미하지 않는다.
 - release candidate는 `test:core`, `check:architecture`, `test:godot`, 시장별 release inventory를 통과해야 한다.
 
+## Autonomous Issue Routine (Autopilot)
+
+- 클라우드 autopilot 루틴이 열린 이슈를 순차 처리한다. 실행 절차는 `docs/08-ops/autopilot.md`(foam-party 전용)와 org 공통 계약 `seorilabs/.github`의 `docs/agent-governance/autonomous-issue-routine.md`를 따른다.
+- 루틴 프롬프트에 절차를 복붙하지 않는다. 위 두 문서를 source of truth로 유지·갱신한다.
+
 ## Git / PR
 
 - GitHub PR 제목과 Description은 한글로 작성한다. 고유명사, 명령어, 코드, 에러 메시지는 원문 유지 가능하다.
