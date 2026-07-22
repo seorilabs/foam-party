@@ -1698,7 +1698,7 @@ func _test_daily_mission_style_contract(root_node: Node, analytics_recorder: Ana
 		_fail("style daily missions must reuse the existing title card and HUD chip residency")
 		return false
 	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
-	var claim_start := main_source.find("func _claim_daily_mission_at(index: int) -> bool:")
+	var claim_start := main_source.find("func _claim_daily_mission_at(")
 	var claim_end := main_source.find("\nfunc ", claim_start + 1)
 	var claim_body := main_source.substr(claim_start, claim_end - claim_start)
 	if not claim_body.contains("_save_daily()") or not claim_body.contains("_save_progress()"):
