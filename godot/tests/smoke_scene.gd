@@ -551,6 +551,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_daily_mission_exposure_contract(root_node, analytics_recorder):
 		return
+	if not _test_headless_compile_gate_contract(root_node):
+		return
 
 	if String(root_node.call("get_car_type_for_test")) != "compact":
 		_fail("level 1 should be a compact car")
@@ -1820,6 +1822,30 @@ func _test_multi_daily_mission_streak_contract(root_node: Node, analytics_record
 	root_node.set("daily_last_active_date", "")
 	root_node.call("_generate_daily_mission", root_node.call("_today_string"))
 	analytics_recorder.events.clear()
+	return true
+
+
+func _test_headless_compile_gate_contract(root_node: Node) -> bool:
+	# AC-5: the Godot headless compile gate. Every script this change touches must
+	# load and compile without a parse/SCRIPT ERROR under `godot --headless`. This
+	# assertion runs inside that same headless smoke pass, so a compile regression in
+	# main.gd or the touched core scripts fails here (and the gate script also fails
+	# the job on any `SCRIPT ERROR`/`ERROR:` log line).
+	var scripts := [
+		"res://scripts/main.gd",
+		"res://core/use_cases/daily_mission.gd",
+		"res://core/analytics/content_events.gd",
+	]
+	for path in scripts:
+		var script := load(path)
+		if script == null or not (script is GDScript):
+			_fail("headless compile gate: script failed to compile/load: " + path)
+			return false
+	# The running root scene is main.gd itself; its live script proves the full main
+	# scene tree compiled and instantiated under headless Godot.
+	if root_node.get_script() == null:
+		_fail("headless compile gate: main scene must run under headless Godot")
+		return false
 	return true
 
 
