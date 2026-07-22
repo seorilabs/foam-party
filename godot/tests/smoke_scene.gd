@@ -549,6 +549,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_multi_daily_mission_streak_contract(root_node, analytics_recorder):
 		return
+	if not _test_daily_mission_exposure_contract(root_node, analytics_recorder):
+		return
 
 	if String(root_node.call("get_car_type_for_test")) != "compact":
 		_fail("level 1 should be a compact car")
@@ -1816,6 +1818,104 @@ func _test_multi_daily_mission_streak_contract(root_node: Node, analytics_record
 	root_node.set("coins", original_coins)
 	root_node.set("daily_streak", 0)
 	root_node.set("daily_last_active_date", "")
+	root_node.call("_generate_daily_mission", root_node.call("_today_string"))
+	analytics_recorder.events.clear()
+	return true
+
+
+func _test_daily_mission_exposure_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
+	# AC-1: result screen surfaces each mission's progress/reward and lets the player
+	# claim an achieved-but-unclaimed mission with placement="result". AC-2: the main
+	# HUD gains an unclaimed badge + tomorrow-bonus preview. AC-3: both surfaces emit
+	# daily_mission_view and the result claim carries placement=result.
+	var baseline_control_children := root_node.find_children("*", "Control", true, false).size()
+	var original_coins := int(root_node.get("coins"))
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+
+	# AC-2: main HUD badge + tomorrow-bonus preview draw hooks.
+	if not main_source.contains('tr("DM_TOMORROW_BONUS") % DailyMission.next_day_streak_bonus(daily_streak)') \
+			or not main_source.contains("_unclaimed_daily_mission_count()"):
+		_fail("main mission HUD must render an unclaimed badge and tomorrow-bonus preview")
+		return false
+
+	# AC-1: result-screen strip render + result-placement claim wiring.
+	var strip_start := main_source.find("func _draw_completion_missions() -> void:")
+	var strip_end := main_source.find("\nfunc _unclaimed_daily_mission_count", strip_start)
+	var strip_body := main_source.substr(strip_start, strip_end - strip_start)
+	if not strip_body.contains('tr("DM_REWARD") % int(mission.get("reward", DAILY_MISSION_REWARD))') \
+			or not strip_body.contains('tr("DM_CLAIM")') \
+			or not strip_body.contains("DailyMission.claimable("):
+		_fail("result mission strip must show reward, a claim CTA, and gate it on claimable()")
+		return false
+	if not main_source.contains('_claim_daily_mission_at(mission_index, "result")'):
+		_fail("result-screen tap must claim with placement=result")
+		return false
+
+	# Drive a real completion so the strip and its rects are live.
+	root_node.call("reset_game", 1, "daily_exposure_smoke")
+	root_node.call("configure_daily_missions_for_test", ["dust", "mud", "combo"], 3)
+	root_node.set("coins", 0)
+	for patch in root_node.get("dirt_patches"):
+		patch.set("health", 0.0)
+	root_node.call("_update_clean_progress")
+	if not bool(root_node.get("completed")):
+		_fail("wash completion must open the result screen")
+		return false
+
+	# AC-3: completing emits a result-surface impression with placement=result.
+	var result_views := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "daily_mission_view" \
+				and String(event.get("params", {}).get("placement", "")) == "result"
+	)
+	if result_views.is_empty():
+		_fail("result screen must emit daily_mission_view with placement=result")
+		return false
+
+	# AC-1 layout: strip, rows, and claim chip stay inside the panel and never overlap
+	# the existing completion actions.
+	var panel: Rect2 = root_node.call("_completion_panel_rect")
+	var strip: Rect2 = root_node.call("_completion_mission_strip_rect")
+	var retry_rect: Rect2 = root_node.call("_get_retry_rect")
+	var next_rect: Rect2 = root_node.call("_get_next_rect")
+	if not panel.encloses(strip) or strip.intersects(retry_rect) or strip.intersects(next_rect):
+		_fail("result mission strip must sit inside the panel above the action row")
+		return false
+	var missions: Array[Dictionary] = root_node.call("get_daily_missions_for_test")
+	for index in range(missions.size()):
+		var row: Rect2 = root_node.call("_completion_mission_row_rect", index)
+		if not strip.encloses(row):
+			_fail("each result mission row must fit inside the strip")
+			return false
+
+	# AC-1 claim: make slot 0 achieved-but-unclaimed and tap its claim chip. It must
+	# grant exactly that reward once and record a result-placement claim.
+	var target: int = int(missions[0]["target"])
+	var reward: int = int(missions[0]["reward"])
+	root_node.call("set_daily_mission_progress_for_test", 0, target, false)
+	root_node.set("coins", 0)
+	analytics_recorder.events.clear()
+	root_node.call("_handle_tap", root_node.call("_completion_mission_claim_rect", 0).get_center())
+	if not bool(root_node.call("get_daily_missions_for_test")[0]["claimed"]) \
+			or int(root_node.call("get_coins_for_test")) != reward:
+		_fail("tapping the result claim chip must claim the mission and pay its reward once")
+		return false
+	var claim_events := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "daily_mission_claim"
+	)
+	if claim_events.size() != 1 or String(claim_events[0]["params"].get("placement", "")) != "result":
+		_fail("result claim must emit daily_mission_claim with placement=result")
+		return false
+
+	# The strip is procedural draw: no new persistent Control nodes.
+	if root_node.find_children("*", "Control", true, false).size() != baseline_control_children:
+		_fail("result mission strip must reuse the procedural completion panel residency")
+		return false
+
+	root_node.call("reset_game", 1, "daily_exposure_smoke_cleanup")
+	root_node.set("coins", original_coins)
+	root_node.set("daily_streak", 0)
 	root_node.call("_generate_daily_mission", root_node.call("_today_string"))
 	analytics_recorder.events.clear()
 	return true
@@ -4753,7 +4853,9 @@ func _test_level_load_event_order_and_params(events: Array[Dictionary]) -> bool:
 	var actual_names: Array[String] = []
 	for event in events:
 		actual_names.append(String(event["name"]))
-	if actual_names != ["level_load_start", "level_load_complete", "level_start"]:
+	# After onboarding the main daily-mission HUD impression rides the level-start
+	# sequence (see _mark_level_started), so the funnel ends with daily_mission_view.
+	if actual_names != ["level_load_start", "level_load_complete", "level_start", "daily_mission_view"]:
 		_fail("level load event order changed: " + str(actual_names))
 		return false
 	if events[0]["params"] != {"level": "2", "reason": "smoke_retry"}:
@@ -4762,6 +4864,12 @@ func _test_level_load_event_order_and_params(events: Array[Dictionary]) -> bool:
 	var load_complete_params: Dictionary = events[1]["params"]
 	if String(load_complete_params.get("level", "")) != "2" or String(load_complete_params.get("reason", "")) != "smoke_retry" or String(load_complete_params.get("car_type", "")).is_empty():
 		_fail("level load complete params changed: " + str(load_complete_params))
+		return false
+	# AC-2/AC-3: the main-surface impression carries placement=main plus streak/unclaimed.
+	var main_view_params: Dictionary = events[3]["params"]
+	if String(main_view_params.get("placement", "")) != "main" \
+			or not main_view_params.has("unclaimed") or not main_view_params.has("streak"):
+		_fail("main daily_mission_view params changed: " + str(main_view_params))
 		return false
 	return true
 

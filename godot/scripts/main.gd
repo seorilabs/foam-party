@@ -983,7 +983,9 @@ func _mark_level_started() -> void:
 		return
 	_level_started = true
 	_emit_analytics(ContentEvents.level_start(active_level_index, car_type))
-	if not daily_missions.is_empty():
+	# Main-HUD mission impression. Skipped during the first-run tutorial (the HUD is
+	# occluded and the FTUE funnel stays pristine); measured once onboarding is done.
+	if tutorial_seen and not daily_missions.is_empty():
 		_emit_analytics(ContentEvents.daily_mission_view(
 			"main", _unclaimed_daily_mission_count(), daily_streak))
 
