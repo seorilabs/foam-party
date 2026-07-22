@@ -323,6 +323,27 @@ func _run_core_tests() -> void:
 			or DailyMission.updated_streak(4, "2026-07-31", "2026-08-01") != 5:
 		_fail("daily attendance streak must be idempotent, increment consecutive dates, and reset gaps")
 		return
+	# claimable predicate — result-screen claim CTA and the engine claim guard share it
+	if DailyMission.claimable(15, 15, false) != true \
+			or DailyMission.claimable(16, 15, false) != true \
+			or DailyMission.claimable(15, 15, true) != false \
+			or DailyMission.claimable(14, 15, false) != false \
+			or DailyMission.claimable(0, 0, false) != false:
+		_fail("daily mission claimable predicate changed")
+		return
+	# next-day preview — "오늘 스트릭 n → 내일 보상" drives the come-back hooks
+	if DailyMission.next_day_streak(6) != 7 or DailyMission.next_day_streak(0) != 1 \
+			or DailyMission.next_day_streak(-3) != 1:
+		_fail("next_day_streak must advance today's streak by one and floor at one")
+		return
+	if DailyMission.next_day_streak_bonus(1) != 0 or DailyMission.next_day_streak_bonus(2) != 10 \
+			or DailyMission.next_day_streak_bonus(6) != 25 or DailyMission.next_day_streak_bonus(13) != 50:
+		_fail("next_day_streak_bonus must preview tomorrow's streak tier")
+		return
+	if int(DailyMission.next_day_reward_preview("mud", 6)) != 85 \
+			or int(DailyMission.next_day_reward_preview("unknown", 2)) != int(GameConfig.DAILY_MISSION_REWARD) + 10:
+		_fail("next_day_reward_preview must pay tomorrow's streak-adjusted reward")
+		return
 	var seen_style_missions: Dictionary = {}
 	var style_mission_dates: Dictionary = {}
 	for month in range(1, 13):
@@ -543,9 +564,19 @@ func _run_core_tests() -> void:
 	if String(e_bomb_coin["params"]["source"]) != "coins" or String(e_bomb_coin["params"]["cost"]) != str(GameConfig.BOMB_COST):
 		_fail("coin-sourced foam bomb should report source=coins and its coin cost: " + str(e_bomb_coin))
 		return
-	var e_mission: Dictionary = ContentEvents.daily_mission_claim("dust", 55)
-	if String(e_mission["params"]["mission_type"]) != "dust" or String(e_mission["params"]["reward"]) != "55":
+	var e_mission: Dictionary = ContentEvents.daily_mission_claim("dust", 55, "result")
+	if String(e_mission["params"]["mission_type"]) != "dust" or String(e_mission["params"]["reward"]) != "55" \
+			or String(e_mission["params"]["placement"]) != "result":
 		_fail("daily_mission_claim params changed: " + str(e_mission))
+		return
+	var e_mission_default: Dictionary = ContentEvents.daily_mission_claim("dust", 55)
+	if String(e_mission_default["params"]["placement"]) != "":
+		_fail("daily_mission_claim placement must default to empty: " + str(e_mission_default))
+		return
+	var e_mission_view: Dictionary = ContentEvents.daily_mission_view("main", 2, 6)
+	if String(e_mission_view["name"]) != "daily_mission_view" or String(e_mission_view["params"]["placement"]) != "main" \
+			or String(e_mission_view["params"]["unclaimed"]) != "2" or String(e_mission_view["params"]["streak"]) != "6":
+		_fail("daily_mission_view params changed: " + str(e_mission_view))
 		return
 	var e_upgrade: Dictionary = ContentEvents.upgrade_purchase("water", 2, 160)
 	if String(e_upgrade["params"]["tool"]) != "water" or String(e_upgrade["params"]["level"]) != "2" or String(e_upgrade["params"]["cost"]) != "160":
@@ -560,7 +591,7 @@ func _run_core_tests() -> void:
 		_fail("reward_double_coins params changed: " + str(e_double))
 		return
 	# Every built event name must be declared in the ALL catalog (backoffice contract).
-	for built in [e_start, e_complete, e_bomb_ad, e_mission, e_upgrade, e_skin, e_double]:
+	for built in [e_start, e_complete, e_bomb_ad, e_mission, e_mission_view, e_upgrade, e_skin, e_double]:
 		if not ContentEvents.ALL.has(String(built["name"])):
 			_fail("event not registered in ContentEvents.ALL: " + String(built["name"]))
 			return
