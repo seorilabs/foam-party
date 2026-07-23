@@ -32,16 +32,16 @@ static func title_screen_view(entry: String) -> Dictionary:
 
 
 static func play_tap(level: int) -> Dictionary:
-	return _event(PLAY_TAP, {"level": str(level)})
+	return _event(PLAY_TAP, {"level": level})
 
 
 static func level_load_start(level: int, reason: String) -> Dictionary:
-	return _event(LEVEL_LOAD_START, {"level": str(level), "reason": reason})
+	return _event(LEVEL_LOAD_START, {"level": level, "reason": reason})
 
 
 static func level_load_complete(level: int, car_type: String, reason: String) -> Dictionary:
 	return _event(LEVEL_LOAD_COMPLETE, {
-		"level": str(level),
+		"level": level,
 		"car_type": car_type,
 		"reason": reason,
 	})
