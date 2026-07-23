@@ -62,6 +62,8 @@ const STRINGS := {
 	"DM_PROGRESS": ["%d/%d 완료", "%d/%d done"],
 	"DM_REWARD": ["+%d 코인", "+%d Coins"],
 	"DM_DONE": ["완료!", "Done!"],
+	"DM_CLAIM": ["받기", "Claim"],
+	"DM_TOMORROW_BONUS": ["내일 오면 +%d", "Tomorrow +%d"],
 	"DM_CLEAR_POP": ["+%d 코인!  데일리 미션 클리어!", "+%d Coins!  Daily mission clear!"],
 	"DM_LEAF": ["낙엽 %d개 날리기", "Blow away %d leaves"],
 	"DM_DUST": ["먼지 %d개 제거하기", "Clear %d dust"],

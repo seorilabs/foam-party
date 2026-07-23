@@ -20,6 +20,7 @@ const LEVEL_START := "level_start"
 const LEVEL_COMPLETE := "level_complete"
 const FOAM_BOMB_USE := "foam_bomb_use"
 const DAILY_MISSION_CLAIM := "daily_mission_claim"
+const DAILY_MISSION_VIEW := "daily_mission_view"
 const UPGRADE_PURCHASE := "upgrade_purchase"
 const SKIN_SELECT := "skin_select"
 const SKIN_PURCHASE := "skin_purchase"
@@ -32,6 +33,7 @@ const ALL := [
 	LEVEL_COMPLETE,
 	FOAM_BOMB_USE,
 	DAILY_MISSION_CLAIM,
+	DAILY_MISSION_VIEW,
 	UPGRADE_PURCHASE,
 	SKIN_SELECT,
 	SKIN_PURCHASE,
@@ -78,8 +80,27 @@ static func foam_bomb_use(level: int, is_ad: bool, coin_cost: int) -> Dictionary
 	})
 
 
-static func daily_mission_claim(mission_type: String, reward: int) -> Dictionary:
-	return _event(DAILY_MISSION_CLAIM, {"mission_type": mission_type, "reward": str(reward)})
+# `placement` marks which surface the claim happened on (main HUD vs level-result
+# screen) so the retention analysis can see which exposure drives claims. Empty
+# string when the surface is unknown; the key is always present to keep the
+# BigQuery column type stable.
+static func daily_mission_claim(mission_type: String, reward: int, placement: String = "") -> Dictionary:
+	return _event(DAILY_MISSION_CLAIM, {
+		"mission_type": mission_type,
+		"reward": str(reward),
+		"placement": placement,
+	})
+
+
+# Impression of the daily-mission widget on a given surface (main|result). `unclaimed`
+# is how many of today's missions are still unclaimed at view time and `streak` the
+# current attendance streak, so exposure can be correlated with later claims.
+static func daily_mission_view(placement: String, unclaimed: int, streak: int) -> Dictionary:
+	return _event(DAILY_MISSION_VIEW, {
+		"placement": placement,
+		"unclaimed": str(unclaimed),
+		"streak": str(streak),
+	})
 
 
 static func upgrade_purchase(tool: String, level: int, cost: int) -> Dictionary:

@@ -983,6 +983,11 @@ func _mark_level_started() -> void:
 		return
 	_level_started = true
 	_emit_analytics(ContentEvents.level_start(active_level_index, car_type))
+	# Main-HUD mission impression. Skipped during the first-run tutorial (the HUD is
+	# occluded and the FTUE funnel stays pristine); measured once onboarding is done.
+	if tutorial_seen and not daily_missions.is_empty():
+		_emit_analytics(ContentEvents.daily_mission_view(
+			"main", _unclaimed_daily_mission_count(), daily_streak))
 
 
 # Register the Godot back handler with the AIT wrapper once the bridge is present
@@ -2591,6 +2596,15 @@ func _handle_tap(point: Vector2) -> bool:
 		_try_double_coins()
 		return true
 
+	if completed and _car_transition_phase != CAR_TRANSITION_EXITING:
+		for mission_index in range(daily_missions.size()):
+			var claim_mission := daily_missions[mission_index]
+			if DailyMission.claimable(int(claim_mission.get("progress", 0)), int(claim_mission.get("target", 0)), bool(claim_mission.get("claimed", false))) \
+					and _completion_mission_claim_rect(mission_index).has_point(point):
+				_play_ui_select()
+				_claim_daily_mission_at(mission_index, "result")
+				return true
+
 	if completed and _car_transition_phase != CAR_TRANSITION_EXITING and _get_retry_rect().has_point(point):
 		_maybe_show_game_over_interstitial()
 		reset_game(active_level_index, "retry")
@@ -3874,6 +3888,9 @@ func _update_clean_progress() -> void:
 			active_level_index, earned_stars, int(level_time), best_combo, coin_reward, is_new_record
 		))
 		_record_completion_daily_mission()
+		if not daily_missions.is_empty():
+			_emit_analytics(ContentEvents.daily_mission_view(
+				"result", _unclaimed_daily_mission_count(), daily_streak))
 		_record_achievement_increment(AchievementProgress.COUNTER_WASHES)
 		_record_achievement_max(AchievementProgress.COUNTER_STARS, total_stars)
 		_save_progress()
@@ -5565,18 +5582,18 @@ func _claim_daily_mission_reward() -> bool:
 	return _claim_daily_mission_at(0)
 
 
-func _claim_daily_mission_at(index: int) -> bool:
+func _claim_daily_mission_at(index: int, placement: String = "main") -> bool:
 	if index < 0 or index >= daily_missions.size():
 		return false
 	var mission := daily_missions[index]
 	var target := int(mission.get("target", 0))
-	if bool(mission.get("claimed", false)) or target <= 0 or int(mission.get("progress", 0)) < target:
+	if not DailyMission.claimable(int(mission.get("progress", 0)), target, bool(mission.get("claimed", false))):
 		return false
 	mission["claimed"] = true
 	mission["progress"] = target
 	daily_missions[index] = mission
 	var granted_reward := _grant_daily_mission_coins(int(mission.get("reward", DAILY_MISSION_REWARD)))
-	_emit_analytics(ContentEvents.daily_mission_claim(String(mission.get("type", "")), granted_reward))
+	_emit_analytics(ContentEvents.daily_mission_claim(String(mission.get("type", "")), granted_reward, placement))
 	_daily_last_claim_reward = granted_reward
 	_daily_mission_pop_time = float(Time.get_ticks_msec()) / 1000.0
 	_sync_legacy_daily_from_first()
@@ -5675,6 +5692,19 @@ func _draw_daily_mission() -> void:
 				Rect2(bar_rect.position, Vector2(maxf(5.0, bar_rect.size.x * fill), bar_rect.size.y)))
 		draw_string(font, Vector2(rect.position.x + 3.0, bar_rect.position.y + 4.0), str(index + 1),
 			HORIZONTAL_ALIGNMENT_CENTER, 10.0, 7, Color(0.8, 0.95, 1.0))
+
+	# Tomorrow's streak bonus as a "come back" hook, plus an unclaimed-count badge so
+	# the mission loop is visible on entry even before the player opens anything.
+	var preview_text := tr("DM_TOMORROW_BONUS") % DailyMission.next_day_streak_bonus(daily_streak)
+	draw_string(font, Vector2(rect.position.x + 8.0, rect.position.y + 52.0), preview_text,
+		HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 16.0, _fit_fs(preview_text, 8, rect.size.x - 16.0),
+		Color(1.0, 0.86, 0.32, 0.9))
+	var unclaimed := _unclaimed_daily_mission_count()
+	if unclaimed > 0:
+		var badge_center := rect.position + Vector2(3.0, 3.0)
+		draw_circle(badge_center, 8.0, Color("#ff5a5a"))
+		draw_string(font, Vector2(badge_center.x - 8.0, badge_center.y + 4.0), str(unclaimed),
+			HORIZONTAL_ALIGNMENT_CENTER, 16.0, 10, Color(1.0, 1.0, 1.0))
 
 	if _daily_mission_pop_time >= 0.0:
 		var age := time_now - _daily_mission_pop_time
@@ -6661,6 +6691,8 @@ func _draw_completion_panel() -> void:
 		draw_string(font, Vector2(dbl.position.x, dbl.position.y + 27.0), double_text,
 			HORIZONTAL_ALIGNMENT_CENTER, dbl.size.x, _fit_fs(double_text, 16, dbl.size.x - 16.0), Color("#4a565c") if not active else Color("#0d3b2a"))
 
+	_draw_completion_missions()
+
 	var retry_rect := _get_retry_rect()
 	draw_style_box(_style("retry_shadow", Color("#246076"), 14.0), Rect2(retry_rect.position + Vector2(0.0, 4.0), retry_rect.size))
 	draw_style_box(_style("retry_button", Color("#7fd6e6"), 14.0), retry_rect)
@@ -6674,6 +6706,66 @@ func _draw_completion_panel() -> void:
 	var next_text := tr("NEXT")
 	draw_string(font, Vector2(next_rect.position.x, next_rect.position.y + 30.0), next_text,
 		HORIZONTAL_ALIGNMENT_CENTER, next_rect.size.x, _fit_fs(next_text, 16, next_rect.size.x - 12.0), Color("#0d3b2a"))
+
+
+# Result-screen daily-mission strip. Surfaces today's mission progress and reward
+# at the moment attention is highest (level end) and lets the player claim an
+# achieved-but-unclaimed mission right here with placement="result".
+func _draw_completion_missions() -> void:
+	if daily_missions.is_empty():
+		return
+	var font := _font()
+	var strip := _completion_mission_strip_rect()
+	draw_style_box(_style("cm_bg", Color(0.03, 0.14, 0.2, 0.08), 12.0), strip)
+
+	var unclaimed := _unclaimed_daily_mission_count()
+	draw_string(font, Vector2(strip.position.x + 8.0, strip.position.y + 16.0), tr("DM_HEADER"),
+		HORIZONTAL_ALIGNMENT_LEFT, strip.size.x - 16.0, 12, Color("#123246"))
+	var tomorrow_bonus := DailyMission.next_day_streak_bonus(daily_streak)
+	var preview_text := tr("DM_TOMORROW_BONUS") % tomorrow_bonus
+	draw_string(font, Vector2(strip.position.x, strip.position.y + 16.0), preview_text,
+		HORIZONTAL_ALIGNMENT_RIGHT, strip.size.x - 8.0, _fit_fs(preview_text, 11, 150.0), Color("#2c6b78"))
+
+	for index in range(daily_missions.size()):
+		var mission := daily_missions[index]
+		var row := _completion_mission_row_rect(index)
+		var target := maxi(int(mission.get("target", 0)), 1)
+		var progress := mini(int(mission.get("progress", 0)), target)
+		var claimed := bool(mission.get("claimed", false))
+		var can_claim := DailyMission.claimable(int(mission.get("progress", 0)), target, claimed)
+
+		var label := String(mission.get("label", ""))
+		draw_string(font, Vector2(row.position.x, row.position.y + 12.0), label,
+			HORIZONTAL_ALIGNMENT_LEFT, row.size.x - 116.0, _fit_fs(label, 11, row.size.x - 116.0), Color("#2c6b78"))
+
+		var bar_rect := Rect2(row.position.x + row.size.x - 112.0, row.position.y + 5.0, 46.0, 5.0)
+		draw_style_box(_style("cm_bar_bg", Color(0.0, 0.0, 0.0, 0.12), 2.0), bar_rect)
+		var fill := 1.0 if claimed else float(progress) / float(target)
+		if fill > 0.0:
+			var fill_col := Color("#39d98a") if claimed else Color("#49a7ff")
+			draw_style_box(_style("cm_bar_fill", fill_col, 2.0),
+				Rect2(bar_rect.position, Vector2(maxf(4.0, bar_rect.size.x * fill), bar_rect.size.y)))
+
+		if can_claim:
+			var claim_rect := _completion_mission_claim_rect(index)
+			draw_style_box(_style("cm_claim_sh", Color("#1f8a55"), 9.0),
+				Rect2(claim_rect.position + Vector2(0.0, 2.0), claim_rect.size))
+			draw_style_box(_style("cm_claim", Color("#39d98a"), 9.0), claim_rect)
+			draw_string(font, Vector2(claim_rect.position.x, claim_rect.position.y + 13.0), tr("DM_CLAIM"),
+				HORIZONTAL_ALIGNMENT_CENTER, claim_rect.size.x, _fit_fs(tr("DM_CLAIM"), 11, claim_rect.size.x - 6.0), Color("#0d3b2a"))
+		else:
+			var status := tr("DM_DONE") if claimed else (tr("DM_REWARD") % int(mission.get("reward", DAILY_MISSION_REWARD)))
+			var status_col := Color("#1f8a55") if claimed else Color("#6b7d86")
+			draw_string(font, Vector2(row.position.x + row.size.x - 58.0, row.position.y + 12.0), status,
+				HORIZONTAL_ALIGNMENT_CENTER, 58.0, _fit_fs(status, 11, 56.0), status_col)
+
+
+func _unclaimed_daily_mission_count() -> int:
+	var count := 0
+	for mission in daily_missions:
+		if not bool(mission.get("claimed", false)):
+			count += 1
+	return count
 
 
 func _draw_completion_reveal_cards(panel: Rect2, time_now: float) -> void:
@@ -6860,10 +6952,42 @@ func _get_tool_rect(index: int) -> Rect2:
 # row adds its own space below them so every completion action keeps its hit rect.
 const COMPLETION_PREVIEW_EXTRA := 138.0
 const COMPLETION_DOUBLE_EXTRA := 56.0
+# Result-screen daily-mission strip: a header row plus one row per mission. Reserved
+# only when the player has missions today so completion actions keep their hit rects.
+const COMPLETION_MISSION_EXTRA := 84.0
 
 
 func _completion_extra() -> float:
-	return COMPLETION_PREVIEW_EXTRA + (COMPLETION_DOUBLE_EXTRA if _double_offer_shown else 0.0)
+	return COMPLETION_PREVIEW_EXTRA + (COMPLETION_DOUBLE_EXTRA if _double_offer_shown else 0.0) \
+		+ _completion_mission_extra()
+
+
+func _completion_mission_extra() -> float:
+	return COMPLETION_MISSION_EXTRA if not daily_missions.is_empty() else 0.0
+
+
+# The strip fills the reserved band directly above the retry/next row. Because the
+# retry row already includes the mission extra, this never overlaps the double/tip
+# chips above it.
+func _completion_mission_strip_rect() -> Rect2:
+	var panel := _completion_panel_rect()
+	var retry_y := _get_retry_rect().position.y
+	return Rect2(panel.position.x + 12.0, retry_y - COMPLETION_MISSION_EXTRA,
+		panel.size.x - 24.0, COMPLETION_MISSION_EXTRA - 8.0)
+
+
+func _completion_mission_row_rect(index: int) -> Rect2:
+	var strip := _completion_mission_strip_rect()
+	var row_h := 18.0
+	return Rect2(strip.position.x + 6.0, strip.position.y + 22.0 + float(index) * row_h,
+		strip.size.x - 12.0, row_h - 2.0)
+
+
+# Claim chip on a result-screen mission row; only hit-tested when that mission is
+# claimable. Sits at the right edge of its row.
+func _completion_mission_claim_rect(index: int) -> Rect2:
+	var row := _completion_mission_row_rect(index)
+	return Rect2(row.position.x + row.size.x - 58.0, row.position.y - 1.0, 58.0, row.size.y)
 
 
 func _get_double_rect() -> Rect2:

@@ -67,6 +67,31 @@ static func reward_for_type(mission_type: String, streak: int = 1) -> int:
 	return GameConfig.DAILY_MISSION_REWARD + streak_bonus(streak)
 
 
+# A mission is claimable once its progress reaches the target and it has not been
+# claimed yet. Pure predicate shared by the engine's claim guard and the
+# result-screen "claim" CTA so both surfaces agree on when a reward is available.
+static func claimable(progress: int, target: int, claimed: bool) -> bool:
+	return not claimed and target > 0 and progress >= target
+
+
+# Tomorrow's streak if the player returns the next calendar day: today's streak
+# advances by one. Used to preview "come back tomorrow" incentives.
+static func next_day_streak(today_streak: int) -> int:
+	return maxi(0, today_streak) + 1
+
+
+# Streak bonus the player would unlock by returning tomorrow (today streak n →
+# bonus at streak n+1). Drives the main-screen "내일 오면 +N" preview label.
+static func next_day_streak_bonus(today_streak: int) -> int:
+	return streak_bonus(next_day_streak(today_streak))
+
+
+# Reward a given mission type would pay tomorrow if the streak continues. Lets the
+# UI show the concrete coin value waiting on the next return without mutating state.
+static func next_day_reward_preview(mission_type: String, today_streak: int) -> int:
+	return reward_for_type(mission_type, next_day_streak(today_streak))
+
+
 static func streak_bonus(streak: int) -> int:
 	var bonus := 0
 	var milestones: Array = GameConfig.DAILY_STREAK_REWARD_BONUSES.keys()
