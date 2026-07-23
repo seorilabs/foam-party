@@ -625,6 +625,38 @@ func _run_core_tests() -> void:
 			_fail("event not registered in ContentEvents.ALL: " + String(built["name"]))
 			return
 
+	# #246 AC: numeric params must ship as native int (so GA4 exports int_value, a
+	# prerequisite for custom metrics), while enum/id params and the boolean flag
+	# stay strings; economy-critical events must carry every required key.
+	if typeof(e_start["params"]["level"]) != TYPE_INT:
+		_fail("game_start.level must be a native int for GA4 int_value")
+		return
+	for numeric_key in ["level", "stars", "time_sec", "best_combo", "coins_earned"]:
+		if typeof(cp[numeric_key]) != TYPE_INT:
+			_fail("level_complete.%s must be a native int: %s" % [numeric_key, str(cp)])
+			return
+		if not cp.has(numeric_key):
+			_fail("level_complete missing required key: " + numeric_key)
+			return
+	if typeof(cp["new_record"]) != TYPE_STRING or not cp.has("new_record"):
+		_fail("level_complete.new_record must stay a string flag")
+		return
+	if typeof(e_bomb_coin["params"]["cost"]) != TYPE_INT \
+			or typeof(e_bomb_coin["params"]["source"]) != TYPE_STRING \
+			or not (e_bomb_coin["params"].has("cost") and e_bomb_coin["params"].has("source")):
+		_fail("foam_bomb_use must send cost as int and source as string enum: " + str(e_bomb_coin))
+		return
+	if typeof(e_mission["params"]["reward"]) != TYPE_INT or typeof(e_mission["params"]["mission_type"]) != TYPE_STRING:
+		_fail("daily_mission_claim reward must be int and mission_type string")
+		return
+	if typeof(e_mission_view["params"]["unclaimed"]) != TYPE_INT or typeof(e_mission_view["params"]["streak"]) != TYPE_INT:
+		_fail("daily_mission_view unclaimed/streak must be int")
+		return
+	if typeof(e_upgrade["params"]["cost"]) != TYPE_INT or typeof(e_upgrade["params"]["level"]) != TYPE_INT \
+			or typeof(e_skin["params"]["cost"]) != TYPE_INT or typeof(e_double["params"]["bonus"]) != TYPE_INT:
+		_fail("upgrade_purchase/skin_purchase/reward_double_coins numeric params must be int")
+		return
+
 	# --- FTUE events: title -> load -> play -> tutorial funnel contract ---
 	var FtueEvents: GDScript = load("res://core/analytics/ftue_events.gd")
 	if FtueEvents == null:
@@ -641,13 +673,13 @@ func _run_core_tests() -> void:
 	if e_title != {"name": "title_screen_view", "params": {"entry": "cold_start"}}:
 		_fail("title_screen_view event schema changed: " + str(e_title))
 		return
-	if e_play != {"name": "play_tap", "params": {"level": "2"}}:
+	if e_play != {"name": "play_tap", "params": {"level": 2}}:
 		_fail("play_tap event schema changed: " + str(e_play))
 		return
-	if e_load_start != {"name": "level_load_start", "params": {"level": "2", "reason": "cold_start"}}:
+	if e_load_start != {"name": "level_load_start", "params": {"level": 2, "reason": "cold_start"}}:
 		_fail("level_load_start event schema changed: " + str(e_load_start))
 		return
-	if e_load_complete != {"name": "level_load_complete", "params": {"level": "2", "car_type": "sports", "reason": "cold_start"}}:
+	if e_load_complete != {"name": "level_load_complete", "params": {"level": 2, "car_type": "sports", "reason": "cold_start"}}:
 		_fail("level_load_complete event schema changed: " + str(e_load_complete))
 		return
 	if e_tutorial_view != {"name": "tutorial_step_view", "params": {"step": "overview", "source": "first_run"}}:

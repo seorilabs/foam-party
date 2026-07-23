@@ -10,9 +10,15 @@ extends RefCounted
 # content event has ONE locked schema that the backoffice aggregation depends
 # on, and a future self-hosted metrics sink reads the exact same contract.
 #
-# Param values are stringified at this boundary. Downstream analytics params are
-# strings/numbers; keeping them strings gives the daily BigQuery aggregation a
-# stable column type per key (int-vs-string drift breaks GROUP BY).
+# Param VALUE TYPES are locked here and must match GA4 export column types.
+# Numeric params (level, stars, time_sec, best_combo, coins_earned, cost, reward,
+# bonus, unclaimed, streak) are emitted as native int so GA4 exports them under
+# int_value/double_value — a prerequisite for registering GA4 custom metrics and
+# for aggregating without CAST. Identifier/enum params (mission_type, source,
+# car_type, skin_id, tool, placement) and boolean flags stay strings. Sending a
+# key as int now, after it was historically logged as string, causes a one-time
+# int↔string split in BigQuery for that key; this is accepted on the current small
+# sample (see #246) so downstream metrics are correct going forward.
 
 # ── Event names ─────────────────────────────────────────────────────────────
 const GAME_START := "game_start"
@@ -50,23 +56,23 @@ const SOURCE_COINS := "coins"
 # never assembles event params inline (that is what let the taxonomy drift).
 
 static func game_start(level: int) -> Dictionary:
-	return _event(GAME_START, {"level": str(level)})
+	return _event(GAME_START, {"level": level})
 
 
 static func level_start(level: int, car_type: String) -> Dictionary:
-	return _event(LEVEL_START, {"level": str(level), "car_type": car_type})
+	return _event(LEVEL_START, {"level": level, "car_type": car_type})
 
 
 static func level_complete(
 	level: int, stars: int, time_sec: int, best_combo: int, coins_earned: int, new_record: bool
 ) -> Dictionary:
 	return _event(LEVEL_COMPLETE, {
-		"level": str(level),
-		"stars": str(stars),
-		"time_sec": str(time_sec),
-		"best_combo": str(best_combo),
-		"coins_earned": str(coins_earned),
-		"new_record": str(new_record),
+		"level": level,
+		"stars": stars,
+		"time_sec": time_sec,
+		"best_combo": best_combo,
+		"coins_earned": coins_earned,
+		"new_record": str(new_record),  # boolean flag stays a string ("true"/"false")
 	})
 
 
@@ -74,9 +80,9 @@ static func foam_bomb_use(level: int, is_ad: bool, coin_cost: int) -> Dictionary
 	# Ad-sourced bombs cost no coins → report cost 0 so the economy sink can sum
 	# coin_cost across all foam_bomb_use rows without double counting ad grants.
 	return _event(FOAM_BOMB_USE, {
-		"level": str(level),
+		"level": level,
 		"source": SOURCE_AD if is_ad else SOURCE_COINS,
-		"cost": str(0 if is_ad else coin_cost),
+		"cost": 0 if is_ad else coin_cost,
 	})
 
 
@@ -87,7 +93,7 @@ static func foam_bomb_use(level: int, is_ad: bool, coin_cost: int) -> Dictionary
 static func daily_mission_claim(mission_type: String, reward: int, placement: String = "") -> Dictionary:
 	return _event(DAILY_MISSION_CLAIM, {
 		"mission_type": mission_type,
-		"reward": str(reward),
+		"reward": reward,
 		"placement": placement,
 	})
 
@@ -98,13 +104,13 @@ static func daily_mission_claim(mission_type: String, reward: int, placement: St
 static func daily_mission_view(placement: String, unclaimed: int, streak: int) -> Dictionary:
 	return _event(DAILY_MISSION_VIEW, {
 		"placement": placement,
-		"unclaimed": str(unclaimed),
-		"streak": str(streak),
+		"unclaimed": unclaimed,
+		"streak": streak,
 	})
 
 
 static func upgrade_purchase(tool: String, level: int, cost: int) -> Dictionary:
-	return _event(UPGRADE_PURCHASE, {"tool": tool, "level": str(level), "cost": str(cost)})
+	return _event(UPGRADE_PURCHASE, {"tool": tool, "level": level, "cost": cost})
 
 
 static func skin_select(tool: String, skin_id: String) -> Dictionary:
@@ -112,14 +118,14 @@ static func skin_select(tool: String, skin_id: String) -> Dictionary:
 
 
 static func skin_purchase(tool: String, skin_id: String, cost: int) -> Dictionary:
-	return _event(SKIN_PURCHASE, {"tool": tool, "skin_id": skin_id, "cost": str(cost)})
+	return _event(SKIN_PURCHASE, {"tool": tool, "skin_id": skin_id, "cost": cost})
 
 
 # Level-end rewarded "double coins": the player watched an ad to double the coins
 # earned that level. `bonus` is the extra coins granted (equal to the base
 # level reward), so the economy sink can sum ad-driven coin issuance separately.
 static func reward_double_coins(level: int, bonus: int) -> Dictionary:
-	return _event(REWARD_DOUBLE_COINS, {"level": str(level), "bonus": str(bonus)})
+	return _event(REWARD_DOUBLE_COINS, {"level": level, "bonus": bonus})
 
 
 static func _event(name: String, params: Dictionary) -> Dictionary:

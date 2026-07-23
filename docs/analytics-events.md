@@ -11,7 +11,7 @@
 
 콘텐츠 이벤트의 **이름 + 파라미터 스키마 원본은 순수 코어**에 있다: `packages/product-core/src/analytics/content_events.gd`(`res://core/analytics/content_events.gd`). 엔진 의존 없는 빌더가 `{name, params}`를 만들고, `godot/scripts/main.gd`의 `_emit_content(...)`가 `AnalyticsPort`로 포워딩한다. 즉 호출부는 인라인 딕셔너리를 조립하지 않으며, 이벤트 스키마가 한 곳에서만 잠긴다.
 
-- 파라미터 값은 이 경계에서 문자열로 고정한다(`str()`). 다운스트림 BigQuery 집계가 키별 컬럼 타입을 안정적으로 잡게 하기 위함(int↔string 드리프트는 GROUP BY를 깨뜨림).
+- 파라미터 값 타입은 이 경계에서 GA4 export 컬럼 타입에 맞춰 고정한다. 수치 파라미터(`level`·`stars`·`time_sec`·`best_combo`·`coins_earned`·`cost`·`reward`·`bonus`·`unclaimed`·`streak`)는 네이티브 int로 보내 GA4가 `int_value`/`double_value`로 적재하게 한다(GA4 커스텀 측정항목 등록·무-CAST 집계의 전제). 식별자/enum(`mission_type`·`source`·`car_type`·`skin_id`·`tool`·`placement`)과 불리언 플래그(`new_record`)는 문자열로 둔다. 기존에 문자열로 적재되던 키를 int로 전환하면 그 키에 한해 BigQuery에서 int↔string 1회성 분리가 생기지만, 현재 소표본에서는 이를 감수해 이후 지표를 정상화한다(#246).
 - 백오피스는 이 카탈로그와 1:1로 맞춘 `ContentMetricsSource`(GA4/BigQuery 어댑터, 자체 지표 서버로 교체 가능)로 하루 1회 집계한다. 상세: seorilabs-backoffice `src/lib/analytics/content-shapes.ts`, `src/lib/ga4/content-source.ts`.
 
 | 이벤트 | 주요 파라미터 | 콘텐츠 지표 |

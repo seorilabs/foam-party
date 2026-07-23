@@ -553,6 +553,8 @@ func _run_smoke() -> void:
 		return
 	if not _test_headless_compile_gate_contract(root_node):
 		return
+	if not _test_replay_level_start_contract(root_node, analytics_recorder):
+		return
 
 	if String(root_node.call("get_car_type_for_test")) != "compact":
 		_fail("level 1 should be a compact car")
@@ -1825,6 +1827,37 @@ func _test_multi_daily_mission_streak_contract(root_node: Node, analytics_record
 	return true
 
 
+func _test_replay_level_start_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
+	# #246 defect 3: restart/replay must re-fire level_start so every level keeps the
+	# start >= complete invariant. reset_game resets the _level_started guard, so each
+	# replay (e.g. retry from the result screen, pause-menu restart) emits level_start.
+	var orig_state := String(root_node.get("game_state"))
+	var orig_level := int(root_node.get("active_level_index"))
+	root_node.set("game_state", "playing")
+	analytics_recorder.events.clear()
+	root_node.call("reset_game", 3, "retry")
+	root_node.call("reset_game", 3, "retry")
+	var starts := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_start"
+	)
+	if starts.size() != 2:
+		_fail("each replay/restart must emit level_start (start >= complete); got %d" % starts.size())
+		root_node.call("reset_game", orig_level, "replay_smoke_cleanup")
+		root_node.set("game_state", orig_state)
+		return false
+	# The replayed level_start carries level as a native int (#246 param types).
+	if typeof(starts[0]["params"].get("level")) != TYPE_INT:
+		_fail("replay level_start.level must be a native int: " + str(starts[0]))
+		root_node.call("reset_game", orig_level, "replay_smoke_cleanup")
+		root_node.set("game_state", orig_state)
+		return false
+	root_node.call("reset_game", orig_level, "replay_smoke_cleanup")
+	root_node.set("game_state", orig_state)
+	analytics_recorder.events.clear()
+	return true
+
+
 func _test_headless_compile_gate_contract(root_node: Node) -> bool:
 	# AC-5: the Godot headless compile gate. Every script this change touches must
 	# load and compile without a parse/SCRIPT ERROR under `godot --headless`. This
@@ -1965,7 +1998,7 @@ func _test_ftue_entry_and_tutorial_event_order_and_params(events: Array[Dictiona
 	if events[0]["params"] != {"entry": "pause_home"}:
 		_fail("title screen entry params changed: " + str(events[0]))
 		return false
-	if events[1]["params"] != {"level": "1"}:
+	if events[1]["params"] != {"level": 1}:
 		_fail("play tap params changed: " + str(events[1]))
 		return false
 	if events[4]["params"] != {"step": "overview", "source": "first_run"}:
@@ -4884,7 +4917,7 @@ func _test_level_load_event_order_and_params(events: Array[Dictionary]) -> bool:
 	if actual_names != ["level_load_start", "level_load_complete", "level_start", "daily_mission_view"]:
 		_fail("level load event order changed: " + str(actual_names))
 		return false
-	if events[0]["params"] != {"level": "2", "reason": "smoke_retry"}:
+	if events[0]["params"] != {"level": 2, "reason": "smoke_retry"}:
 		_fail("level load start params changed: " + str(events[0]))
 		return false
 	var load_complete_params: Dictionary = events[1]["params"]
