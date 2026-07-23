@@ -1539,7 +1539,7 @@ func _test_daily_mission_reward_contract(root_node: Node, analytics_recorder: An
 		func(event: Dictionary) -> bool:
 			return event.get("name") == "daily_mission_claim"
 	)
-	if claim_events.size() != 1 or String(claim_events[0]["params"].get("reward", "")) != str(reward):
+	if claim_events.size() != 1 or str(claim_events[0]["params"].get("reward", "")) != str(reward):
 		_fail("daily mission analytics must receive the granted reward")
 		return false
 	root_node.set("coins", 300)
@@ -4921,7 +4921,7 @@ func _test_level_load_event_order_and_params(events: Array[Dictionary]) -> bool:
 		_fail("level load start params changed: " + str(events[0]))
 		return false
 	var load_complete_params: Dictionary = events[1]["params"]
-	if String(load_complete_params.get("level", "")) != "2" or String(load_complete_params.get("reason", "")) != "smoke_retry" or String(load_complete_params.get("car_type", "")).is_empty():
+	if str(load_complete_params.get("level", "")) != "2" or str(load_complete_params.get("reason", "")) != "smoke_retry" or str(load_complete_params.get("car_type", "")).is_empty():
 		_fail("level load complete params changed: " + str(load_complete_params))
 		return false
 	# AC-2/AC-3: the main-surface impression carries placement=main plus streak/unclaimed.

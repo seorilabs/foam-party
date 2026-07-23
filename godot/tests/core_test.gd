@@ -573,7 +573,7 @@ func _run_core_tests() -> void:
 		_fail("content_events failed to load through res://core symlink")
 		return
 	var e_start: Dictionary = ContentEvents.game_start(3)
-	if String(e_start["name"]) != "game_start" or String(e_start["params"]["level"]) != "3":
+	if str(e_start["name"]) != "game_start" or str(e_start["params"]["level"]) != "3":
 		_fail("game_start event schema changed: " + str(e_start))
 		return
 	var e_complete: Dictionary = ContentEvents.level_complete(7, 3, 62, 5, 60, true)
@@ -581,21 +581,21 @@ func _run_core_tests() -> void:
 		_fail("level_complete event name changed")
 		return
 	var cp: Dictionary = e_complete["params"]
-	if String(cp["level"]) != "7" or String(cp["stars"]) != "3" or String(cp["time_sec"]) != "62" \
-			or String(cp["best_combo"]) != "5" or String(cp["coins_earned"]) != "60" or String(cp["new_record"]) != "true":
+	if str(cp["level"]) != "7" or str(cp["stars"]) != "3" or str(cp["time_sec"]) != "62" \
+			or str(cp["best_combo"]) != "5" or str(cp["coins_earned"]) != "60" or str(cp["new_record"]) != "true":
 		_fail("level_complete params changed: " + str(cp))
 		return
 	var e_bomb_ad: Dictionary = ContentEvents.foam_bomb_use(4, true, GameConfig.BOMB_COST)
-	if String(e_bomb_ad["params"]["source"]) != "ad" or String(e_bomb_ad["params"]["cost"]) != "0":
+	if str(e_bomb_ad["params"]["source"]) != "ad" or str(e_bomb_ad["params"]["cost"]) != "0":
 		_fail("ad-sourced foam bomb should report source=ad and cost 0: " + str(e_bomb_ad))
 		return
 	var e_bomb_coin: Dictionary = ContentEvents.foam_bomb_use(4, false, GameConfig.BOMB_COST)
-	if String(e_bomb_coin["params"]["source"]) != "coins" or String(e_bomb_coin["params"]["cost"]) != str(GameConfig.BOMB_COST):
+	if str(e_bomb_coin["params"]["source"]) != "coins" or str(e_bomb_coin["params"]["cost"]) != str(GameConfig.BOMB_COST):
 		_fail("coin-sourced foam bomb should report source=coins and its coin cost: " + str(e_bomb_coin))
 		return
 	var e_mission: Dictionary = ContentEvents.daily_mission_claim("dust", 55, "result")
-	if String(e_mission["params"]["mission_type"]) != "dust" or String(e_mission["params"]["reward"]) != "55" \
-			or String(e_mission["params"]["placement"]) != "result":
+	if str(e_mission["params"]["mission_type"]) != "dust" or str(e_mission["params"]["reward"]) != "55" \
+			or str(e_mission["params"]["placement"]) != "result":
 		_fail("daily_mission_claim params changed: " + str(e_mission))
 		return
 	var e_mission_default: Dictionary = ContentEvents.daily_mission_claim("dust", 55)
@@ -603,20 +603,20 @@ func _run_core_tests() -> void:
 		_fail("daily_mission_claim placement must default to empty: " + str(e_mission_default))
 		return
 	var e_mission_view: Dictionary = ContentEvents.daily_mission_view("main", 2, 6)
-	if String(e_mission_view["name"]) != "daily_mission_view" or String(e_mission_view["params"]["placement"]) != "main" \
-			or String(e_mission_view["params"]["unclaimed"]) != "2" or String(e_mission_view["params"]["streak"]) != "6":
+	if str(e_mission_view["name"]) != "daily_mission_view" or str(e_mission_view["params"]["placement"]) != "main" \
+			or str(e_mission_view["params"]["unclaimed"]) != "2" or str(e_mission_view["params"]["streak"]) != "6":
 		_fail("daily_mission_view params changed: " + str(e_mission_view))
 		return
 	var e_upgrade: Dictionary = ContentEvents.upgrade_purchase("water", 2, 160)
-	if String(e_upgrade["params"]["tool"]) != "water" or String(e_upgrade["params"]["level"]) != "2" or String(e_upgrade["params"]["cost"]) != "160":
+	if str(e_upgrade["params"]["tool"]) != "water" or str(e_upgrade["params"]["level"]) != "2" or str(e_upgrade["params"]["cost"]) != "160":
 		_fail("upgrade_purchase params changed: " + str(e_upgrade))
 		return
 	var e_skin: Dictionary = ContentEvents.skin_purchase("water", "coral", 80)
-	if String(e_skin["params"]["skin_id"]) != "coral" or String(e_skin["params"]["cost"]) != "80":
+	if str(e_skin["params"]["skin_id"]) != "coral" or str(e_skin["params"]["cost"]) != "80":
 		_fail("skin_purchase params changed: " + str(e_skin))
 		return
 	var e_double: Dictionary = ContentEvents.reward_double_coins(9, 60)
-	if String(e_double["name"]) != "reward_double_coins" or String(e_double["params"]["level"]) != "9" or String(e_double["params"]["bonus"]) != "60":
+	if str(e_double["name"]) != "reward_double_coins" or str(e_double["params"]["level"]) != "9" or str(e_double["params"]["bonus"]) != "60":
 		_fail("reward_double_coins params changed: " + str(e_double))
 		return
 	# Every built event name must be declared in the ALL catalog (backoffice contract).
