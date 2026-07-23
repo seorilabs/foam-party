@@ -18,26 +18,44 @@ var _firebase_core_initialized := false
 var _firebase_analytics_initialized := false
 var _pending: Array = []  # buffer events fired before init, flush on ready
 var _web_firebase: JavaScriptObject = null  # window.__foamPartyFirebase (web/AIT)
+# Diagnosable last state of Firebase setup/init. Firebase failing silently is why
+# Android custom events went entirely uncollected (issue #245); this value plus the
+# push_warning() calls below turn every silent no-op path into a logged reason
+# (visible in logcat) so the failing precondition can be identified on device.
+var status := "uninitialized"
 
 
 func setup() -> void:
 	if OS.get_environment("FOAM_FIREBASE_DISABLED") == "1":
+		status = "disabled_by_env"
 		return
 	# Web/AIT export cannot use the native Firebase plugin, so route analytics to
 	# the JS Firebase bridge installed by the AIT wrapper (firebaseRuntime.ts).
 	if OS.has_feature("web"):
 		_web_firebase = JavaScriptBridge.get_interface("__foamPartyFirebase")
+		if _web_firebase == null:
+			status = "web_bridge_absent"
+			push_warning("[Firebase] web bridge __foamPartyFirebase not found; analytics disabled")
+		else:
+			status = "web_bridge"
 		return
 	if not _firebase_config_present():
+		status = "config_absent"
+		push_warning("[Firebase] platform config not present (Android expects %s in the pck); analytics disabled" % FIREBASE_ANDROID_CONFIG_PATH)
 		return
 	if not Engine.has_singleton("GodotxFirebaseCore"):
+		status = "core_singleton_absent"
+		push_warning("[Firebase] GodotxFirebaseCore singleton not bundled; analytics disabled")
 		return
 	_firebase_core = Engine.get_singleton("GodotxFirebaseCore")
 	if Engine.has_singleton("GodotxFirebaseAnalytics"):
 		_firebase_analytics = Engine.get_singleton("GodotxFirebaseAnalytics")
 		_connect_firebase_signal(_firebase_analytics, "analytics_initialized", _on_firebase_analytics_initialized)
+	else:
+		push_warning("[Firebase] GodotxFirebaseAnalytics singleton absent; custom events cannot be sent")
 	_connect_firebase_signal(_firebase_core, "core_initialized", _on_firebase_core_initialized)
 	_firebase_runtime_enabled = true
+	status = "core_initializing" if _firebase_analytics != null else "analytics_singleton_absent"
 	if _firebase_core.has_method("initialize"):
 		_firebase_core.call("initialize")
 
@@ -57,8 +75,14 @@ func _connect_firebase_signal(obj, sig, target) -> void:
 
 func _on_firebase_core_initialized(success: bool) -> void:
 	_firebase_core_initialized = success
-	if not success or _firebase_analytics == null:
+	if not success:
+		status = "core_init_failed"
+		push_warning("[Firebase] core initialization failed; analytics unavailable")
 		return
+	if _firebase_analytics == null:
+		status = "analytics_singleton_absent"
+		return
+	status = "analytics_initializing"
 	if _firebase_analytics.has_method("initialize"):
 		_firebase_analytics.call("initialize")
 
@@ -66,11 +90,16 @@ func _on_firebase_core_initialized(success: bool) -> void:
 func _on_firebase_analytics_initialized(success: bool) -> void:
 	_firebase_analytics_initialized = success
 	if success:
+		status = "ready"
 		for e in _pending:
 			_emit(e[0], e[1])  # flush buffered events
-	# Drop the buffer either way: on success it has been flushed; on failure the
-	# events can never be delivered, so retaining them would leak indefinitely.
-	_pending.clear()
+		_pending.clear()  # flushed — safe to release
+		return
+	# Init reported failure: keep the buffered events (bounded by the cap in
+	# log_event) so a later retry-success can still flush them, and surface the
+	# failure loudly instead of silently swallowing it (issue #245).
+	status = "analytics_init_failed"
+	push_warning("[Firebase] analytics initialization failed; %d buffered event(s) retained, custom events not sent yet" % _pending.size())
 
 
 func log_event(event_name: String, params: Dictionary = {}) -> void:
@@ -86,6 +115,7 @@ func log_event(event_name: String, params: Dictionary = {}) -> void:
 		_pending.append([event_name, params])  # buffer until init (don't lose startup events)
 		if _pending.size() > 64:
 			_pending.pop_front()
+			push_warning("[Firebase] pending analytics buffer exceeded 64 before init; dropping oldest event")
 		return
 	_emit(event_name, params)
 
