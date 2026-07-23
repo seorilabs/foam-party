@@ -538,6 +538,35 @@ func _run_core_tests() -> void:
 		return
 	adapter.free()
 
+	# #245 AC-3: setup() must record a diagnosable status instead of silently
+	# no-opping, so the failing precondition is visible (here: headless config absent).
+	var probe = FirebaseAdapter.new()
+	probe.setup()
+	if String(probe.status).is_empty() or String(probe.status) == "uninitialized":
+		_fail("adapter setup must record a status for the silent no-op path")
+		probe.free()
+		return
+	probe.free()
+
+	# #245 AC-4: a failed analytics init must NOT discard buffered events (a later
+	# retry-success can still flush them) and must record a loud failure status.
+	var adapter2 = FirebaseAdapter.new()
+	adapter2._firebase_runtime_enabled = true
+	adapter2.log_event("pre_init_a", {})
+	adapter2.log_event("pre_init_b", {})
+	adapter2._on_firebase_analytics_initialized(false)
+	if adapter2._pending.size() != 2 or String(adapter2.status) != "analytics_init_failed":
+		_fail("failed analytics init must retain buffered events and record a failure status")
+		adapter2.free()
+		return
+	# The retained events flush and clear on a later successful init.
+	adapter2._on_firebase_analytics_initialized(true)
+	if not adapter2._pending.is_empty() or String(adapter2.status) != "ready":
+		_fail("retained events must flush and clear on a later successful init")
+		adapter2.free()
+		return
+	adapter2.free()
+
 	# --- Content events: catalog builders produce locked {name, params} schema ---
 	var ContentEvents: GDScript = load("res://core/analytics/content_events.gd")
 	if ContentEvents == null:
