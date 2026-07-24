@@ -1868,16 +1868,21 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 	var orig_state := String(root_node.get("game_state"))
 	var orig_level := int(root_node.get("active_level_index"))
 
-	# AC-3 / AC-7: with a level in progress (_level_started == true via reset_game while
-	# playing, completed == false), calling _go_home() directly emits exactly one
-	# pause_home level_abandon carrying progress_pct=62 and elapsed_sec=18.
+	# AC-3 / AC-7: with a level IN PROGRESS — the exact guard `_level_started and not
+	# completed` — calling _go_home() directly emits exactly one pause_home level_abandon
+	# carrying progress_pct=62 and elapsed_sec=18. The precondition is set and asserted
+	# explicitly so the `_level_started and not completed` TRUE branch is unambiguous.
 	root_node.set("game_state", "playing")
 	root_node.call("reset_game", 3, "abandon_smoke")
 	root_node.set("game_state", "playing")
 	root_node.set("show_tutorial", false)
+	root_node.set("_level_started", true)
 	root_node.set("completed", false)
 	root_node.set("clean_progress", 0.62)
 	root_node.set("level_time", 18.4)
+	if not (bool(root_node.get("_level_started")) and not bool(root_node.get("completed"))):
+		_fail("AC-3 precondition failed: level must be in progress (_level_started and not completed)")
+		return false
 	analytics_recorder.events.clear()
 	root_node.call("_go_home")
 	var home_events := analytics_recorder.events.filter(
