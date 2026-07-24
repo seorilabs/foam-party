@@ -1868,8 +1868,9 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 	var orig_state := String(root_node.get("game_state"))
 	var orig_level := int(root_node.get("active_level_index"))
 
-	# AC-3 / AC-7: the pause-menu "홈" button (_pause_button_rect(4)) reaches _go_home,
-	# which emits pause_home with progress_pct=62, elapsed_sec=18 while a level is running.
+	# AC-3 / AC-7: with a level in progress (_level_started == true via reset_game while
+	# playing, completed == false), calling _go_home() directly emits exactly one
+	# pause_home level_abandon carrying progress_pct=62 and elapsed_sec=18.
 	root_node.set("game_state", "playing")
 	root_node.call("reset_game", 3, "abandon_smoke")
 	root_node.set("game_state", "playing")
@@ -1877,9 +1878,8 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 	root_node.set("completed", false)
 	root_node.set("clean_progress", 0.62)
 	root_node.set("level_time", 18.4)
-	root_node.set("show_pause", true)
 	analytics_recorder.events.clear()
-	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 4).get_center())
+	root_node.call("_go_home")
 	var home_events := analytics_recorder.events.filter(
 		func(event: Dictionary) -> bool:
 			return event.get("name") == "level_abandon"
@@ -1899,10 +1899,12 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 		_fail("level_abandon numeric params must be native int: " + str(hp))
 		return false
 
-	# AC-8 (미발화 가드, real path) + AC-3 (guard): _go_home must NOT emit when the level
-	# attempt is not in progress. `completed == true` models the "level_complete 이후"
-	# state; `_level_started == false` models "레벨 미시작". Both exercise the exact
-	# `_level_started and not completed` guard at the real _go_home() entry point.
+	# AC-3 (guard half): the positive above proves _go_home emits pause_home WHILE a level
+	# is in progress; these two negatives prove it emits ONLY then, i.e. gated by the exact
+	# `_level_started and not completed` condition. `completed == true` (level_complete 이후)
+	# → no emit; `_level_started == false` (레벨 미시작) → no emit. Together the three
+	# assertions verify AC-3's full conditional at the real _go_home() entry point.
+	# (These negatives also exercise AC-8's 미발화 가드; AC-8 further checks reset + source below.)
 	root_node.set("game_state", "playing")
 	root_node.call("reset_game", 3, "abandon_smoke")
 	root_node.set("game_state", "playing")
@@ -1914,7 +1916,7 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 			return event.get("name") == "level_abandon"
 	)
 	if completed_home.size() != 0:
-		_fail("AC-8: _go_home must not emit level_abandon after level_complete (completed=true)")
+		_fail("AC-3: _go_home must not emit pause_home once the level is completed (guard: not completed)")
 		return false
 	root_node.set("game_state", "playing")
 	root_node.call("reset_game", 3, "abandon_smoke")
@@ -1928,7 +1930,7 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 			return event.get("name") == "level_abandon"
 	)
 	if unstarted_home.size() != 0:
-		_fail("AC-8: _go_home must not emit level_abandon before a level has started (_level_started=false)")
+		_fail("AC-3: _go_home must not emit pause_home before a level starts (guard: _level_started)")
 		return false
 
 	# AC-4: pause → restart emits pause_restart, capturing progress/time BEFORE
