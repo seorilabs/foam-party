@@ -619,8 +619,27 @@ func _run_core_tests() -> void:
 	if str(e_double["name"]) != "reward_double_coins" or str(e_double["params"]["level"]) != "9" or str(e_double["params"]["bonus"]) != "60":
 		_fail("reward_double_coins params changed: " + str(e_double))
 		return
+	# #249: level_abandon carries the exit reason, wash progress and elapsed seconds.
+	var e_abandon: Dictionary = ContentEvents.level_abandon(4, ContentEvents.REASON_PAUSE_HOME, 62, 18)
+	var ap: Dictionary = e_abandon["params"]
+	if str(e_abandon["name"]) != "level_abandon" or str(ap["level"]) != "4" or str(ap["reason"]) != "pause_home" \
+			or str(ap["progress_pct"]) != "62" or str(ap["elapsed_sec"]) != "18":
+		_fail("level_abandon params changed: " + str(e_abandon))
+		return
+	# Numeric params ship as native int (GA4 int_value); reason stays a string enum.
+	if typeof(ap["level"]) != TYPE_INT or typeof(ap["progress_pct"]) != TYPE_INT or typeof(ap["elapsed_sec"]) != TYPE_INT:
+		_fail("level_abandon numeric params must be native int: " + str(ap))
+		return
+	if typeof(ap["reason"]) != TYPE_STRING:
+		_fail("level_abandon.reason must stay a string enum")
+		return
+	# The four exit-reason enums are locked so the game and the metrics sink agree.
+	if ContentEvents.REASON_PAUSE_HOME != "pause_home" or ContentEvents.REASON_PAUSE_RESTART != "pause_restart" \
+			or ContentEvents.REASON_QUIT_CONFIRM != "quit_confirm" or ContentEvents.REASON_APP_BACKGROUND != "app_background":
+		_fail("level_abandon reason enums changed")
+		return
 	# Every built event name must be declared in the ALL catalog (backoffice contract).
-	for built in [e_start, e_complete, e_bomb_ad, e_mission, e_mission_view, e_upgrade, e_skin, e_double]:
+	for built in [e_start, e_complete, e_bomb_ad, e_mission, e_mission_view, e_upgrade, e_skin, e_double, e_abandon]:
 		if not ContentEvents.ALL.has(String(built["name"])):
 			_fail("event not registered in ContentEvents.ALL: " + String(built["name"]))
 			return
