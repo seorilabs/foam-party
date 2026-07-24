@@ -17,7 +17,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@apps-in-toss/web-framework": "^2.6.0",
+    "@apps-in-toss/web-framework": "^2.10.7",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
