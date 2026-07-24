@@ -4,6 +4,7 @@ const AdService := preload("res://scripts/services/ad_service.gd")
 const GameConfig := preload("res://core/domain/game_config.gd")
 const Economy := preload("res://core/use_cases/economy.gd")
 const NativeAds := preload("res://scripts/services/native_ad_config.gd")
+const ContentEvents := preload("res://core/analytics/content_events.gd")
 
 
 class AnalyticsRecorder:
@@ -554,6 +555,8 @@ func _run_smoke() -> void:
 	if not _test_headless_compile_gate_contract(root_node):
 		return
 	if not _test_replay_level_start_contract(root_node, analytics_recorder):
+		return
+	if not _test_level_abandon_contract(root_node, analytics_recorder):
 		return
 
 	if String(root_node.call("get_car_type_for_test")) != "compact":
@@ -1853,6 +1856,111 @@ func _test_replay_level_start_contract(root_node: Node, analytics_recorder: Anal
 		root_node.set("game_state", orig_state)
 		return false
 	root_node.call("reset_game", orig_level, "replay_smoke_cleanup")
+	root_node.set("game_state", orig_state)
+	analytics_recorder.events.clear()
+	return true
+
+
+func _test_level_abandon_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
+	# #249: leaving an in-progress level emits level_abandon with the exit reason,
+	# wash progress (0~100 from clean_progress) and elapsed seconds (level_time).
+	# Exercised through the real exit entry points the headless harness can reach.
+	var orig_state := String(root_node.get("game_state"))
+	var orig_level := int(root_node.get("active_level_index"))
+
+	# AC-3 / AC-7: pause → home emits pause_home with progress_pct=62, elapsed_sec=18.
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("show_tutorial", false)
+	root_node.set("completed", false)
+	root_node.set("clean_progress", 0.62)
+	root_node.set("level_time", 18.4)
+	analytics_recorder.events.clear()
+	root_node.call("_go_home")
+	var home_events := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if home_events.size() != 1:
+		_fail("_go_home must emit exactly one level_abandon while a level is in progress; got %d" % home_events.size())
+		return false
+	var hp: Dictionary = home_events[0]["params"]
+	if String(hp["reason"]) != "pause_home" or int(hp["level"]) != 3 \
+			or int(hp["progress_pct"]) != 62 or int(hp["elapsed_sec"]) != 18:
+		_fail("pause_home level_abandon params mismatch: " + str(home_events[0]))
+		return false
+	if typeof(hp["progress_pct"]) != TYPE_INT or typeof(hp["elapsed_sec"]) != TYPE_INT or typeof(hp["level"]) != TYPE_INT:
+		_fail("level_abandon numeric params must be native int: " + str(hp))
+		return false
+
+	# AC-4: pause → restart emits pause_restart, capturing progress/time BEFORE
+	# reset_game tears the level down.
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("completed", false)
+	root_node.set("clean_progress", 0.40)
+	root_node.set("level_time", 25.0)
+	root_node.set("show_pause", true)
+	analytics_recorder.events.clear()
+	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 1).get_center())
+	var restart_events := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if restart_events.size() != 1 or String(restart_events[0]["params"]["reason"]) != "pause_restart" \
+			or int(restart_events[0]["params"]["progress_pct"]) != 40 or int(restart_events[0]["params"]["elapsed_sec"]) != 25:
+		_fail("pause restart must emit one pause_restart level_abandon captured before reset_game: " + str(restart_events))
+		return false
+	# AC-8 (reset): the new attempt started by reset_game clears the app_background cap.
+	if bool(root_node.get("_level_abandon_bg_emitted")):
+		_fail("reset_game must reset the app_background per-attempt guard")
+		return false
+
+	# AC-6: backgrounding mid-level emits app_background, capped at once per attempt.
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("completed", false)
+	root_node.set("clean_progress", 0.10)
+	root_node.set("level_time", 5.0)
+	analytics_recorder.events.clear()
+	root_node.call("_notification", root_node.NOTIFICATION_APPLICATION_PAUSED)
+	root_node.call("_notification", root_node.NOTIFICATION_APPLICATION_PAUSED)
+	var bg_events := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if bg_events.size() != 1 or String(bg_events[0]["params"]["reason"]) != "app_background":
+		_fail("app_background must fire exactly once per level attempt; got %d" % bg_events.size())
+		return false
+
+	# AC-8 (guards): no emission after completion or before a level starts.
+	analytics_recorder.events.clear()
+	root_node.set("completed", true)
+	root_node.call("_emit_level_abandon", ContentEvents.REASON_PAUSE_HOME)
+	root_node.set("completed", false)
+	root_node.set("_level_started", false)
+	root_node.call("_emit_level_abandon", ContentEvents.REASON_QUIT_CONFIRM)
+	var guarded := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if guarded.size() != 0:
+		_fail("level_abandon must not fire after completion or before a level starts")
+		return false
+
+	# AC-5: _quit_app calls get_tree().quit() in headless and cannot be invoked here,
+	# so assert its wiring at the source. The shared emit path is proven above for the
+	# other three reasons, so this reason reaches the same builder.
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_source.contains("_emit_level_abandon(ContentEvents.REASON_QUIT_CONFIRM)"):
+		_fail("_quit_app must emit a quit_confirm level_abandon")
+		return false
+
+	root_node.set("show_pause", false)
+	root_node.call("reset_game", orig_level, "abandon_smoke_cleanup")
 	root_node.set("game_state", orig_state)
 	analytics_recorder.events.clear()
 	return true
