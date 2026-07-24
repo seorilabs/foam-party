@@ -619,6 +619,14 @@ func _run_core_tests() -> void:
 	if str(e_double["name"]) != "reward_double_coins" or str(e_double["params"]["level"]) != "9" or str(e_double["params"]["bonus"]) != "60":
 		_fail("reward_double_coins params changed: " + str(e_double))
 		return
+	# #249 AC-1: the LEVEL_ABANDON event-name const exists and is registered in the
+	# ALL catalog (backoffice contract); #249 AC-9: the builder param contract below.
+	if ContentEvents.LEVEL_ABANDON != "level_abandon":
+		_fail("ContentEvents.LEVEL_ABANDON const must equal \"level_abandon\"")
+		return
+	if not ContentEvents.ALL.has(ContentEvents.LEVEL_ABANDON):
+		_fail("LEVEL_ABANDON must be registered in ContentEvents.ALL")
+		return
 	# #249: level_abandon carries the exit reason, wash progress and elapsed seconds.
 	var e_abandon: Dictionary = ContentEvents.level_abandon(4, ContentEvents.REASON_PAUSE_HOME, 62, 18)
 	var ap: Dictionary = e_abandon["params"]

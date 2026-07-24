@@ -1894,6 +1894,37 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 		_fail("level_abandon numeric params must be native int: " + str(hp))
 		return false
 
+	# AC-3 (guard) / AC-8: _go_home must NOT emit pause_home when the level attempt is
+	# not in progress — i.e. the `_level_started and not completed` guard holds at the
+	# real entry point. Completed level → no emit; not-yet-started level → no emit.
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("completed", true)  # level_complete already fired for this attempt
+	analytics_recorder.events.clear()
+	root_node.call("_go_home")
+	var completed_home := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if completed_home.size() != 0:
+		_fail("_go_home must not emit level_abandon after the level is completed")
+		return false
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("completed", false)
+	root_node.set("_level_started", false)  # level not started yet
+	analytics_recorder.events.clear()
+	root_node.call("_go_home")
+	var unstarted_home := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if unstarted_home.size() != 0:
+		_fail("_go_home must not emit level_abandon before a level has started")
+		return false
+
 	# AC-4: pause → restart emits pause_restart, capturing progress/time BEFORE
 	# reset_game tears the level down.
 	root_node.set("game_state", "playing")
