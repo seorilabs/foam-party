@@ -1868,7 +1868,8 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 	var orig_state := String(root_node.get("game_state"))
 	var orig_level := int(root_node.get("active_level_index"))
 
-	# AC-3 / AC-7: pause → home emits pause_home with progress_pct=62, elapsed_sec=18.
+	# AC-3 / AC-7: the pause-menu "홈" button (_pause_button_rect(4)) reaches _go_home,
+	# which emits pause_home with progress_pct=62, elapsed_sec=18 while a level is running.
 	root_node.set("game_state", "playing")
 	root_node.call("reset_game", 3, "abandon_smoke")
 	root_node.set("game_state", "playing")
@@ -1876,8 +1877,9 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 	root_node.set("completed", false)
 	root_node.set("clean_progress", 0.62)
 	root_node.set("level_time", 18.4)
+	root_node.set("show_pause", true)
 	analytics_recorder.events.clear()
-	root_node.call("_go_home")
+	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 4).get_center())
 	var home_events := analytics_recorder.events.filter(
 		func(event: Dictionary) -> bool:
 			return event.get("name") == "level_abandon"
@@ -1987,12 +1989,25 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 		_fail("AC-8: level_abandon must not fire after completion or before a level starts")
 		return false
 
-	# AC-5: _quit_app calls get_tree().quit() in headless and cannot be invoked here,
-	# so assert its wiring at the source. The shared emit path is proven above for the
-	# other three reasons, so this reason reaches the same builder.
+	# Source-wiring assertions mirroring the runtime proofs above, tying each remaining
+	# AC to its exact main.gd line (same style credited for AC-5).
 	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	# AC-5: _quit_app calls get_tree().quit() in headless and cannot be invoked here,
+	# so its emit is asserted at the source (the shared builder is proven at runtime above).
 	if not main_source.contains("_emit_level_abandon(ContentEvents.REASON_QUIT_CONFIRM)"):
-		_fail("_quit_app must emit a quit_confirm level_abandon")
+		_fail("AC-5: _quit_app must emit a quit_confirm level_abandon")
+		return false
+	# AC-3: _go_home emits pause_home (runtime-proven above; wiring asserted here too).
+	if not main_source.contains("_emit_level_abandon(ContentEvents.REASON_PAUSE_HOME)"):
+		_fail("AC-3: _go_home must emit a pause_home level_abandon")
+		return false
+	# AC-8: the shared emit is guarded by `_level_started`/`completed` (미발화 가드) and the
+	# per-attempt state is re-armed in reset_game (새 레벨 시작 시 리셋).
+	if not main_source.contains("if not _level_started or completed:"):
+		_fail("AC-8: _emit_level_abandon must guard on _level_started/completed")
+		return false
+	if not main_source.contains("_level_abandon_bg_emitted = false"):
+		_fail("AC-8: reset_game must reset the per-attempt abandon guard on a new level")
 		return false
 
 	root_node.set("show_pause", false)
