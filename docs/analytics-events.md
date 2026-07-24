@@ -19,6 +19,7 @@
 | `game_start` | `level` | 세션 시작 |
 | `level_start` | `level`, `car_type` | 레벨 퍼널(시작) |
 | `level_complete` | `level`, `stars`, `time_sec`, `best_combo`, `coins_earned`, `new_record` | 레벨 퍼널(완료/클리어시간/별), 경제(코인 획득) |
+| `level_abandon` | `level`, **`reason`**(`pause_home` \| `pause_restart` \| `quit_confirm` \| `app_background`), `progress_pct`(0~100), `elapsed_sec` | 레벨 퍼널(중도 이탈 사유·진행률·경과초) |
 | `foam_bomb_use` | `level`, **`source`**(`coins` \| `ad`), `cost` | 수익화(폼밤), 경제(코인/광고 소비) |
 | `daily_mission_claim` | `mission_type`, `reward` | 3개 데일리 슬롯별 수령·streak 보너스를 포함한 실제 코인 획득 |
 | `upgrade_purchase` | `tool`, `level`, `cost` | 수익화(업그레이드), 경제(코인 소비) |

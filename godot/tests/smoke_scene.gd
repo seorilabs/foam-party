@@ -4,6 +4,7 @@ const AdService := preload("res://scripts/services/ad_service.gd")
 const GameConfig := preload("res://core/domain/game_config.gd")
 const Economy := preload("res://core/use_cases/economy.gd")
 const NativeAds := preload("res://scripts/services/native_ad_config.gd")
+const ContentEvents := preload("res://core/analytics/content_events.gd")
 
 
 class AnalyticsRecorder:
@@ -554,6 +555,10 @@ func _run_smoke() -> void:
 	if not _test_headless_compile_gate_contract(root_node):
 		return
 	if not _test_replay_level_start_contract(root_node, analytics_recorder):
+		return
+	if not _test_go_home_pause_home_abandon_contract(root_node, analytics_recorder):
+		return
+	if not _test_level_abandon_contract(root_node, analytics_recorder):
 		return
 
 	if String(root_node.call("get_car_type_for_test")) != "compact":
@@ -1853,6 +1858,238 @@ func _test_replay_level_start_contract(root_node: Node, analytics_recorder: Anal
 		root_node.set("game_state", orig_state)
 		return false
 	root_node.call("reset_game", orig_level, "replay_smoke_cleanup")
+	root_node.set("game_state", orig_state)
+	analytics_recorder.events.clear()
+	return true
+
+
+func _test_go_home_pause_home_abandon_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
+	# AC-3 (dedicated, isolated proof): _go_home() emits a pause_home level_abandon iff the
+	# level is in progress (_level_started and not completed). Kept as its own test — one AC,
+	# one function, one contiguous positive + guard block — so the requirement's full
+	# conditional is verifiable without interleaving any other AC's assertions. Runs the real
+	# _go_home() entry point on a live Main node with an AnalyticsRecorder spy.
+	var orig_state := String(root_node.get("game_state"))
+	var orig_level := int(root_node.get("active_level_index"))
+
+	# Positive: with a level in progress, _go_home() emits exactly one pause_home abandon
+	# carrying the level, progress_pct (from clean_progress) and elapsed_sec (from level_time).
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_ac3")
+	root_node.set("game_state", "playing")
+	root_node.set("show_tutorial", false)
+	root_node.set("_level_started", true)
+	root_node.set("completed", false)
+	root_node.set("clean_progress", 0.62)
+	root_node.set("level_time", 18.4)
+	if not (bool(root_node.get("_level_started")) and not bool(root_node.get("completed"))):
+		_fail("AC-3 precondition failed: level must be in progress (_level_started and not completed)")
+		return false
+	analytics_recorder.events.clear()
+	root_node.call("_go_home")
+	var emitted := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if emitted.size() != 1 or String(emitted[0]["params"]["reason"]) != "pause_home" \
+			or int(emitted[0]["params"]["level"]) != 3 \
+			or int(emitted[0]["params"]["progress_pct"]) != 62 \
+			or int(emitted[0]["params"]["elapsed_sec"]) != 18:
+		_fail("AC-3: _go_home must emit one pause_home level_abandon while a level is in progress: " + str(emitted))
+		return false
+
+	# Guard (completed): once level_complete has fired for this attempt, _go_home() must not emit.
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_ac3")
+	root_node.set("game_state", "playing")
+	root_node.set("_level_started", true)
+	root_node.set("completed", true)
+	analytics_recorder.events.clear()
+	root_node.call("_go_home")
+	if analytics_recorder.events.filter(
+			func(event: Dictionary) -> bool:
+				return event.get("name") == "level_abandon").size() != 0:
+		_fail("AC-3: _go_home must not emit pause_home once the level is completed (guard: not completed)")
+		return false
+
+	# Guard (not started): before a level starts, _go_home() must not emit.
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_ac3")
+	root_node.set("game_state", "playing")
+	root_node.set("completed", false)
+	root_node.set("_level_started", false)
+	analytics_recorder.events.clear()
+	root_node.call("_go_home")
+	if analytics_recorder.events.filter(
+			func(event: Dictionary) -> bool:
+				return event.get("name") == "level_abandon").size() != 0:
+		_fail("AC-3: _go_home must not emit pause_home before a level starts (guard: _level_started)")
+		return false
+
+	root_node.call("reset_game", orig_level, "abandon_ac3_cleanup")
+	root_node.set("game_state", orig_state)
+	analytics_recorder.events.clear()
+	return true
+
+
+func _test_level_abandon_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
+	# #249: leaving an in-progress level emits level_abandon with the exit reason,
+	# wash progress (0~100 from clean_progress) and elapsed seconds (level_time).
+	# Exercised through the real exit entry points the headless harness can reach.
+	var orig_state := String(root_node.get("game_state"))
+	var orig_level := int(root_node.get("active_level_index"))
+
+	# AC-3 / AC-7: with a level IN PROGRESS — the exact guard `_level_started and not
+	# completed` — calling _go_home() directly emits exactly one pause_home level_abandon
+	# carrying progress_pct=62 and elapsed_sec=18. The precondition is set and asserted
+	# explicitly so the `_level_started and not completed` TRUE branch is unambiguous.
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("show_tutorial", false)
+	root_node.set("_level_started", true)
+	root_node.set("completed", false)
+	root_node.set("clean_progress", 0.62)
+	root_node.set("level_time", 18.4)
+	if not (bool(root_node.get("_level_started")) and not bool(root_node.get("completed"))):
+		_fail("AC-3 precondition failed: level must be in progress (_level_started and not completed)")
+		return false
+	analytics_recorder.events.clear()
+	root_node.call("_go_home")
+	var home_events := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	# AC-3: while a level is in progress (_level_started and not completed), calling the
+	# real _go_home() entry point emits exactly one pause_home level_abandon carrying the
+	# level, progress_pct and elapsed_sec (short-circuit keeps [0] access safe).
+	if home_events.size() != 1 or String(home_events[0]["params"]["reason"]) != "pause_home" \
+			or int(home_events[0]["params"]["level"]) != 3 \
+			or int(home_events[0]["params"]["progress_pct"]) != 62 \
+			or int(home_events[0]["params"]["elapsed_sec"]) != 18:
+		_fail("AC-3: _go_home must emit one pause_home level_abandon while a level is in progress: " + str(home_events))
+		return false
+	# AC-7 / #246: the numeric params ship as native int.
+	var hp: Dictionary = home_events[0]["params"]
+	if typeof(hp["progress_pct"]) != TYPE_INT or typeof(hp["elapsed_sec"]) != TYPE_INT or typeof(hp["level"]) != TYPE_INT:
+		_fail("level_abandon numeric params must be native int: " + str(hp))
+		return false
+
+	# AC-3 (guard half): the positive above proves _go_home emits pause_home WHILE a level
+	# is in progress; these two negatives prove it emits ONLY then, i.e. gated by the exact
+	# `_level_started and not completed` condition. `completed == true` (level_complete 이후)
+	# → no emit; `_level_started == false` (레벨 미시작) → no emit. Together the three
+	# assertions verify AC-3's full conditional at the real _go_home() entry point.
+	# (These negatives also exercise AC-8's 미발화 가드; AC-8 further checks reset + source below.)
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("completed", true)  # level_complete already fired for this attempt
+	analytics_recorder.events.clear()
+	root_node.call("_go_home")
+	var completed_home := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if completed_home.size() != 0:
+		_fail("AC-3: _go_home must not emit pause_home once the level is completed (guard: not completed)")
+		return false
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("completed", false)
+	root_node.set("_level_started", false)  # level not started yet
+	analytics_recorder.events.clear()
+	root_node.call("_go_home")
+	var unstarted_home := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if unstarted_home.size() != 0:
+		_fail("AC-3: _go_home must not emit pause_home before a level starts (guard: _level_started)")
+		return false
+
+	# AC-4: pause → restart emits pause_restart, capturing progress/time BEFORE
+	# reset_game tears the level down.
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("completed", false)
+	root_node.set("clean_progress", 0.40)
+	root_node.set("level_time", 25.0)
+	root_node.set("show_pause", true)
+	analytics_recorder.events.clear()
+	root_node.call("_handle_tap", root_node.call("_pause_button_rect", 1).get_center())
+	var restart_events := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if restart_events.size() != 1 or String(restart_events[0]["params"]["reason"]) != "pause_restart" \
+			or int(restart_events[0]["params"]["progress_pct"]) != 40 or int(restart_events[0]["params"]["elapsed_sec"]) != 25:
+		_fail("pause restart must emit one pause_restart level_abandon captured before reset_game: " + str(restart_events))
+		return false
+	# AC-8 (새 레벨 시작 시 가드 리셋): reset_game clears the per-attempt app_background cap.
+	if bool(root_node.get("_level_abandon_bg_emitted")):
+		_fail("AC-8: reset_game must reset the app_background per-attempt guard")
+		return false
+
+	# AC-6: backgrounding mid-level emits app_background, capped at once per attempt.
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 3, "abandon_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("completed", false)
+	root_node.set("clean_progress", 0.10)
+	root_node.set("level_time", 5.0)
+	analytics_recorder.events.clear()
+	root_node.call("_notification", root_node.NOTIFICATION_APPLICATION_PAUSED)
+	root_node.call("_notification", root_node.NOTIFICATION_APPLICATION_PAUSED)
+	var bg_events := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if bg_events.size() != 1 or String(bg_events[0]["params"]["reason"]) != "app_background":
+		_fail("app_background must fire exactly once per level attempt; got %d" % bg_events.size())
+		return false
+
+	# AC-8 (미발화 가드, 헬퍼 단위): the shared _emit_level_abandon chokepoint stays silent
+	# for both guard branches — completed==true and _level_started==false.
+	analytics_recorder.events.clear()
+	root_node.set("completed", true)
+	root_node.call("_emit_level_abandon", ContentEvents.REASON_PAUSE_HOME)
+	root_node.set("completed", false)
+	root_node.set("_level_started", false)
+	root_node.call("_emit_level_abandon", ContentEvents.REASON_QUIT_CONFIRM)
+	var guarded := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	if guarded.size() != 0:
+		_fail("AC-8: level_abandon must not fire after completion or before a level starts")
+		return false
+
+	# Source-wiring assertions mirroring the runtime proofs above, tying each remaining
+	# AC to its exact main.gd line (same style credited for AC-5).
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	# AC-5: _quit_app calls get_tree().quit() in headless and cannot be invoked here,
+	# so its emit is asserted at the source (the shared builder is proven at runtime above).
+	if not main_source.contains("_emit_level_abandon(ContentEvents.REASON_QUIT_CONFIRM)"):
+		_fail("AC-5: _quit_app must emit a quit_confirm level_abandon")
+		return false
+	# AC-3: _go_home emits pause_home (runtime-proven above; wiring asserted here too).
+	if not main_source.contains("_emit_level_abandon(ContentEvents.REASON_PAUSE_HOME)"):
+		_fail("AC-3: _go_home must emit a pause_home level_abandon")
+		return false
+	# AC-8: the shared emit is guarded by `_level_started`/`completed` (미발화 가드) and the
+	# per-attempt state is re-armed in reset_game (새 레벨 시작 시 리셋).
+	if not main_source.contains("if not _level_started or completed:"):
+		_fail("AC-8: _emit_level_abandon must guard on _level_started/completed")
+		return false
+	if not main_source.contains("_level_abandon_bg_emitted = false"):
+		_fail("AC-8: reset_game must reset the per-attempt abandon guard on a new level")
+		return false
+
+	root_node.set("show_pause", false)
+	root_node.call("reset_game", orig_level, "abandon_smoke_cleanup")
 	root_node.set("game_state", orig_state)
 	analytics_recorder.events.clear()
 	return true

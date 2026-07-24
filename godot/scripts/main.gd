@@ -301,6 +301,9 @@ var audio: AudioService
 # _emit_analytics with a pure-core catalog builder, not scattered dictionaries.
 var analytics: Node = null
 var _level_started := false
+# level_abandon(app_background) is capped at one emission per level attempt so a
+# brief background→foreground bounce is not counted repeatedly. Reset on reset_game.
+var _level_abandon_bg_emitted := false
 var ads: Node = null
 # Show a game-over interstitial only every Nth level transition, so ads never
 # interrupt every single completion.
@@ -990,6 +993,19 @@ func _mark_level_started() -> void:
 			"main", _unclaimed_daily_mission_count(), daily_streak))
 
 
+# Emit level_abandon when the player leaves an in-progress level attempt without
+# completing it. Guarded by _level_started/completed so it never fires after
+# level_complete or before a level starts — the mirror of the level_start/
+# level_complete pair. progress_pct is clean_progress as 0~100, elapsed_sec the
+# whole-second level time (matching level_complete.time_sec).
+func _emit_level_abandon(reason: String) -> void:
+	if not _level_started or completed:
+		return
+	var progress_pct := clampi(int(round(clean_progress * 100.0)), 0, 100)
+	_emit_analytics(ContentEvents.level_abandon(
+		active_level_index, reason, progress_pct, int(level_time)))
+
+
 # Register the Godot back handler with the AIT wrapper once the bridge is present
 # (window.__foamPartyNav, installed before Godot boots). Web/AIT only.
 func _ensure_back_handler() -> void:
@@ -1036,6 +1052,9 @@ func _on_back_pressed() -> void:
 
 
 func _go_home() -> void:
+	# Leaving an in-progress level for the title is an abandon; emit before the
+	# state below tears the level down so progress/time are still readable.
+	_emit_level_abandon(ContentEvents.REASON_PAUSE_HOME)
 	show_pause = false
 	show_quit_confirm = false
 	show_stage_panel = false
@@ -1050,6 +1069,8 @@ func _go_home() -> void:
 
 
 func _quit_app() -> void:
+	# Quitting with a level attempt still in progress is an abandon.
+	_emit_level_abandon(ContentEvents.REASON_QUIT_CONFIRM)
 	if OS.has_feature("web") and _web_nav != null:
 		_web_nav.closeApp()
 	else:
@@ -1124,6 +1145,12 @@ func _notification(what: int) -> void:
 		_update_canvas_transform()
 		queue_redraw()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
+		# Backgrounding/closing mid-level is the dominant silent abandon (level_start
+		# as last event). Cap at one per attempt so a background→foreground bounce is
+		# not double-counted; a later same-level level_complete marks it soft-abandon.
+		if _level_started and not completed and not _level_abandon_bg_emitted:
+			_level_abandon_bg_emitted = true
+			_emit_level_abandon(ContentEvents.REASON_APP_BACKGROUND)
 		if what == NOTIFICATION_APPLICATION_PAUSED:
 			is_washing = false
 			if audio != null:
@@ -1446,6 +1473,7 @@ func reset_game(new_level: int, load_reason: String = "manual") -> void:
 	_emit_analytics(FtueEvents.level_load_start(new_level, load_reason))
 	active_level_index = maxi(new_level, 1)
 	_level_started = false
+	_level_abandon_bg_emitted = false
 	completed = false
 	completion_burst_done = false
 	_car_transition_phase = CAR_TRANSITION_IDLE
@@ -2511,6 +2539,8 @@ func _handle_tap(point: Vector2) -> bool:
 			queue_redraw()
 		elif _pause_button_rect(1).has_point(point):
 			show_pause = false
+			# Emit before reset_game clears _level_started/level_time/clean_progress.
+			_emit_level_abandon(ContentEvents.REASON_PAUSE_RESTART)
 			reset_game(active_level_index, "pause_restart")
 			_play_ui_select()
 		elif _pause_audio_option_rect("music").has_point(point):

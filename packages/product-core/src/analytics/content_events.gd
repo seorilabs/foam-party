@@ -24,6 +24,7 @@ extends RefCounted
 const GAME_START := "game_start"
 const LEVEL_START := "level_start"
 const LEVEL_COMPLETE := "level_complete"
+const LEVEL_ABANDON := "level_abandon"
 const FOAM_BOMB_USE := "foam_bomb_use"
 const DAILY_MISSION_CLAIM := "daily_mission_claim"
 const DAILY_MISSION_VIEW := "daily_mission_view"
@@ -37,6 +38,7 @@ const ALL := [
 	GAME_START,
 	LEVEL_START,
 	LEVEL_COMPLETE,
+	LEVEL_ABANDON,
 	FOAM_BOMB_USE,
 	DAILY_MISSION_CLAIM,
 	DAILY_MISSION_VIEW,
@@ -49,6 +51,14 @@ const ALL := [
 # Foam-bomb coin/ad source labels — shared so the sink and the game agree.
 const SOURCE_AD := "ad"
 const SOURCE_COINS := "coins"
+
+# level_abandon reason enum — the in-game exit path the player took while a level
+# attempt was still incomplete. Locked here so the game and the metrics sink agree
+# on the exact string values.
+const REASON_PAUSE_HOME := "pause_home"          # pause → 홈(타이틀) 복귀
+const REASON_PAUSE_RESTART := "pause_restart"    # pause → 현재 레벨 재시작
+const REASON_QUIT_CONFIRM := "quit_confirm"      # 종료 확인 → 앱 종료
+const REASON_APP_BACKGROUND := "app_background"  # 앱 백그라운드/종료 요청(시도당 1회)
 
 
 # ── Builders — each returns {"name": String, "params": Dictionary} ──────────
@@ -73,6 +83,19 @@ static func level_complete(
 		"best_combo": best_combo,
 		"coins_earned": coins_earned,
 		"new_record": str(new_record),  # boolean flag stays a string ("true"/"false")
+	})
+
+
+# Fired when the player leaves an in-progress level attempt without completing it.
+# `reason` is one of the REASON_* enums; `progress_pct` is the wash completion at
+# exit time (0~100 int, from clean_progress) and `elapsed_sec` the level time in
+# whole seconds. Numeric params stay native int so GA4 exports int_value.
+static func level_abandon(level: int, reason: String, progress_pct: int, elapsed_sec: int) -> Dictionary:
+	return _event(LEVEL_ABANDON, {
+		"level": level,
+		"reason": reason,
+		"progress_pct": progress_pct,
+		"elapsed_sec": elapsed_sec,
 	})
 
 
