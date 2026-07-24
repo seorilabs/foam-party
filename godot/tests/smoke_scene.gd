@@ -1882,21 +1882,25 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 		func(event: Dictionary) -> bool:
 			return event.get("name") == "level_abandon"
 	)
-	if home_events.size() != 1:
-		_fail("_go_home must emit exactly one level_abandon while a level is in progress; got %d" % home_events.size())
+	# AC-3: while a level is in progress (_level_started and not completed), calling the
+	# real _go_home() entry point emits exactly one pause_home level_abandon carrying the
+	# level, progress_pct and elapsed_sec (short-circuit keeps [0] access safe).
+	if home_events.size() != 1 or String(home_events[0]["params"]["reason"]) != "pause_home" \
+			or int(home_events[0]["params"]["level"]) != 3 \
+			or int(home_events[0]["params"]["progress_pct"]) != 62 \
+			or int(home_events[0]["params"]["elapsed_sec"]) != 18:
+		_fail("AC-3: _go_home must emit one pause_home level_abandon while a level is in progress: " + str(home_events))
 		return false
+	# AC-7 / #246: the numeric params ship as native int.
 	var hp: Dictionary = home_events[0]["params"]
-	if String(hp["reason"]) != "pause_home" or int(hp["level"]) != 3 \
-			or int(hp["progress_pct"]) != 62 or int(hp["elapsed_sec"]) != 18:
-		_fail("pause_home level_abandon params mismatch: " + str(home_events[0]))
-		return false
 	if typeof(hp["progress_pct"]) != TYPE_INT or typeof(hp["elapsed_sec"]) != TYPE_INT or typeof(hp["level"]) != TYPE_INT:
 		_fail("level_abandon numeric params must be native int: " + str(hp))
 		return false
 
-	# AC-3 (guard) / AC-8: _go_home must NOT emit pause_home when the level attempt is
-	# not in progress — i.e. the `_level_started and not completed` guard holds at the
-	# real entry point. Completed level → no emit; not-yet-started level → no emit.
+	# AC-8 (미발화 가드, real path) + AC-3 (guard): _go_home must NOT emit when the level
+	# attempt is not in progress. `completed == true` models the "level_complete 이후"
+	# state; `_level_started == false` models "레벨 미시작". Both exercise the exact
+	# `_level_started and not completed` guard at the real _go_home() entry point.
 	root_node.set("game_state", "playing")
 	root_node.call("reset_game", 3, "abandon_smoke")
 	root_node.set("game_state", "playing")
@@ -1908,7 +1912,7 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 			return event.get("name") == "level_abandon"
 	)
 	if completed_home.size() != 0:
-		_fail("_go_home must not emit level_abandon after the level is completed")
+		_fail("AC-8: _go_home must not emit level_abandon after level_complete (completed=true)")
 		return false
 	root_node.set("game_state", "playing")
 	root_node.call("reset_game", 3, "abandon_smoke")
@@ -1922,7 +1926,7 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 			return event.get("name") == "level_abandon"
 	)
 	if unstarted_home.size() != 0:
-		_fail("_go_home must not emit level_abandon before a level has started")
+		_fail("AC-8: _go_home must not emit level_abandon before a level has started (_level_started=false)")
 		return false
 
 	# AC-4: pause → restart emits pause_restart, capturing progress/time BEFORE
@@ -1944,9 +1948,9 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 			or int(restart_events[0]["params"]["progress_pct"]) != 40 or int(restart_events[0]["params"]["elapsed_sec"]) != 25:
 		_fail("pause restart must emit one pause_restart level_abandon captured before reset_game: " + str(restart_events))
 		return false
-	# AC-8 (reset): the new attempt started by reset_game clears the app_background cap.
+	# AC-8 (새 레벨 시작 시 가드 리셋): reset_game clears the per-attempt app_background cap.
 	if bool(root_node.get("_level_abandon_bg_emitted")):
-		_fail("reset_game must reset the app_background per-attempt guard")
+		_fail("AC-8: reset_game must reset the app_background per-attempt guard")
 		return false
 
 	# AC-6: backgrounding mid-level emits app_background, capped at once per attempt.
@@ -1967,7 +1971,8 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 		_fail("app_background must fire exactly once per level attempt; got %d" % bg_events.size())
 		return false
 
-	# AC-8 (guards): no emission after completion or before a level starts.
+	# AC-8 (미발화 가드, 헬퍼 단위): the shared _emit_level_abandon chokepoint stays silent
+	# for both guard branches — completed==true and _level_started==false.
 	analytics_recorder.events.clear()
 	root_node.set("completed", true)
 	root_node.call("_emit_level_abandon", ContentEvents.REASON_PAUSE_HOME)
@@ -1979,7 +1984,7 @@ func _test_level_abandon_contract(root_node: Node, analytics_recorder: Analytics
 			return event.get("name") == "level_abandon"
 	)
 	if guarded.size() != 0:
-		_fail("level_abandon must not fire after completion or before a level starts")
+		_fail("AC-8: level_abandon must not fire after completion or before a level starts")
 		return false
 
 	# AC-5: _quit_app calls get_tree().quit() in headless and cannot be invoked here,
