@@ -151,12 +151,15 @@
       "game_over": "확정 필요"
     },
     "androidRewardedAdUnits": {
-      "foam_bomb_free": "ca-app-pub-2444587584524186/5440739953",
+      "foam_bomb_free": "확정 필요",
       "level_reward_2x": "확정 필요",
       "coin_double": "확정 필요",
       "star_rescue": "확정 필요"
     },
-    "runtimeStatus": "Native adapter implemented with Google test IDs by default. tools/build_admob_plugin.sh injects configured IDs; unresolved placements remain test-only and block production promotion",
+    "rejectedAdUnits": {
+      "ca-app-pub-2444587584524186/5440739953": "AdMob console format is rewarded interstitial; incompatible with the current RewardedAdLoader"
+    },
+    "runtimeStatus": "Native adapter keeps Google test IDs only as repository defaults. ADMOB_REQUIRE_PRODUCTION=1 blocks a Google Play build when any Android app/unit slot still uses the Google test publisher; game_over interstitial and standard rewarded units remain unresolved",
     "lastLocalVerification": "2026-07-21 debug AAB export passed. Bundle manifest contains Google test APPLICATION_ID plus PoingGodotAdMob/InterstitialAd/RewardedAd singleton metadata; DEX contains Google Mobile Ads and Poing rewarded/interstitial implementations. Release AAB and physical-device QA pending"
   },
   "firebase": {

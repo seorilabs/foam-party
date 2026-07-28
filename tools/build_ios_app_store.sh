@@ -43,7 +43,9 @@ targeted_device_family_from_preset() {
   esac
 }
 
-python3 tools/configure_native_ads.py
+ADMOB_REQUIRE_PRODUCTION="${ADMOB_REQUIRE_PRODUCTION:-0}" \
+ADMOB_TARGET_PLATFORM="${ADMOB_TARGET_PLATFORM:-iOS}" \
+  python3 tools/configure_native_ads.py
 
 team_id="${FOAM_PARTY_IOS_TEAM_ID:-HCDUXX4Z3X}"
 bundle_id="${FOAM_PARTY_IOS_BUNDLE_ID:-com.seorilabs.foamparty}"

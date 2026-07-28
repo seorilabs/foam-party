@@ -95,6 +95,12 @@ FTUE 이벤트의 이름과 파라미터 원본은 `packages/product-core/src/an
 ## 안전/비활성 규칙
 
 - Android/iOS는 Poing AdMob v4.3.1과 Godot 4.6.3용 바이너리를 repo에 고정한다. desktop/headless/Web에는 네이티브 singleton이 없어 기존 no-op 경로를 유지한다.
-- `godot/config/native_ads.json` 기본값은 Google 공식 테스트 app/unit ID다. `tools/configure_native_ads.py`가 빌드 환경변수로 실제 ID를 주입한다. 실제 ID가 모두 확정되기 전 production 배포 금지.
+- `godot/config/native_ads.json` 기본값은 Google 공식 테스트 app/unit ID다. `tools/configure_native_ads.py`가 빌드 환경변수로 실제 ID를 주입한다.
+- 마켓 릴리즈는 `ADMOB_REQUIRE_PRODUCTION=1`과 `ADMOB_TARGET_PLATFORM=Android|iOS`를 전달한다. 선택한 플랫폼의 최종 `native_ads.json`·Android `config.gd`·iOS `.gdip` 중 테스트 퍼블리셔 `ca-app-pub-3940256099942544`가 하나라도 남으면 빌드가 실패해야 한다. 미설정 시 dev/AIT/PR의 기존 테스트 ID 동작은 유지한다.
+- Android production 변수: `ADMOB_ANDROID_APP_ID`(호환: `ADMOB_APP_ID`), `ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID`(호환: `ADMOB_INTERSTITIAL_AD_UNIT_ID`), `ADMOB_ANDROID_FOAM_BOMB_REWARDED_AD_UNIT_ID`, `ADMOB_ANDROID_LEVEL_REWARD_REWARDED_AD_UNIT_ID`.
+- iOS production 변수: `ADMOB_IOS_APP_ID`, `ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID`, `ADMOB_IOS_FOAM_BOMB_REWARDED_AD_UNIT_ID`, `ADMOB_IOS_LEVEL_REWARD_REWARDED_AD_UNIT_ID`.
+- 확정 앱 ID: Android `ca-app-pub-2444587584524186~8642747667`, iOS `ca-app-pub-2444587584524186~1722116096`.
+- AdMob 콘솔 확인 결과 Android `ca-app-pub-2444587584524186/5440739953`와 iOS `ca-app-pub-2444587584524186/7557772414`는 모두 `보상형 전면 광고`다. 현재 네이티브 어댑터는 `RewardedAdLoader`를 사용하므로 설정 스크립트가 두 ID를 거부한다. 두 플랫폼 모두 일반 `보상형` 유닛을 별도로 생성해야 한다.
+- repo 밖 동반 작업: `seorilabs/.github`의 `godot-deploy-google-play.yml`이 Android rewarded 변수 2개와 `ADMOB_REQUIRE_PRODUCTION=1`을 전달해야 한다. Google Play `google-play` environment에는 Android app/interstitial/rewarded 변수를 모두 설정한다.
 - iOS는 ATT prompt 없이 `npa=1`을 요청별 기본값으로 보낸다. 이는 UMP 동의 수집을 대체하지 않으므로 EEA/UK 배포 전 AdMob privacy message와 UMP 흐름을 별도 확정한다.
 - 광고 이벤트는 fire-and-forget: 게임 상태/반환값에 영향 없음.
