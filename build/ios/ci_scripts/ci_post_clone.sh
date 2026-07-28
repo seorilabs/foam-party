@@ -49,7 +49,9 @@ godot --headless --path godot --import --quit-after 1
 echo "▸ 네이티브 AdMob ID 설정(ADMOB_* 환경 변수 오버라이드 또는 native_ads.json 기본값)"
 # .gdip 의 GADApplicationIdentifier 와 광고 유닛 ID 를 export 전에 확정한다. 이 단계를
 # 생략하면 커밋된 테스트 ID 가 그대로 아카이브된다. tools/build_ios_app_store.sh 와 동일.
-python3 "${REPO}/tools/configure_native_ads.py"
+ADMOB_REQUIRE_PRODUCTION="${ADMOB_REQUIRE_PRODUCTION:-0}" \
+ADMOB_TARGET_PLATFORM="${ADMOB_TARGET_PLATFORM:-iOS}" \
+  python3 "${REPO}/tools/configure_native_ads.py"
 
 echo "▸ iOS Xcode 프로젝트 export → build/ios/foam-party.xcodeproj"
 mkdir -p build/ios

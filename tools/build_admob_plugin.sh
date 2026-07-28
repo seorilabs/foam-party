@@ -7,7 +7,9 @@ cd "${repo_root}"
 # The verified Poing v4.3.1/Godot 4.6.3 binaries are vendored. This hook is
 # called by the Seorilabs Google Play reusable workflow and only applies the
 # build-environment IDs plus verifies that the native payload is intact.
-python3 tools/configure_native_ads.py
+ADMOB_REQUIRE_PRODUCTION="${ADMOB_REQUIRE_PRODUCTION:-0}" \
+ADMOB_TARGET_PLATFORM="${ADMOB_TARGET_PLATFORM:-Android}" \
+  python3 tools/configure_native_ads.py
 
 required_files=(
   "godot/addons/admob/android/bin/ads/libs/poing-godot-admob-ads-debug.aar"

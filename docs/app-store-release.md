@@ -50,7 +50,7 @@ export FOAM_PARTY_IOS_TARGETED_DEVICE_FAMILY="1"
 AdMob app/unit ID도 같은 빌드에서 주입한다. 미설정 값은 Google 공식 테스트 ID로 남으므로 production 제출 전에 모두 지정해야 한다.
 
 ```bash
-export ADMOB_IOS_APP_ID="ca-app-pub-...~..."
+export ADMOB_IOS_APP_ID="ca-app-pub-2444587584524186~1722116096"
 export ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID="ca-app-pub-.../..."
 export ADMOB_IOS_FOAM_BOMB_REWARDED_AD_UNIT_ID="ca-app-pub-.../..."
 export ADMOB_IOS_LEVEL_REWARD_REWARDED_AD_UNIT_ID="ca-app-pub-.../..."
