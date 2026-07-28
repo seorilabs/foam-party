@@ -17,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIGURE_SCRIPT = REPO_ROOT / "tools" / "configure_native_ads.py"
 ANDROID_BUILD = REPO_ROOT / "tools" / "build_admob_plugin.sh"
 IOS_POST_CLONE = REPO_ROOT / "build" / "ios" / "ci_scripts" / "ci_post_clone.sh"
+ANALYTICS_DOCS = REPO_ROOT / "docs" / "analytics-events.md"
 
 TEST_PUBLISHER = "ca-app-pub-3940256099942544"
 PRODUCTION_PUBLISHER = "ca-app-pub-1234567890123456"
@@ -202,6 +203,26 @@ class ReleaseScriptContractTest(unittest.TestCase):
         script = IOS_POST_CLONE.read_text(encoding="utf-8")
         self.assertIn('ADMOB_REQUIRE_PRODUCTION="${ADMOB_REQUIRE_PRODUCTION:-0}"', script)
         self.assertIn('ADMOB_TARGET_PLATFORM="${ADMOB_TARGET_PLATFORM:-iOS}"', script)
+
+    def test_docs_record_production_variables_and_org_workflow_handoff(self) -> None:
+        """AC: 운영에 필요한 전체 변수와 org 재사용 workflow 변경을 문서화한다."""
+        docs = ANALYTICS_DOCS.read_text(encoding="utf-8")
+        required_variables = [
+            "ADMOB_REQUIRE_PRODUCTION",
+            "ADMOB_ANDROID_APP_ID",
+            "ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID",
+            "ADMOB_ANDROID_FOAM_BOMB_REWARDED_AD_UNIT_ID",
+            "ADMOB_ANDROID_LEVEL_REWARD_REWARDED_AD_UNIT_ID",
+            "ADMOB_IOS_APP_ID",
+            "ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID",
+            "ADMOB_IOS_FOAM_BOMB_REWARDED_AD_UNIT_ID",
+            "ADMOB_IOS_LEVEL_REWARD_REWARDED_AD_UNIT_ID",
+        ]
+        for variable in required_variables:
+            with self.subTest(variable=variable):
+                self.assertIn(variable, docs)
+        self.assertIn("seorilabs/.github", docs)
+        self.assertIn("godot-deploy-google-play.yml", docs)
 
 
 if __name__ == "__main__":
