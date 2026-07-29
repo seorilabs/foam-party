@@ -169,6 +169,24 @@ class CiPostCloneOrchestrationTest(unittest.TestCase):
             configure_at, self.export_at, "광고 ID 설정은 export 앞에서 실행돼야 함"
         )
 
+    def test_resolves_packages_after_pbxproj_patch(self) -> None:
+        """AC-3: pbxproj 패치 후 package resolve 와 lockfile 검증을 수행한다."""
+        patch_at = self.script.find("tools/patch_ios_admob_project.py")
+        resolve_at = self.script.find("-resolvePackageDependencies")
+        lockfile_at = self.script.find(
+            "project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+        )
+
+        self.assertNotEqual(patch_at, -1, "patch_ios_admob_project.py 호출이 없음")
+        self.assertNotEqual(resolve_at, -1, "Swift Package resolve 호출이 없음")
+        self.assertNotEqual(lockfile_at, -1, "Package.resolved 검증이 없음")
+        self.assertGreater(
+            resolve_at, patch_at, "package resolve 는 pbxproj 패치 뒤에서 실행돼야 함"
+        )
+        self.assertGreater(
+            lockfile_at, resolve_at, "lockfile 검증은 package resolve 뒤에서 실행돼야 함"
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

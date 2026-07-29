@@ -69,6 +69,20 @@ echo "▸ AdMob SPM 로컬 패키지를 Xcode 프로젝트에 링크"
 # 생성되므로, export 후 pbxproj 만 결정론적으로 패치한다(로컬 빌드 경로와 동일).
 python3 "${REPO}/tools/patch_ios_admob_project.py" "${REPO}/build/ios/foam-party.xcodeproj/project.pbxproj"
 
+echo "▸ Swift Package 의존성 resolve 및 Package.resolved 생성"
+# Xcode Cloud 워크플로는 자동 package resolution 을 비활성화한다. Godot 가 post-clone
+# 중 생성하는 Xcode 프로젝트에는 Package.resolved 가 아직 없으므로, Archive 검증 전에
+# 명시적으로 resolve 해 Xcode Cloud 가 요구하는 project workspace 경로에 고정한다.
+xcodebuild \
+  -resolvePackageDependencies \
+  -project "${REPO}/build/ios/foam-party.xcodeproj" \
+  -scheme foam-party
+PACKAGE_RESOLVED="${REPO}/build/ios/foam-party.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+[ -f "${PACKAGE_RESOLVED}" ] || {
+  echo "  Swift Package lockfile 이 생성되지 않음: ${PACKAGE_RESOLVED}" >&2
+  exit 1
+}
+
 echo "▸ 생성된 scheme 확인"
 xcodebuild -list -project "${REPO}/build/ios/foam-party.xcodeproj" || true
 
