@@ -148,18 +148,26 @@
     "androidAppId": "ca-app-pub-2444587584524186~8642747667",
     "plugin": "Poing AdMob v4.3.1 / Godot 4.6.3 Android platform binary",
     "androidInterstitialAdUnits": {
-      "game_over": "확정 필요"
+      "game_over": "ca-app-pub-2444587584524186/7916431267"
     },
     "androidRewardedAdUnits": {
-      "foam_bomb_free": "확정 필요",
-      "level_reward_2x": "확정 필요",
+      "foam_bomb_free": "ca-app-pub-2444587584524186/5358816619",
+      "level_reward_2x": "ca-app-pub-2444587584524186/3854163255",
       "coin_double": "확정 필요",
       "star_rescue": "확정 필요"
     },
     "rejectedAdUnits": {
       "ca-app-pub-2444587584524186/5440739953": "AdMob console format is rewarded interstitial; incompatible with the current RewardedAdLoader"
     },
-    "runtimeStatus": "Native adapter keeps Google test IDs only as repository defaults. ADMOB_REQUIRE_PRODUCTION=1 blocks a Google Play build when any Android app/unit slot still uses the Google test publisher; game_over interstitial and standard rewarded units remain unresolved",
+    "productionUnitVerification": {
+      "checkedAt": "2026-07-29",
+      "console": "Google AdMob",
+      "game_over": "전면 광고",
+      "foam_bomb_free": "보상형",
+      "level_reward_2x": "보상형",
+      "githubEnvironment": "google-play"
+    },
+    "runtimeStatus": "Native adapter keeps Google test IDs only as repository defaults. The google-play environment supplies the verified Android app/interstitial/rewarded IDs, and ADMOB_REQUIRE_PRODUCTION=1 blocks a Google Play build when any Android runtime slot still uses the Google test publisher. Physical-device ad and GA4 QA remain pending",
     "lastLocalVerification": "2026-07-21 debug AAB export passed. Bundle manifest contains Google test APPLICATION_ID plus PoingGodotAdMob/InterstitialAd/RewardedAd singleton metadata; DEX contains Google Mobile Ads and Poing rewarded/interstitial implementations. Release AAB and physical-device QA pending"
   },
   "firebase": {
@@ -198,7 +206,7 @@
     "Play Console 앱 이름은 Foam Party, 패키지는 com.seorilabs.foamparty, 출시 기본 언어는 영어로 확인했다.",
     "초기 Google Play 가격은 무료로 확정했다. Google Play는 앱이 무료로 제공된 뒤 같은 packageName을 유료 앱으로 전환할 수 없으므로, 유료 판매가 필요하면 별도 packageName의 새 앱이 필요하다.",
     "Android release build는 x64 Linux 경로를 사용한다. Seorilabs RPI ARC runner로 AAB/APK release build를 보내지 않는다.",
-    "AdMob Android app ID와 foam_bomb_free rewarded ad unit ID는 repo 원장에 확정했다. game_over와 level_reward_2x production unit ID는 확정 필요이며 기본 빌드는 Google 테스트 ID를 사용한다.",
+    "AdMob Android app ID와 game_over/foam_bomb_free/level_reward_2x production unit ID를 2026-07-29 콘솔 형식 확인 후 repo 원장과 GitHub google-play environment에 등록했다. 기본 빌드는 Google 테스트 ID를 유지하고 release build에서만 운영 ID를 주입한다.",
     "Firebase Core/Analytics SDK와 Android/iOS config 파일을 반영했다. Google Play Data safety는 제출 완료했고, 실제 기기 Analytics QA는 blocker다.",
     "Godot Android AdMob/Firebase plugin을 위해 Gradle build preset으로 전환했다. godot/android/build template은 로컬 생성물이므로 tools/install_android_build_template.sh로 재생성한다.",
     "Google Play internal testing용 signed AAB는 build/android/foam-party-internal.aab로 생성했다. seorilabs-play-publisher service account로 internal track upload를 완료했다. 최신 internal upload는 versionCode 3 completed release다.",

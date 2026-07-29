@@ -19,7 +19,8 @@
 - [ ] Signing confirmed
 - [ ] Internal testing upload ready
 - [ ] Data safety confirmed
-- [ ] Android production AdMob app ID와 `game_over`/`foam_bomb_free`/`level_reward_2x` unit ID 주입 확인
+- [x] Android production AdMob app ID와 `game_over`/`foam_bomb_free`/`level_reward_2x` unit ID 콘솔 형식 확인 및 `google-play` environment 등록
+- [ ] release AAB 최종 산출물의 Android production AdMob ID 주입 확인
 - [ ] 실제 Android 기기에서 load → impression → dismiss/earned 이벤트 확인
 - [ ] 승인된 태그로 `google_play_track=production`, `google_play_release_status=completed` dispatch
 - [ ] Android Publisher API 또는 Play Console에서 production versionName/versionCode/status readback
@@ -31,7 +32,8 @@
 - [ ] Signing/provisioning confirmed
 - [ ] TestFlight notes ready
 - [ ] Privacy labels confirmed
-- [ ] iOS production AdMob app/unit ID 주입 확인
+- [x] iOS production AdMob app/unit ID 콘솔 형식 확인 및 Xcode Cloud `Release` workflow 등록
+- [ ] Xcode Cloud archive 최종 산출물의 iOS production AdMob ID 주입 확인
 - [ ] ATT 비활성 + NPA 기본값 검토, EEA/UK용 UMP privacy message/동의 흐름 확정
 - [ ] 실제 iPhone에서 load → impression → dismiss/earned 이벤트 확인
 - [ ] Screenshot set captured

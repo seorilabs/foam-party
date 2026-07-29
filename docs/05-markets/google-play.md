@@ -35,7 +35,8 @@
 - 사업자 계정은 최소 business contact address와 contact telephone number를 Play Console에서 확정해야 한다. 유료 앱/IAP가 있으면 사업자등록번호, 통신판매업 신고번호, 신고기관도 필요하다.
 - Android AAB/APK release build는 Seorilabs RPI ARC runner로 보내지 않는다.
 - Poing AdMob v4.3.1 Android plugin은 repo에 번들되어 있다. 기본값은 Google 테스트 ID이며 `tools/build_admob_plugin.sh`가 x64 Google Play build에서 repo/environment 변수로 production ID를 주입한다.
-- `game_over`와 `level_reward_2x` production unit ID, 실제 기기 광고/GA4 이벤트 확인 전에는 새 광고 빌드를 production으로 승격하지 않는다.
+- 2026-07-29 AdMob 콘솔에서 `game_over=전면 광고`, `foam_bomb_free/level_reward_2x=보상형` 운영 ID를 확인하고 GitHub `google-play` environment에 app/unit ID 4개를 등록했다.
+- 실제 기기 광고/GA4 이벤트 확인 전에는 새 광고 빌드를 production으로 승격하지 않는다.
 - 2026-07-21 로컬 debug AAB export에서 테스트 app ID, Poing AdMob singleton metadata, Google Mobile Ads/리워드/전면 구현을 bundle manifest와 DEX로 확인했다. 연결된 Android 기기가 없어 실노출 QA는 남았다.
 
 ## Production Promotion Procedure
