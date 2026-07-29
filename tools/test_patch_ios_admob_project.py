@@ -8,6 +8,7 @@ GoogleMobileAds/UMP 링크가 다시 깨지지 않도록 링크 삽입과 idempo
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -15,6 +16,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from check_ios_package_resolved import EXPECTED_VERSIONS, validate_package_resolved
 from patch_ios_admob_project import BUILD_FILE, LOCAL_REF, patch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -176,16 +178,75 @@ class CiPostCloneOrchestrationTest(unittest.TestCase):
         lockfile_at = self.script.find(
             "project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
         )
+        version_check_at = self.script.find("tools/check_ios_package_resolved.py")
 
         self.assertNotEqual(patch_at, -1, "patch_ios_admob_project.py 호출이 없음")
         self.assertNotEqual(resolve_at, -1, "Swift Package resolve 호출이 없음")
         self.assertNotEqual(lockfile_at, -1, "Package.resolved 검증이 없음")
+        self.assertNotEqual(version_check_at, -1, "resolved SDK 버전 검증이 없음")
         self.assertGreater(
             resolve_at, patch_at, "package resolve 는 pbxproj 패치 뒤에서 실행돼야 함"
         )
         self.assertGreater(
             lockfile_at, resolve_at, "lockfile 검증은 package resolve 뒤에서 실행돼야 함"
         )
+        self.assertGreater(
+            version_check_at,
+            lockfile_at,
+            "resolved SDK 버전 검증은 lockfile 확인 뒤에서 실행돼야 함",
+        )
+
+
+class IosPackageResolvedValidationTest(unittest.TestCase):
+    def _write_resolved(self, versions: dict[str, str]) -> Path:
+        fixture_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(fixture_dir.cleanup)
+        path = Path(fixture_dir.name) / "Package.resolved"
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 3,
+                    "pins": [
+                        {
+                            "identity": identity,
+                            "kind": "remoteSourceControl",
+                            "location": f"https://example.invalid/{identity}.git",
+                            "state": {
+                                "revision": "fixture",
+                                "version": version,
+                            },
+                        }
+                        for identity, version in versions.items()
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    def test_accepts_exact_admob_and_ump_versions(self) -> None:
+        """AC-3: 실제 lockfile 의 Ads 13.3.0 및 UMP 3.1.0을 직접 검증한다."""
+        path = self._write_resolved(EXPECTED_VERSIONS)
+        resolved = validate_package_resolved(path)
+
+        self.assertEqual(
+            resolved["swift-package-manager-google-mobile-ads"], "13.3.0"
+        )
+        self.assertEqual(
+            resolved["swift-package-manager-google-user-messaging-platform"],
+            "3.1.0",
+        )
+
+    def test_rejects_resolved_version_drift(self) -> None:
+        drifted = dict(EXPECTED_VERSIONS)
+        drifted["swift-package-manager-google-mobile-ads"] = "99.0.0"
+        path = self._write_resolved(drifted)
+
+        with self.assertRaisesRegex(
+            SystemExit,
+            "expected 13.3.0, got 99.0.0",
+        ):
+            validate_package_resolved(path)
 
 
 if __name__ == "__main__":

@@ -82,6 +82,7 @@ PACKAGE_RESOLVED="${REPO}/build/ios/foam-party.xcodeproj/project.xcworkspace/xcs
   echo "  Swift Package lockfile 이 생성되지 않음: ${PACKAGE_RESOLVED}" >&2
   exit 1
 }
+python3 "${REPO}/tools/check_ios_package_resolved.py" "${PACKAGE_RESOLVED}"
 
 echo "▸ 생성된 scheme 확인"
 xcodebuild -list -project "${REPO}/build/ios/foam-party.xcodeproj" || true
