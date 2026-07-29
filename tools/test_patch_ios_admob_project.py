@@ -174,26 +174,46 @@ class CiPostCloneOrchestrationTest(unittest.TestCase):
     def test_resolves_packages_after_pbxproj_patch(self) -> None:
         """AC-3: pbxproj 패치 후 package resolve 와 lockfile 검증을 수행한다."""
         patch_at = self.script.find("tools/patch_ios_admob_project.py")
-        resolve_at = self.script.find("-resolvePackageDependencies")
-        lockfile_at = self.script.find(
-            "project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+        swift_resolve_at = self.script.find(
+            'swift package --package-path "${REPO}/build/ios" resolve'
         )
+        copy_at = self.script.find(
+            'cp "${SWIFT_PACKAGE_RESOLVED}" "${PACKAGE_RESOLVED}"'
+        )
+        xcode_resolve_at = self.script.find("-resolvePackageDependencies")
+        locked_xcode_at = self.script.find("-onlyUsePackageVersionsFromResolvedFile")
         version_check_at = self.script.find("tools/check_ios_package_resolved.py")
 
         self.assertNotEqual(patch_at, -1, "patch_ios_admob_project.py 호출이 없음")
-        self.assertNotEqual(resolve_at, -1, "Swift Package resolve 호출이 없음")
-        self.assertNotEqual(lockfile_at, -1, "Package.resolved 검증이 없음")
+        self.assertNotEqual(swift_resolve_at, -1, "SwiftPM resolve 호출이 없음")
+        self.assertNotEqual(copy_at, -1, "SwiftPM lockfile 복사가 없음")
+        self.assertNotEqual(xcode_resolve_at, -1, "Xcode package resolve 호출이 없음")
+        self.assertNotEqual(locked_xcode_at, -1, "Xcode lockfile 강제가 없음")
         self.assertNotEqual(version_check_at, -1, "resolved SDK 버전 검증이 없음")
         self.assertGreater(
-            resolve_at, patch_at, "package resolve 는 pbxproj 패치 뒤에서 실행돼야 함"
+            swift_resolve_at,
+            patch_at,
+            "SwiftPM resolve 는 pbxproj 패치 뒤에서 실행돼야 함",
         )
         self.assertGreater(
-            lockfile_at, resolve_at, "lockfile 검증은 package resolve 뒤에서 실행돼야 함"
+            copy_at,
+            swift_resolve_at,
+            "lockfile 복사는 SwiftPM resolve 뒤에서 실행돼야 함",
+        )
+        self.assertGreater(
+            xcode_resolve_at,
+            copy_at,
+            "Xcode resolve 는 project lockfile 복사 뒤에서 실행돼야 함",
+        )
+        self.assertGreater(
+            locked_xcode_at,
+            xcode_resolve_at,
+            "Xcode resolve 는 copied lockfile만 사용해야 함",
         )
         self.assertGreater(
             version_check_at,
-            lockfile_at,
-            "resolved SDK 버전 검증은 lockfile 확인 뒤에서 실행돼야 함",
+            locked_xcode_at,
+            "resolved SDK 버전 검증은 locked Xcode resolve 뒤에서 실행돼야 함",
         )
 
 
