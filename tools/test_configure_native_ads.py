@@ -172,6 +172,39 @@ class ConfigureNativeAdsTest(unittest.TestCase):
             config["platforms"]["iOS"]["units"]["rewarded"]["foam_bomb_free"],
         )
 
+    def test_test_id_defaults_and_production_strict_boundary_are_preserved(self) -> None:
+        """AC-4: 테스트 ID 기본값과 운영 strict 주입 경계를 유지한다."""
+        default_result = self.run_configure()
+        default_config = json.loads(self.config_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(default_result.returncode, 0, default_result.stderr)
+        self.assertEqual(default_config["mode"], "google-test-defaults")
+        self.assertIn(TEST_PUBLISHER, json.dumps(default_config["platforms"]["Android"]))
+        self.assertIn(TEST_PUBLISHER, json.dumps(default_config["platforms"]["iOS"]))
+
+        strict_result = self.run_configure(
+            {
+                "ADMOB_REQUIRE_PRODUCTION": "1",
+                "ADMOB_TARGET_PLATFORM": "Android",
+                "ADMOB_ANDROID_APP_ID": f"{PRODUCTION_PUBLISHER}~1000000001",
+                "ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID": (
+                    f"{PRODUCTION_PUBLISHER}/2000000001"
+                ),
+                "ADMOB_ANDROID_FOAM_BOMB_REWARDED_AD_UNIT_ID": (
+                    f"{PRODUCTION_PUBLISHER}/3000000001"
+                ),
+                "ADMOB_ANDROID_LEVEL_REWARD_REWARDED_AD_UNIT_ID": (
+                    f"{PRODUCTION_PUBLISHER}/3000000002"
+                ),
+            }
+        )
+        strict_config = json.loads(self.config_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(strict_result.returncode, 0, strict_result.stderr)
+        self.assertEqual(strict_config["mode"], "environment-overrides")
+        self.assertNotIn(TEST_PUBLISHER, json.dumps(strict_config["platforms"]["Android"]))
+        self.assertIn(TEST_PUBLISHER, json.dumps(strict_config["platforms"]["iOS"]))
+
     def test_require_production_cli_flag_is_supported(self) -> None:
         """AC: env 없이 --require-production 플래그로도 strict 검증을 켤 수 있다."""
         result = self.run_configure(
@@ -226,6 +259,26 @@ class ReleaseScriptContractTest(unittest.TestCase):
                 self.assertIn(variable, docs)
         self.assertIn("seorilabs/.github", docs)
         self.assertIn("godot-deploy-google-play.yml", docs)
+        self.assertIn("Google Play `google-play` environment", docs)
+        self.assertIn("Xcode Cloud `Release` workflow", docs)
+
+    def test_release_environment_registration_state_is_recorded_in_repo(self) -> None:
+        """AC-3: Xcode Cloud와 Google Play 릴리스 환경 반영 상태가 repo 원장에 남는다."""
+        play = json.loads(PLAY_STORE_CONFIG.read_text(encoding="utf-8"))["adMob"]
+        app_store = json.loads(APP_STORE_CONFIG.read_text(encoding="utf-8"))["adMob"]
+        docs = ANALYTICS_DOCS.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            play["productionUnitVerification"]["githubEnvironment"],
+            "google-play",
+        )
+        self.assertEqual(
+            app_store["productionUnitVerification"]["xcodeCloudWorkflow"],
+            "Release",
+        )
+        self.assertTrue(
+            app_store["productionUnitVerification"]["strictProductionGuard"]
+        )
         self.assertIn("Google Play `google-play` environment", docs)
         self.assertIn("Xcode Cloud `Release` workflow", docs)
 
