@@ -18,6 +18,9 @@ CONFIGURE_SCRIPT = REPO_ROOT / "tools" / "configure_native_ads.py"
 ANDROID_BUILD = REPO_ROOT / "tools" / "build_admob_plugin.sh"
 IOS_POST_CLONE = REPO_ROOT / "build" / "ios" / "ci_scripts" / "ci_post_clone.sh"
 ANALYTICS_DOCS = REPO_ROOT / "docs" / "analytics-events.md"
+APP_STORE_RELEASE_DOCS = REPO_ROOT / "docs" / "app-store-release.md"
+PLAY_STORE_CONFIG = REPO_ROOT / "play-store" / "google-play.config.json"
+APP_STORE_CONFIG = REPO_ROOT / "app-store" / "app-store.config.json"
 
 TEST_PUBLISHER = "ca-app-pub-3940256099942544"
 PRODUCTION_PUBLISHER = "ca-app-pub-1234567890123456"
@@ -223,6 +226,45 @@ class ReleaseScriptContractTest(unittest.TestCase):
                 self.assertIn(variable, docs)
         self.assertIn("seorilabs/.github", docs)
         self.assertIn("godot-deploy-google-play.yml", docs)
+
+    def test_console_verified_production_units_are_recorded_by_platform(self) -> None:
+        """AC: 콘솔 확인한 운영 ID가 각 플랫폼의 실제 loader 형식 아래 기록된다."""
+        play = json.loads(PLAY_STORE_CONFIG.read_text(encoding="utf-8"))["adMob"]
+        app_store = json.loads(APP_STORE_CONFIG.read_text(encoding="utf-8"))["adMob"]
+
+        self.assertEqual(
+            play["androidInterstitialAdUnits"]["game_over"],
+            "ca-app-pub-2444587584524186/7916431267",
+        )
+        self.assertEqual(
+            play["androidRewardedAdUnits"]["foam_bomb_free"],
+            "ca-app-pub-2444587584524186/5358816619",
+        )
+        self.assertEqual(
+            play["androidRewardedAdUnits"]["level_reward_2x"],
+            "ca-app-pub-2444587584524186/3854163255",
+        )
+        self.assertEqual(
+            app_store["iosInterstitialAdUnits"]["game_over"],
+            "ca-app-pub-2444587584524186/5905611520",
+        )
+        self.assertEqual(
+            app_store["iosRewardedAdUnits"]["foam_bomb_free"],
+            "ca-app-pub-2444587584524186/1826765714",
+        )
+        self.assertEqual(
+            app_store["iosRewardedAdUnits"]["level_reward_2x"],
+            "ca-app-pub-2444587584524186/8531774866",
+        )
+
+        release_docs = APP_STORE_RELEASE_DOCS.read_text(encoding="utf-8")
+        for unit_id in (
+            "ca-app-pub-2444587584524186/5905611520",
+            "ca-app-pub-2444587584524186/1826765714",
+            "ca-app-pub-2444587584524186/8531774866",
+        ):
+            with self.subTest(unit_id=unit_id):
+                self.assertIn(unit_id, release_docs)
 
 
 if __name__ == "__main__":

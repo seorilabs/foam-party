@@ -51,10 +51,13 @@ AdMob app/unit ID도 같은 빌드에서 주입한다. 미설정 값은 Google �
 
 ```bash
 export ADMOB_IOS_APP_ID="ca-app-pub-2444587584524186~1722116096"
-export ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID="ca-app-pub-.../..."
-export ADMOB_IOS_FOAM_BOMB_REWARDED_AD_UNIT_ID="ca-app-pub-.../..."
-export ADMOB_IOS_LEVEL_REWARD_REWARDED_AD_UNIT_ID="ca-app-pub-.../..."
+export ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID="ca-app-pub-2444587584524186/5905611520"
+export ADMOB_IOS_FOAM_BOMB_REWARDED_AD_UNIT_ID="ca-app-pub-2444587584524186/1826765714"
+export ADMOB_IOS_LEVEL_REWARD_REWARDED_AD_UNIT_ID="ca-app-pub-2444587584524186/8531774866"
+export ADMOB_REQUIRE_PRODUCTION="1"
 ```
+
+Xcode Cloud `Release` workflow에는 위 5개 변수를 2026-07-29 등록하고 저장 후 재조회했다. 광고 단위 형식은 `game_over=전면 광고`, `foam_bomb_free/level_reward_2x=보상형`으로 AdMob 콘솔에서 확인했다.
 
 Godot iOS export는 `build/ios/foam-party.xcodeproj`와 AdMob용 local `Package.swift`를 만든다. 스크립트는 headless export에서 누락될 수 있는 Swift Package project reference를 idempotent하게 보정한 뒤 `build/ios/foam-party.xcarchive`와 `.ipa` export를 이어서 만든다.
 
@@ -62,7 +65,7 @@ Godot iOS export는 `build/ios/foam-party.xcodeproj`와 AdMob용 local `Package.
 
 - 1.0.0 제출 당시 답변과 달리 현재 소스는 AdMob/Firebase Analytics를 포함한다. 다음 버전의 App Privacy, age rating, review notes를 다시 확정해야 한다.
 - iOS는 ATT를 활성화하지 않고 광고 요청에 `npa=1`을 기본 적용한다. Worldwide의 EEA/UK 배포 전 AdMob privacy message와 UMP 동의 흐름을 구성한다.
-- production AdMob app/unit ID와 실제 iPhone 광고 load/impression/dismiss/earned 및 GA4 이벤트를 확인한다.
+- 실제 iPhone 광고 load/impression/dismiss/earned 및 GA4 이벤트를 확인한다. 운영 app/unit ID와 Xcode Cloud 주입은 완료됐다.
 - `app-store/assets/icon-1024.png`는 600x600 원본에서 생성했으므로 최종 고해상도 원본 교체를 권장한다.
 
 ## 확인 명령
@@ -77,6 +80,7 @@ tools/check_app_store_readiness.py --json
 
 ## 검증 기록
 
+- 2026-07-29: AdMob 콘솔에서 iOS 전면 광고 1개와 일반 보상형 2개의 이름·ID·형식을 확인했다. Xcode Cloud `Release` workflow에 app/unit ID와 `ADMOB_REQUIRE_PRODUCTION=1`을 등록한 뒤 재조회했다.
 - 2026-07-21: Poing AdMob v4.3.1 iOS xcframework를 Godot 4.6.3 preset에 번들하고 project-only export를 확인했다. 생성된 plist에 Google 테스트 app ID와 SKAdNetworkItems가 포함되고 ATT usage description은 없다.
 - 2026-07-21: headless export 후 local Swift Package reference를 보정해 GoogleMobileAds 13.3.0, UMP 3.1.0, Poing xcframework가 링크된 unsigned Release iphoneos build를 완료했다.
 - 2026-06-12: App Store 준비 시작. iOS preset, repo-local config, release docs, readiness checker, build script 추가.
