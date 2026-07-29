@@ -80,6 +80,8 @@ tools/check_app_store_readiness.py --json
 
 ## 검증 기록
 
+- 2026-07-29: Xcode Cloud `Release` build 24를 `v1.3.12`/`cc5c723` 대상으로 완료했다. Archive issue 0, App Store Connect `processingState=VALID`, `buildAudienceType=APP_STORE_ELIGIBLE`, `internalBuildState=IN_BETA_TESTING`을 API로 재조회했다.
+- 2026-07-29: build 22는 자동 package resolution 비활성 상태에서 `Package.resolved`가 없어 실패했다. build 23은 post-clone의 Xcode resolver도 같은 설정을 상속해 exit 74로 실패했다. SwiftPM CLI로 lockfile을 선생성하고 Xcode workspace에 복사하도록 보정한 뒤 build 24에서 해결을 확인했다.
 - 2026-07-29: AdMob 콘솔에서 iOS 전면 광고 1개와 일반 보상형 2개의 이름·ID·형식을 확인했다. Xcode Cloud `Release` workflow에 app/unit ID와 `ADMOB_REQUIRE_PRODUCTION=1`을 등록한 뒤 재조회했다.
 - 2026-07-21: Poing AdMob v4.3.1 iOS xcframework를 Godot 4.6.3 preset에 번들하고 project-only export를 확인했다. 생성된 plist에 Google 테스트 app ID와 SKAdNetworkItems가 포함되고 ATT usage description은 없다.
 - 2026-07-21: headless export 후 local Swift Package reference를 보정해 GoogleMobileAds 13.3.0, UMP 3.1.0, Poing xcframework가 링크된 unsigned Release iphoneos build를 완료했다.

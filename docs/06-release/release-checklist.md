@@ -33,7 +33,7 @@
 - [ ] TestFlight notes ready
 - [ ] Privacy labels confirmed
 - [x] iOS production AdMob app/unit ID 콘솔 형식 확인 및 Xcode Cloud `Release` workflow 등록
-- [ ] Xcode Cloud archive 최종 산출물의 iOS production AdMob ID 주입 확인
+- [x] Xcode Cloud archive 최종 산출물의 iOS production AdMob ID 주입 확인 - v1.3.12 build 24 Archive/VALID
 - [ ] ATT 비활성 + NPA 기본값 검토, EEA/UK용 UMP privacy message/동의 흐름 확정
 - [ ] 실제 iPhone에서 load → impression → dismiss/earned 이벤트 확인
 - [ ] Screenshot set captured
