@@ -69,17 +69,28 @@ echo "▸ AdMob SPM 로컬 패키지를 Xcode 프로젝트에 링크"
 # 생성되므로, export 후 pbxproj 만 결정론적으로 패치한다(로컬 빌드 경로와 동일).
 python3 "${REPO}/tools/patch_ios_admob_project.py" "${REPO}/build/ios/foam-party.xcodeproj/project.pbxproj"
 
-echo "▸ Swift Package 의존성 resolve 및 Package.resolved 생성"
-# Xcode Cloud 워크플로는 자동 package resolution 을 비활성화한다. Godot 가 post-clone
-# 중 생성하는 Xcode 프로젝트에는 Package.resolved 가 아직 없으므로, Archive 검증 전에
-# 명시적으로 resolve 해 Xcode Cloud 가 요구하는 project workspace 경로에 고정한다.
+echo "▸ SwiftPM lockfile 생성 및 Xcode 프로젝트에 고정"
+# Xcode Cloud 워크플로는 자동 package resolution 을 비활성화하므로 lockfile 없는
+# xcodebuild resolver 자체가 exit 74로 실패한다. 먼저 SwiftPM CLI로 로컬 패키지의
+# Package.resolved 를 만든 뒤 Xcode project workspace 경로에 복사하고, Xcode에는
+# lockfile에 기록된 exact 버전만 사용하도록 요구한다.
+swift package --package-path "${REPO}/build/ios" resolve
+SWIFT_PACKAGE_RESOLVED="${REPO}/build/ios/Package.resolved"
+[ -f "${SWIFT_PACKAGE_RESOLVED}" ] || {
+  echo "  SwiftPM lockfile 이 생성되지 않음: ${SWIFT_PACKAGE_RESOLVED}" >&2
+  exit 1
+}
+PACKAGE_RESOLVED_DIR="${REPO}/build/ios/foam-party.xcodeproj/project.xcworkspace/xcshareddata/swiftpm"
+mkdir -p "${PACKAGE_RESOLVED_DIR}"
+PACKAGE_RESOLVED="${PACKAGE_RESOLVED_DIR}/Package.resolved"
+cp "${SWIFT_PACKAGE_RESOLVED}" "${PACKAGE_RESOLVED}"
 xcodebuild \
   -resolvePackageDependencies \
   -project "${REPO}/build/ios/foam-party.xcodeproj" \
-  -scheme foam-party
-PACKAGE_RESOLVED="${REPO}/build/ios/foam-party.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+  -scheme foam-party \
+  -onlyUsePackageVersionsFromResolvedFile
 [ -f "${PACKAGE_RESOLVED}" ] || {
-  echo "  Swift Package lockfile 이 생성되지 않음: ${PACKAGE_RESOLVED}" >&2
+  echo "  Xcode project lockfile 이 생성되지 않음: ${PACKAGE_RESOLVED}" >&2
   exit 1
 }
 python3 "${REPO}/tools/check_ios_package_resolved.py" "${PACKAGE_RESOLVED}"
