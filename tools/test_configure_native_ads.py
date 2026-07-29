@@ -226,6 +226,8 @@ class ReleaseScriptContractTest(unittest.TestCase):
                 self.assertIn(variable, docs)
         self.assertIn("seorilabs/.github", docs)
         self.assertIn("godot-deploy-google-play.yml", docs)
+        self.assertIn("Google Play `google-play` environment", docs)
+        self.assertIn("Xcode Cloud `Release` workflow", docs)
 
     def test_console_verified_production_units_are_recorded_by_platform(self) -> None:
         """AC: 콘솔 확인한 운영 ID가 각 플랫폼의 실제 loader 형식 아래 기록된다."""
