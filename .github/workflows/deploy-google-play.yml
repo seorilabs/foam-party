@@ -99,13 +99,17 @@ jobs:
         with:
           ref: ${{ inputs.release_tag || github.ref }}
 
-      # 이미지는 비공개 Artifact Registry 에 있다. 잡 레벨 container: 는 스텝 이전에
-      # 이미지를 받아 WIF 토큰을 쓸 수 없으므로, 인증 후 스텝 안에서 docker run 한다.
-      # 이렇게 하면 저장소를 공개하지도, 새 정적 키를 만들지도 않는다.
+      # 이미지는 비공개 Artifact Registry 에 있다. 조직 정책
+      # constraints/iam.allowedPolicyMemberDomains 가 allUsers 부여를 막으므로
+      # 공개 저장소로 열 수 없고, 열어서도 안 된다 — 그 정책이 실수로 공개되는 것을 막는다.
+      #
+      # 잡 레벨 container: 는 스텝 이전에 이미지를 받아 WIF 토큰을 쓸 수 없다. 인증 후
+      # 스텝 안에서 docker run 한다. 빌드당 15~30초를 쓰지만 새 정적 키가 필요 없다.
+      # SA 는 이 repo 가 Play 업로드에 이미 쓰는 것을 그대로 재사용한다(툴체인 읽기 전용).
       - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.ARTIFACT_REGISTRY_READER_SERVICE_ACCOUNT }}
+          service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
       - uses: google-github-actions/setup-gcloud@v3
       - name: Authenticate Docker to Artifact Registry
         run: gcloud auth configure-docker asia-northeast3-docker.pkg.dev --quiet
