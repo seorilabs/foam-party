@@ -465,6 +465,9 @@ func _run_smoke() -> void:
 	if String(session_fake.credentials[0].get("kind", "")) != "firebase-id-token":
 		_fail("platform auth credential kind must be firebase-id-token")
 		return
+	if String(session_fake.credentials[0].get("value", "")) != "fake-firebase-id-token":
+		_fail("platform auth must forward the ID token returned by ensure_identity")
+		return
 	var platform_auth_service: Node = root_node.get("platform_auth") as Node
 	if platform_auth_service == null or String(platform_auth_service.get("status")) != "failed":
 		_fail("fake Platform session failure must be observable and non-fatal")

@@ -11,6 +11,8 @@
 - core import boundary를 확인한다.
 - platform SDK import는 adapter 계층으로 제한한다.
 - `npm run check:architecture`가 `packages/product-core`의 금지 import 패턴을 검사한다.
+- `npm run check:platform-sdk`가 vendored SDK의 SOURCE·VERSION과 전체 GDScript
+  CHECKSUM을 재계산해 드리프트를 차단한다.
 
 ## Godot
 
