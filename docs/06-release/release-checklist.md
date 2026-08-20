@@ -12,6 +12,13 @@
 - [ ] Privacy/policy answers confirmed
 - [ ] Release notes confirmed
 
+## Firebase / Platform identity
+
+- [x] `foam-party` Platform registry와 custom-token bridge 운영 반영
+- [ ] Firebase Auth 초기화 후 `signInWithCustomToken` 성공 확인
+- [ ] Android/iOS 실기기에서 Platform 세션과 재실행 UID 유지 확인
+- [ ] custom token·Firebase ID token 비영속화 로그/파일 확인
+
 ## Google Play
 
 - [ ] Play Console `Account Details` 한국 법률 추가 정보 완료 및 403 해소

@@ -30,6 +30,7 @@ const AdPort = preload("res://core/ports/ad_port.gd")
 const AudioService = preload("res://scripts/services/audio_service.gd")
 const FirebaseAnalyticsAdapter = preload("res://scripts/services/firebase_analytics_adapter.gd")
 const AdService = preload("res://scripts/services/ad_service.gd")
+const PlatformAuthService = preload("res://scripts/services/platform_auth_service.gd")
 const I18n = preload("res://scripts/services/i18n.gd")
 const BackgroundLayer = preload("res://scripts/background_layer.gd")
 
@@ -300,6 +301,9 @@ var audio: AudioService
 # singletons are absent (headless / plugin not bundled). Events go through
 # _emit_analytics with a pure-core catalog builder, not scattered dictionaries.
 var analytics: Node = null
+var platform_auth: Node = null
+var _platform_auth_client_override: Node = null
+var _platform_identity_override: Node = null
 var _level_started := false
 # level_abandon(app_background) is capped at one emission per level attempt so a
 # brief background→foreground bounce is not counted repeatedly. Reset on reset_game.
@@ -418,6 +422,7 @@ func _ready() -> void:
 	analytics = FirebaseAnalyticsAdapter.new()
 	add_child(analytics)
 	analytics.setup()
+	_setup_platform_auth()
 	_emit_analytics(FtueEvents.title_screen_view(FtueEvents.ENTRY_COLD_START))
 	ads = AdService.new()
 	add_child(ads)
@@ -428,6 +433,32 @@ func _ready() -> void:
 	_bar_fill_style.set_corner_radius_all(12)
 	_apply_audio_settings()
 	reset_game(level_index, "cold_start")
+
+
+func configure_platform_auth_for_test(platform_client: Node, identity_adapter: Node) -> void:
+	if is_inside_tree():
+		return
+	_platform_auth_client_override = platform_client
+	_platform_identity_override = identity_adapter
+
+
+func _setup_platform_auth() -> void:
+	var has_test_override := _platform_auth_client_override != null \
+		and _platform_identity_override != null
+	# Compile/import checks must never contact production. Native release builds use
+	# their existing Firebase config; the AIT/Web delivery keeps its current no-key path.
+	if not has_test_override and not OS.has_feature("android") and not OS.has_feature("ios"):
+		return
+	platform_auth = PlatformAuthService.new()
+	add_child(platform_auth)
+	var options := {}
+	if has_test_override:
+		options = {
+			"platform_client": _platform_auth_client_override,
+			"identity_adapter": _platform_identity_override,
+		}
+	platform_auth.call("configure", options)
+	platform_auth.call("start")
 
 
 func _load_progress() -> void:

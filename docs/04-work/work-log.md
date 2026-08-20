@@ -1,5 +1,13 @@
 # Work Log
 
+## 2026-08-20
+
+- Platform GDScript SDK `0.6.3`을 `VERSION`·`CHECKSUM`과 함께 vendoring하고,
+  Android/iOS 시작 시 Firebase custom-token identity와 Platform 세션을 비동기로
+  여는 서비스 경계를 추가했다. 헤드리스 smoke는 fake client만 주입해 sign-in 1회,
+  credential kind, 세션 실패 시 게임 진행, 로컬 UID 재사용과 token 비영속화를 검증한다.
+  운영 bridge는 준비됐지만 Firebase Auth 초기화와 실기기 확인은 release gate로 남긴다. (#259)
+
 ## 2026-07-21
 
 - 렌더링 프레임 비용을 줄였다. 비누 거품은 비누량 10단계 버킷별 레이아웃(오프셋·반경·색)을 1회 계산해 캐시하고 매 프레임에는 삼각함수·HSV 연산 없이 캐시된 원만 그리며, 거품당 draw 명령을 4개(16세그먼트 arc 포함)에서 큰 덩어리 3개·위성 1개로 줄였다. 하늘·세차 베이 정적 배경 약 90개 draw 명령은 behind-parent 캐시 레이어로 분리해 뷰포트 레이아웃 변경 시에만 다시 그린다. smoke의 거품·베이 시각 계약과 Metal 캡처로 검증한다.

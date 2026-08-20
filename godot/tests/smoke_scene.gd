@@ -5,6 +5,8 @@ const GameConfig := preload("res://core/domain/game_config.gd")
 const Economy := preload("res://core/use_cases/economy.gd")
 const NativeAds := preload("res://scripts/services/native_ad_config.gd")
 const ContentEvents := preload("res://core/analytics/content_events.gd")
+const PlatformAuthService := preload("res://scripts/services/platform_auth_service.gd")
+const PlatformClient := preload("res://addons/seorilabs_platform/platform_client.gd")
 
 
 class AnalyticsRecorder:
@@ -23,6 +25,69 @@ class RewardRecorder:
 
 	func grant() -> void:
 		grants += 1
+
+
+class PlatformIdentityFake:
+	extends Node
+
+	var ensure_identity_calls := 0
+
+	func ensure_identity() -> Dictionary:
+		ensure_identity_calls += 1
+		return {
+			"success": true,
+			"uid": "pb_smoke_uid",
+			"id_token": "fake-firebase-id-token",
+		}
+
+
+class PlatformSessionFake:
+	extends Node
+
+	var credentials: Array[Dictionary] = []
+
+	func sign_in(credential: Dictionary, callback: Callable = Callable()) -> void:
+		credentials.append(credential.duplicate(true))
+		if callback.is_valid():
+			callback.call({
+				"ok": false,
+				"code": "fake_session_failure",
+				"http_status": 503,
+			})
+
+
+class PlatformCustomTokenFake:
+	extends Node
+
+	var existing_tokens: Array[String] = []
+
+	func create_firebase_custom_token(
+		existing_firebase_id_token: String,
+		_app_check_token: String,
+		callback: Callable,
+	) -> void:
+		existing_tokens.append(existing_firebase_id_token)
+		callback.call({
+			"ok": true,
+			"result": {"firebaseCustomToken": "fake-platform-custom-token"},
+		})
+
+
+class FirebaseIdentityFakeTransport:
+	extends "res://addons/seorilabs_platform/adapters/firebase_identity_adapter.gd"
+
+	var responses: Array[Dictionary] = []
+
+	func _request_json(
+		_url: String,
+		_method: int,
+		_headers: PackedStringArray,
+		_body: String,
+		_add_json_header: bool = true,
+	) -> Dictionary:
+		if responses.is_empty():
+			return {"success": false, "status": 0}
+		return responses.pop_front()
 
 
 func _initialize() -> void:
@@ -267,16 +332,151 @@ func _test_achievement_contract(root_node: Node) -> bool:
 	return true
 
 
+func _test_platform_identity_persistence() -> bool:
+	var version := FileAccess.get_file_as_string(
+		"res://addons/seorilabs_platform/VERSION"
+	).strip_edges()
+	var checksum := FileAccess.get_file_as_string(
+		"res://addons/seorilabs_platform/CHECKSUM"
+	).strip_edges()
+	var source := FileAccess.get_file_as_string(
+		"res://addons/seorilabs_platform/SOURCE"
+	).strip_edges()
+	var checksum_pattern := RegEx.new()
+	checksum_pattern.compile("^[0-9a-f]{64}$")
+	if version != PlatformClient.SDK_VERSION \
+			or checksum_pattern.search(checksum) == null \
+			or source != "https://github.com/seorilabs/platform/tree/main/sdk-gdscript":
+		_fail("vendored Platform SDK provenance is incomplete or inconsistent")
+		return false
+	if PlatformAuthService.firebase_api_key_from_android_json(
+			"res://google-services.json").is_empty():
+		_fail("Android Firebase API key must be readable from the existing config")
+		return false
+	if PlatformAuthService.firebase_api_key_from_ios_plist(
+			"res://GoogleService-Info.plist").is_empty():
+		_fail("iOS Firebase API key must be readable from the existing config")
+		return false
+
+	var state_path := "user://foam_party_platform_auth_smoke.json"
+	_remove_platform_identity_test_state(state_path)
+	var first_platform := PlatformCustomTokenFake.new()
+	var first_identity := FirebaseIdentityFakeTransport.new()
+	get_root().add_child(first_platform)
+	get_root().add_child(first_identity)
+	first_identity.configure({
+		"firebase_api_key": "fake-api-key",
+		"platform_client": first_platform,
+		"state_path": state_path,
+	})
+	first_identity.responses.append({
+		"success": true,
+		"status": 200,
+		"data": {
+			"localId": "pb_persisted_uid",
+			"idToken": "fake-firebase-id-token-first",
+			"refreshToken": "fake-firebase-refresh-token-first",
+			"expiresIn": "3600",
+		},
+	})
+	var first_result: Dictionary = await first_identity.ensure_identity()
+	if not bool(first_result.get("success", false)) \
+			or String(first_result.get("uid", "")) != "pb_persisted_uid" \
+			or first_platform.existing_tokens != [""]:
+		first_identity.clear_local_state()
+		first_identity.queue_free()
+		first_platform.queue_free()
+		_fail("first Platform Firebase identity bootstrap failed")
+		return false
+	var persisted_state := FileAccess.get_file_as_string(state_path)
+	if persisted_state.contains("fake-platform-custom-token") \
+			or persisted_state.contains("fake-firebase-id-token") \
+			or persisted_state.contains("\"id_token\""):
+		first_identity.clear_local_state()
+		first_identity.queue_free()
+		first_platform.queue_free()
+		_fail("one-time custom token or Firebase ID token was persisted")
+		return false
+	first_identity.queue_free()
+	first_platform.queue_free()
+	await process_frame
+
+	var second_platform := PlatformCustomTokenFake.new()
+	var second_identity := FirebaseIdentityFakeTransport.new()
+	get_root().add_child(second_platform)
+	get_root().add_child(second_identity)
+	second_identity.configure({
+		"firebase_api_key": "fake-api-key",
+		"platform_client": second_platform,
+		"state_path": state_path,
+	})
+	second_identity.responses.append({
+		"success": true,
+		"status": 200,
+		"data": {
+			"user_id": "pb_persisted_uid",
+			"id_token": "fake-firebase-id-token-second",
+			"refresh_token": "fake-firebase-refresh-token-second",
+			"expires_in": "3600",
+		},
+	})
+	var second_result: Dictionary = await second_identity.ensure_identity()
+	var reused_uid := bool(second_result.get("success", false)) \
+		and String(second_result.get("uid", "")) == "pb_persisted_uid" \
+		and second_platform.existing_tokens.is_empty()
+	second_identity.clear_local_state()
+	second_identity.queue_free()
+	second_platform.queue_free()
+	_remove_platform_identity_test_state(state_path)
+	await process_frame
+	if not reused_uid:
+		_fail("relaunch must refresh and reuse the persisted Firebase uid")
+		return false
+	return true
+
+
+func _remove_platform_identity_test_state(state_path: String) -> void:
+	for path in [state_path, state_path + ".tmp"]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
 func _run_smoke() -> void:
+	if not await _test_platform_identity_persistence():
+		return
+
 	var scene: PackedScene = load("res://scenes/main.tscn") as PackedScene
 	if scene == null:
 		_fail("main scene failed to load")
 		return
 
+	var session_fake := PlatformSessionFake.new()
+	var identity_fake := PlatformIdentityFake.new()
 	var root_node: Node = scene.instantiate()
+	root_node.call("configure_platform_auth_for_test", session_fake, identity_fake)
 	get_root().add_child(root_node)
 
 	await process_frame
+	await process_frame
+
+	if identity_fake.ensure_identity_calls != 1 or session_fake.credentials.size() != 1:
+		_fail("platform auth must request identity and sign in exactly once")
+		return
+	if String(session_fake.credentials[0].get("kind", "")) != "firebase-id-token":
+		_fail("platform auth credential kind must be firebase-id-token")
+		return
+	if String(session_fake.credentials[0].get("value", "")) != "fake-firebase-id-token":
+		_fail("platform auth must forward the ID token returned by ensure_identity")
+		return
+	var platform_auth_service: Node = root_node.get("platform_auth") as Node
+	if platform_auth_service == null or String(platform_auth_service.get("status")) != "failed":
+		_fail("fake Platform session failure must be observable and non-fatal")
+		return
+	platform_auth_service.call("start")
+	await process_frame
+	if session_fake.credentials.size() != 1:
+		_fail("platform auth start guard must prevent duplicate sign_in calls")
+		return
 
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
