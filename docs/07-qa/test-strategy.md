@@ -17,6 +17,9 @@
 - import pass를 먼저 수행한다.
 - compile check는 Godot 로그의 `SCRIPT ERROR` / `ERROR:`를 실패로 처리한다.
 - smoke scene은 main scene boot, cleaning rule, combo/star/coin/save-facing helper를 확인한다.
+- Platform 인증 smoke는 fake identity/client를 주입해 운영 endpoint를 호출하지 않는다.
+  `sign_in` 1회, `firebase-id-token` credential, 세션 실패 시 게임 진행, 재실행 UID
+  재사용, custom token·ID token 비영속화를 확인한다.
 - 명령:
 
 ```bash

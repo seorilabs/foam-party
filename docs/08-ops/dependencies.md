@@ -4,6 +4,10 @@
 
 - Godot: 4.6.3 stable
 - Node for repo checks: 24.x
+- Seorilabs Platform GDScript SDK: `0.6.3`
+  - source: `https://github.com/seorilabs/platform/tree/main/sdk-gdscript`
+  - vendored path: `godot/addons/seorilabs_platform`
+  - `VERSION`과 `CHECKSUM`을 함께 고정한다.
 
 ## GitHub Actions
 
