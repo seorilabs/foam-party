@@ -94,17 +94,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     environment: google-play
-    # 툴체인은 이미지가 제공한다. 러너에 Java/Android SDK/Godot 를 설치하지 않는다.
-    container:
-      image: ${{ needs.resolve.outputs.builder_image }}
-      credentials:
-        username: _json_key_base64
-        password: ${{ secrets.ARTIFACT_REGISTRY_READER_KEY_BASE64 }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_tag || github.ref }}
 
+      # 이미지는 비공개 Artifact Registry 에 있다. 잡 레벨 container: 는 스텝 이전에
+      # 이미지를 받아 WIF 토큰을 쓸 수 없으므로, 인증 후 스텝 안에서 docker run 한다.
+      # 이렇게 하면 저장소를 공개하지도, 새 정적 키를 만들지도 않는다.
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.ARTIFACT_REGISTRY_READER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Authenticate Docker to Artifact Registry
+        run: gcloud auth configure-docker asia-northeast3-docker.pkg.dev --quiet
+
+      # 툴체인은 이미지가 제공한다. 러너에 Java/Android SDK/Godot 를 설치하지 않는다.
       - name: Build
         shell: bash
         env:
@@ -117,7 +123,9 @@ jobs:
           GODOT_ANALYTICS_CONFIG_JSON_BASE64: ${{ secrets.GODOT_ANALYTICS_CONFIG_JSON_BASE64 }}
           ADMOB_APP_ID: ${{ vars.ADMOB_APP_ID }}
           ADMOB_INTERSTITIAL_AD_UNIT_ID: ${{ vars.ADMOB_INTERSTITIAL_AD_UNIT_ID }}
-        run: bash scripts/build-android.sh
+        run: |
+          set -euo pipefail
+          docker run --rm             -v "/Users/syous/orca/workspaces/seorilabs-backoffice/lusca:/workspace" -w /workspace             -e ANDROID_VERSION_NAME -e ANDROID_VERSION_CODE             -e GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 -e GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD             -e GOOGLE_PLAY_UPLOAD_KEY_PASSWORD -e GOOGLE_PLAY_UPLOAD_KEY_ALIAS             -e GODOT_ANALYTICS_CONFIG_JSON_BASE64             -e ADMOB_APP_ID -e ADMOB_INTERSTITIAL_AD_UNIT_ID             "${{ needs.resolve.outputs.builder_image }}"             bash scripts/build-android.sh
 
       - uses: actions/upload-artifact@v7
         with:
