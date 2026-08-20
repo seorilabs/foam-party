@@ -6,7 +6,10 @@
   Android/iOS 시작 시 Firebase custom-token identity와 Platform 세션을 비동기로
   여는 서비스 경계를 추가했다. 헤드리스 smoke는 fake client만 주입해 sign-in 1회,
   credential kind, 세션 실패 시 게임 진행, 로컬 UID 재사용과 token 비영속화를 검증한다.
-  운영 bridge는 준비됐지만 Firebase Auth 초기화와 실기기 확인은 release gate로 남긴다. (#259)
+  Firebase Auth를 활성화한 뒤 Android Seeker와 iPhone 12 Pro에서 최초 인증과 재실행
+  UID 유지를 확인했고, 저장 파일에는 UID·refresh token·만료·provider만 남는다.
+  iOS 실기기에서 발견한 `GoogleService-Info.plist` pack 누락은 export include filter와
+  정적 회귀 gate로 고정했다. (#259)
 
 ## 2026-07-21
 
