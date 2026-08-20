@@ -6,6 +6,7 @@ checksum_file="${addon_dir}/CHECKSUM"
 version_file="${addon_dir}/VERSION"
 source_file="${addon_dir}/SOURCE"
 client_file="${addon_dir}/platform_client.gd"
+export_presets_file="godot/export_presets.cfg"
 
 for required_file in "${checksum_file}" "${version_file}" "${source_file}" "${client_file}"; do
   if [ ! -f "${required_file}" ]; then
@@ -43,5 +44,23 @@ if [ "${source}" != "https://github.com/seorilabs/platform/tree/main/sdk-gdscrip
   echo "Vendored Platform SDK SOURCE is not canonical." >&2
   exit 1
 fi
+
+ios_include_filter="$(awk '
+  $0 == "[preset.0]" { in_ios_preset = 1; next }
+  in_ios_preset && /^\[/ { exit }
+  in_ios_preset && /^include_filter=/ {
+    sub(/^include_filter="/, "")
+    sub(/"$/, "")
+    print
+    exit
+  }
+' "${export_presets_file}")"
+case ",${ios_include_filter}," in
+  *,GoogleService-Info.plist,*) ;;
+  *)
+    echo "iOS export must include GoogleService-Info.plist in the Godot resource pack." >&2
+    exit 1
+    ;;
+esac
 
 echo "Platform SDK ${version} provenance and checksum passed."
