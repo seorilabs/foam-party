@@ -1,6 +1,15 @@
-# Godot 서명 AAB + Google Play 업로드 — ubuntu(x64).
-# contract(tools/): set_google_play_version_code.py, upload_google_play_internal.py
-#   (선택) install_android_build_template.sh, build_admob_plugin.sh, check_google_play_readiness.py
+# Godot 서명 AAB + Google Play 업로드.
+#
+# 계약: seorilabs/.github docs/ci-cd/build-toolchain-contract.md
+#
+# 빌드 정의는 scripts/build-android.sh 가 소유하고, 툴체인은 빌더 이미지가 제공한다.
+# 이 워크플로는 인증·시크릿 주입·업로드만 한다. 여기에 툴체인 설치나 export 명령을
+# 추가하지 않는다 — 그 순간 로컬·CI 가 갈라진다.
+#
+# 이미지 태그는 build.env 의 GODOT_VERSION 을 그대로 쓴다. 엔진을 올릴 때
+# build.env 만 바꾸면 로컬·CI 가 함께 따라온다.
+#
+# Android AAB 는 x64 Linux 가 필요하다(aapt2). ARC 는 arm64 라 쓸 수 없다.
 name: Deploy Google Play
 
 on:
@@ -59,19 +68,87 @@ permissions:
   id-token: write
 
 jobs:
-  google-play:
-    uses: seorilabs/.github/.github/workflows/godot-deploy-google-play.yml@main
-    secrets: inherit
-    with:
-      release_tag: ${{ inputs.release_tag }}
-      version_name: ${{ inputs.version_name }}
-      version_code: ${{ inputs.version_code }}
-      upload: ${{ inputs.upload }}
-      track: ${{ inputs.track }}
-      release_status: ${{ inputs.release_status }}
-      project_dir: godot
-      scripts_dir: tools
-      aab_name: foam-party-internal
-      # 프로젝트가 개발/테스트된 엔진과 동일하게 4.7.stable 로 빌드 (재사용 워크플로우 기본값은 4.6.3).
-      godot_version: "4.6.3"
-      godot_status: "stable"
+  resolve:
+    name: Resolve toolchain
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      builder_image: ${{ steps.env.outputs.builder_image }}
+      aab_path: ${{ steps.env.outputs.aab_path }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      # build.env 가 유일한 툴체인 선언이다. 워크플로에 버전을 다시 적지 않는다.
+      - id: env
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . ./build.env; set +a
+          echo "builder_image=${ANDROID_BUILDER_IMAGE}:${GODOT_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "aab_path=${AAB_PATH}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build signed AAB
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: google-play
+    # 툴체인은 이미지가 제공한다. 러너에 Java/Android SDK/Godot 를 설치하지 않는다.
+    container:
+      image: ${{ needs.resolve.outputs.builder_image }}
+      credentials:
+        username: _json_key_base64
+        password: ${{ secrets.ARTIFACT_REGISTRY_READER_KEY_BASE64 }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+
+      - name: Build
+        shell: bash
+        env:
+          ANDROID_VERSION_NAME: ${{ inputs.version_name }}
+          ANDROID_VERSION_CODE: ${{ inputs.version_code }}
+          GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEYSTORE_PASSWORD }}
+          GOOGLE_PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.GOOGLE_PLAY_UPLOAD_KEY_PASSWORD }}
+          GOOGLE_PLAY_UPLOAD_KEY_ALIAS: ${{ vars.GOOGLE_PLAY_UPLOAD_KEY_ALIAS }}
+          GODOT_ANALYTICS_CONFIG_JSON_BASE64: ${{ secrets.GODOT_ANALYTICS_CONFIG_JSON_BASE64 }}
+          ADMOB_APP_ID: ${{ vars.ADMOB_APP_ID }}
+          ADMOB_INTERSTITIAL_AD_UNIT_ID: ${{ vars.ADMOB_INTERSTITIAL_AD_UNIT_ID }}
+        run: bash scripts/build-android.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: foam-party-aab-${{ inputs.version_name }}
+          path: ${{ needs.resolve.outputs.aab_path }}
+          retention-days: 3
+
+  upload:
+    name: Upload to Google Play
+    needs: [resolve, build]
+    if: ${{ inputs.upload }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: google-play
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      - uses: actions/download-artifact@v7
+        with:
+          name: foam-party-aab-${{ inputs.version_name }}
+          path: build/android
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
+      - name: Install Google Play API client
+        run: python3 -m pip install --upgrade google-api-python-client google-auth google-auth-httplib2 httplib2
+      - name: Upload
+        env:
+          AAB_PATH: ${{ needs.resolve.outputs.aab_path }}
+          TRACK: ${{ inputs.track }}
+          RELEASE_STATUS: ${{ inputs.release_status }}
+        run: python3 tools/upload_google_play_internal.py --aab-path "$AAB_PATH" --track "$TRACK" --release-status "$RELEASE_STATUS"
