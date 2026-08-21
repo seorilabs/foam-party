@@ -35,15 +35,15 @@
 ## App Store
 
 - [ ] `npm run check:app-store`
-- [ ] Xcode/macOS build path confirmed
-- [ ] Signing/provisioning confirmed
+- [x] Xcode/macOS build path confirmed - Xcode Cloud Release run 25
+- [x] Signing/provisioning confirmed - App Store Connect build 25 VALID
 - [ ] TestFlight notes ready
-- [ ] Privacy labels confirmed
+- [x] Privacy labels confirmed - User ID=App Functionality, linked=yes, tracking=no
 - [x] iOS production AdMob app/unit ID 콘솔 형식 확인 및 Xcode Cloud `Release` workflow 등록
 - [x] Xcode Cloud archive 최종 산출물의 iOS production AdMob ID 주입 확인 - v1.3.12 build 24 Archive/VALID
 - [ ] ATT 비활성 + NPA 기본값 검토, EEA/UK용 UMP privacy message/동의 흐름 확정
 - [ ] 실제 iPhone에서 load → impression → dismiss/earned 이벤트 확인
-- [ ] Screenshot set captured
+- [x] Screenshot set captured - version 1.3.16에 en-US iPhone 세트 승계
 
 ## AppsInToss
 
