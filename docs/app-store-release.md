@@ -1,16 +1,29 @@
 # App Store Release
 
-폼 파티의 Apple App Store 빌드 기준 문서다. 현재 실행 기준은 Godot iOS export preset과 로컬 Xcode archive/export다.
+폼 파티의 Apple App Store 빌드 기준 문서다. 현재 배포 정본은 Xcode Cloud `Release` workflow이며 로컬 Xcode archive/export는 검증·복구 경로다.
+
+## 현재 심사 상태
+
+| 항목 | 값 |
+| --- | --- |
+| Version / build | `1.3.16 (25)` |
+| Source | `v1.3.16` / `7e8e96ff52b6fb89cfe029a631648d2aa659dc5b` |
+| Build | Xcode Cloud `Release` run 25, `VALID`, `APP_STORE_ELIGIBLE` |
+| Review submission | `94a206fe-cdbc-4355-9e6d-0bb6a3a849fa` |
+| State | `WAITING_FOR_REVIEW` — 2026-08-21T00:46:05.358Z |
+| Release type | `MANUAL` — 승인 후 별도 공개 필요 |
+
+App Privacy에는 기존 광고·분석 유형과 함께 Firebase `User ID`를 `App Functionality`, 사용자 연결 있음, 추적 없음으로 게시했다.
 
 ## 빌드 기준
 
 | 항목 | 값 | 상태 |
 | --- | --- | --- |
 | Godot preset | `iOS` | 생성됨 |
-| Bundle ID | `com.seorilabs.foamparty` | App Store Connect 최종 확인 필요 |
+| Bundle ID | `com.seorilabs.foamparty` | App Store Connect 확정 |
 | Team ID | `HCDUXX4Z3X` | 로컬 Apple Distribution 인증서에서 확인 |
-| Marketing version | `0.1.0` | iOS preset 기준 |
-| Build number | `1` | iOS preset 기준 |
+| Marketing version | `1.3.16` | App Store version 기준 |
+| Build number | `25` | Xcode Cloud / App Store Connect 기준 |
 | Export method | `app-store-connect` | script export 기준 |
 | Target device | iPhone only | iPad screenshot/icon gate를 피하기 위한 초기값 |
 | Primary locale | `en-US` | 초기 전세계 출시 기준 |
@@ -63,7 +76,7 @@ Godot iOS export는 `build/ios/foam-party.xcodeproj`와 AdMob용 local `Package.
 
 ## 현재 제한
 
-- 1.0.0 제출 당시 답변과 달리 현재 소스는 AdMob/Firebase Analytics를 포함한다. 다음 버전의 App Privacy, age rating, review notes를 다시 확정해야 한다.
+- App Privacy, age rating, review notes는 1.3.16 심사 제출 기준으로 확정했다.
 - iOS는 ATT를 활성화하지 않고 광고 요청에 `npa=1`을 기본 적용한다. Worldwide의 EEA/UK 배포 전 AdMob privacy message와 UMP 동의 흐름을 구성한다.
 - 실제 iPhone 광고 load/impression/dismiss/earned 및 GA4 이벤트를 확인한다. 운영 app/unit ID와 Xcode Cloud 주입은 완료됐다.
 - `app-store/assets/icon-1024.png`는 600x600 원본에서 생성했으므로 최종 고해상도 원본 교체를 권장한다.
@@ -80,6 +93,9 @@ tools/check_app_store_readiness.py --json
 
 ## 검증 기록
 
+- 2026-08-21: Xcode Cloud `Release` run 25의 `v1.3.16`/`7e8e96f` build 25가 `VALID`, `APP_STORE_ELIGIBLE`임을 확인하고 App Store version 1.3.16에 선택했다.
+- 2026-08-21: App Privacy에 Firebase `User ID`를 `App Functionality`, linked=yes, tracking=no로 게시했다.
+- 2026-08-21: review submission `94a206fe-cdbc-4355-9e6d-0bb6a3a849fa`를 제출하고 version/submission 모두 `WAITING_FOR_REVIEW`, releaseType `MANUAL`을 API로 재조회했다.
 - 2026-07-29: Xcode Cloud `Release` build 24를 `v1.3.12`/`cc5c723` 대상으로 완료했다. Archive issue 0, App Store Connect `processingState=VALID`, `buildAudienceType=APP_STORE_ELIGIBLE`, `internalBuildState=IN_BETA_TESTING`을 API로 재조회했다.
 - 2026-07-29: build 22는 자동 package resolution 비활성 상태에서 `Package.resolved`가 없어 실패했다. build 23은 post-clone의 Xcode resolver도 같은 설정을 상속해 exit 74로 실패했다. SwiftPM CLI로 lockfile을 선생성하고 Xcode workspace에 복사하도록 보정한 뒤 build 24에서 해결을 확인했다.
 - 2026-07-29: AdMob 콘솔에서 iOS 전면 광고 1개와 일반 보상형 2개의 이름·ID·형식을 확인했다. Xcode Cloud `Release` workflow에 app/unit ID와 `ADMOB_REQUIRE_PRODUCTION=1`을 등록한 뒤 재조회했다.

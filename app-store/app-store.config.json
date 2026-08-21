@@ -5,7 +5,7 @@
     "englishName": "Foam Party",
     "sku": "foam-party",
     "bundleId": "com.seorilabs.foamparty",
-    "bundleIdStatus": "로컬 iOS export 후보값. App Store Connect App ID 생성 전 최종 확인 필요",
+    "bundleIdStatus": "확정: App Store Connect adamId 6779624201",
     "primaryLocale": "en-US",
     "primaryLocaleStatus": "확정: 초기 App Store 등록은 영어 primary locale로 진행",
     "primaryCategory": "Games",
@@ -14,7 +14,7 @@
     "supportEmail": "cs@seorilabs.com",
     "supportUrl": "https://www.seorilabs.com/support",
     "marketingUrl": "선택 사항",
-    "dsaTraderStatus": "확정 필요: worldwide availability는 EU 배포를 포함하므로 App Store Connect DSA trader 여부 확인 필요"
+    "dsaTraderStatus": "완료: App Store 공개 제품 페이지에서 Seori Labs trader 표시 확인"
   },
   "availability": {
     "distribution": "worldwide",
@@ -29,26 +29,26 @@
       "promotionalText": "Switch between air, pressure water, soap, and sponge tools to make messy cars shine.",
       "description": "Foam Party is a light cartoon car wash game built for mobile play.\n\nDirty cars arrive covered in mud, dust, leaves, bug marks, and oil stains. Pick the right tool for each mess, drag across the car, and watch the dirt blow away, wash down, soften with soap, or wipe clean with a sponge.\n\nCity cars, sports cars, and trucks rotate through the levels, with more durable dirt appearing as you progress. Clear dirt quickly to build combos, earn star ratings from your finish time and best combo, and collect coins. Coins can trigger a foam bomb that soaps up every remaining mess at once.\n\nThe game includes a first-run guide, sound toggle, local progress saving, and instant play without an account.",
       "keywords": "car wash,casual game,cars,foam,cleaning,mobile game,coins",
-      "whatsNew": "First App Store release candidate. Includes cartoon car washing, tool-based cleaning, combos, star ratings, coins, and foam bomb."
+      "whatsNew": "Improved backend connectivity and overall stability for a more consistent game experience."
     }
   },
   "deferredLocalizations": {
     "ko-KR": {
-      "status": "후속 현지화 후보. 초기 전세계 출시는 en-US 단일 메타데이터로 진행",
+      "status": "확정: App Store Connect ko 현지화 사용",
       "name": "폼 파티",
       "subtitle": "거품으로 즐기는 세차 게임",
       "promotionalText": "바람, 고압수, 비누, 스펀지를 바꿔 쓰며 더러워진 차를 반짝이게 닦아 보세요.",
       "description": "폼 파티는 모바일에서 가볍게 즐기는 카툰풍 세차 게임입니다.\n\n흙탕물, 먼지, 낙엽, 벌레 자국, 오일 얼룩이 붙은 차가 들어오면 상황에 맞는 도구를 골라 차 위를 문질러 주세요. 바람으로 가벼운 오물을 날리고, 고압수로 흘려보내고, 비누와 스펀지로 단단한 얼룩을 불리고 닦아냅니다.\n\n차량은 시티카, 스포츠카, 트럭이 번갈아 등장하며 레벨이 오를수록 오물 수와 체력이 조금씩 늘어납니다. 빠르게 연속 제거하면 콤보가 쌓이고, 완료 시간과 최고 콤보에 따라 별점과 코인을 받습니다. 코인으로 거품 폭탄을 사용해 남은 오물을 한 번에 비누칠할 수 있습니다.\n\n첫 실행 가이드, 사운드 토글, 로컬 진행 저장을 제공하며 별도 계정 없이 바로 플레이할 수 있습니다.",
       "keywords": "세차,캐주얼게임,자동차,거품,청소,모바일게임,코인",
-      "whatsNew": "첫 App Store 출시 후보입니다. 카툰풍 세차, 도구별 오물 제거, 콤보, 별점, 코인, 거품 폭탄을 제공합니다."
+      "whatsNew": "더 안정적인 게임 이용을 위해 백엔드 연결과 전반적인 안정성을 개선했습니다."
     }
   },
   "build": {
     "godotPreset": "iOS",
     "godotVersion": "4.6.3.stable",
-    "marketingVersion": "0.1.1",
-    "buildNumber": "1",
-    "versionNote": "0.1.0 train은 App Store Connect에서 승인/마감되어 새 빌드 제출 불가(90186). 0.1.1로 범프해 재업로드. 한글 폰트(Do Hyeon 번들) + ko/en 런타임 i18n 포함.",
+    "marketingVersion": "1.3.16",
+    "buildNumber": "25",
+    "versionNote": "v1.3.16 / 7e8e96f를 Xcode Cloud Release run 25로 archive해 App Store Connect build 25에 업로드하고 심사 제출했다.",
     "teamId": "HCDUXX4Z3X",
     "teamIdStatus": "로컬 Apple Distribution 인증서에서 확인됨",
     "signingIdentity": "Apple Distribution: Seori Labs (HCDUXX4Z3X)",
@@ -62,7 +62,7 @@
   "assets": {
     "appStoreIcon": "app-store/assets/icon-1024.png",
     "appStoreIconStatus": "godot/assets/AppIcon.png 600x600 원본에서 1024x1024로 생성. 최종 제출 전 고해상도 원본 교체 권장",
-    "screenshotsStatus": "확정 필요: en-US primary locale 기준 실제 iOS/Simulator 화면에서 iPhone 6.9-inch 세트 우선 캡처",
+    "screenshotsStatus": "완료: version 1.3.16에 en-US iPhone 6.7-inch 3장과 이전 호환 세트 승계",
     "screenshots": {
       "en-US": {
         "iphone69": []
@@ -75,17 +75,18 @@
     "analytics": true,
     "iap": false,
     "account": false,
+    "platformIdentity": true,
     "networkCallsObservedInSource": true,
     "localSaveOnly": false,
-    "appPrivacyCandidate": "AdMob 및 Firebase Analytics 도입 기준으로 App Privacy를 다시 작성해야 함. 새 바이너리 제출 전 확정 필요",
-    "trackingCandidate": "아니오 후보: ATT disabled, iOS AdMob requests default to npa=1",
-    "attRequiredCandidate": "아니오 후보. IDFA 추적을 활성화하지 않으며 ATT prompt를 표시하지 않음",
+    "appPrivacyCandidate": "확정: 2026-08-21 App Store Connect에 User ID를 App Functionality 용도, 사용자 연결 있음, 추적 없음으로 추가. 기존 Coarse Location, Device ID, Product Interaction, Advertising Data, Crash Data, Other Diagnostic Data 유지",
+    "trackingCandidate": "확정: User ID 추적 없음. ATT disabled, iOS AdMob requests default to npa=1",
+    "attRequiredCandidate": "확정: IDFA 추적을 활성화하지 않으며 ATT prompt를 표시하지 않음",
     "consentCandidate": "확정 필요: EEA/UK 배포 전 AdMob privacy message와 UMP 동의 흐름 구성"
   },
   "complianceCandidates": {
-    "ageRating": "4+ 후보. 실제 App Store Connect 설문 입력 전 완료 아님",
-    "contentRights": "자체 제작/코드 생성 에셋 사용 후보. Poing AdMob plugin MIT license와 Google Mobile Ads SDK 의존성 포함",
-    "exportCompliance": "ITSAppUsesNonExemptEncryption=false 후보. 현재 custom cryptography 없음",
+    "ageRating": "확정: App Store Connect 4+, Advertising=true",
+    "contentRights": "확정: USES_THIRD_PARTY_CONTENT. 자체 제작/코드 생성 에셋과 광고 SDK 콘텐츠 사용",
+    "exportCompliance": "확정: usesNonExemptEncryption=false. 현재 custom cryptography 없음",
     "gameCenter": false,
     "lootBoxes": false,
     "gambling": false,
@@ -124,16 +125,16 @@
     "provisioningProfile": "완료: App Store profile WQFTFT3KG7 (Apple Distribution 인증서 4PSTD55GTV). repo secret APPLE_PROVISIONING_PROFILE_BASE64",
     "supportUrl": "https://www.seorilabs.com/support",
     "privacyPolicyUrl": "https://www.seorilabs.com/privacy",
-    "appPrivacy": "확정 필요: AdMob/Firebase Analytics가 들어간 다음 버전 기준으로 App Privacy 재제출",
-    "ageRating": "확정 필요: 광고 포함 여부를 다음 버전 설문에 반영",
+    "appPrivacy": "완료: User ID=App Functionality, linked=yes, tracking=no 포함 7개 데이터 유형 게시 (2026-08-21)",
+    "ageRating": "완료: 4+, Advertising=true",
     "dsaTraderStatus": "1.0.0 제출 시 콘솔에서 확정",
     "reviewContactPhone": "1.0.0 제출 시 콘솔에서 확정",
     "contentRights": "1.0.0 제출 시 콘솔에서 확정",
     "exportCompliance": "완료: usesNonExemptEncryption=false (면제)",
     "screenshots": "완료: en-US iPhone 6.7\" 1290x2796 3장 (app-store/screenshots/en-US/iphone69)",
-    "testFlightUpload": "완료: Xcode Cloud version 1.3.12 build 24 업로드, processingState=VALID, internalBuildState=IN_BETA_TESTING (2026-07-29). Xcode Cloud 경로가 정본이며 GH 경로는 폐지",
-    "buildSelection": "완료: 1.0.0 = Xcode Cloud build 8",
-    "submitForReview": "완료: 1.0.0 WAITING_FOR_REVIEW (2026-07-10 제출). 네이티브 광고 변경은 다음 버전 범위",
+    "testFlightUpload": "완료: Xcode Cloud Release run 25의 version 1.3.16 build 25 업로드, processingState=VALID, buildAudienceType=APP_STORE_ELIGIBLE (2026-08-21)",
+    "buildSelection": "완료: App Store version 1.3.16에 build 25 선택",
+    "submitForReview": "완료: review submission 94a206fe-cdbc-4355-9e6d-0bb6a3a849fa, WAITING_FOR_REVIEW (2026-08-21T00:46:05.358Z). releaseType=MANUAL",
     "nativeAdMobProductionIds": "완료: Xcode Cloud Release에 iOS app ID와 game_over 전면/foam_bomb_free 보상형/level_reward_2x 보상형 운영 ID, ADMOB_REQUIRE_PRODUCTION=1을 등록하고 version 1.3.12 build 24 Archive 성공으로 strict 주입 경로를 확인함",
     "nativeAdMobDeviceQa": "확정 필요: 실제 iPhone에서 load/impression/dismiss/earned와 GA4 이벤트 확인",
     "umpConsent": "확정 필요: worldwide 배포의 EEA/UK용 AdMob privacy message와 UMP 흐름"
@@ -145,13 +146,13 @@
     "signedAppStoreIpa": "not run for this change: production AdMob IDs, UMP policy flow, signing, and physical-device QA remain gated"
   },
   "lastCloudVerification": {
-    "date": "2026-07-29",
+    "date": "2026-08-21",
     "workflow": "Release",
-    "buildRun": 24,
-    "releaseTag": "v1.3.12",
-    "sourceCommit": "cc5c723b020d55f5ecc348e5c9b743fc5f772687",
-    "marketingVersion": "1.3.12",
-    "buildNumber": "24",
+    "buildRun": 25,
+    "releaseTag": "v1.3.16",
+    "sourceCommit": "7e8e96ff52b6fb89cfe029a631648d2aa659dc5b",
+    "marketingVersion": "1.3.16",
+    "buildNumber": "25",
     "archive": "SUCCEEDED",
     "issueCount": 0,
     "processingState": "VALID",
@@ -160,12 +161,13 @@
     "productionAdGuard": "passed"
   },
   "notes": [
-    "현재 소스는 Firebase Analytics와 Poing AdMob v4.3.1 네이티브 SDK를 포함한다. IAP와 계정 기능은 없다.",
+    "현재 소스는 Firebase Analytics와 Poing AdMob v4.3.1 네이티브 SDK를 포함한다. IAP와 사용자 로그인 UI는 없고 Platform custom-token Firebase identity를 사용한다.",
     "초기 App Store 등록은 en-US primary locale과 worldwide availability로 진행한다. 한국어 현지화는 후속 후보로 보관한다.",
     "iOS 광고 요청은 ATT를 띄우지 않고 npa=1을 기본 적용한다. NPA는 UMP 동의 수집을 대체하지 않는다.",
     "godot/config/native_ads.json은 Google 테스트 ID가 기본이며 실제 ID는 tools/configure_native_ads.py가 빌드 환경변수로 주입한다.",
     "2026-07-29 AdMob 콘솔에서 iOS game_over=전면 광고, foam_bomb_free/level_reward_2x=보상형을 확인하고 Xcode Cloud Release workflow에 운영 ID를 등록했다.",
-    "2026-07-29 Xcode Cloud v1.3.12 build 24가 Archive 성공, App Store Connect VALID, 내부 TestFlight 테스트 상태로 확인됐다.",
+    "2026-08-21 Xcode Cloud v1.3.16 build 25가 Archive 성공, App Store Connect VALID와 APP_STORE_ELIGIBLE로 확인됐다.",
+    "2026-08-21 App Privacy에 Firebase User ID를 App Functionality, linked=yes, tracking=no로 게시하고 version 1.3.16 build 25를 MANUAL release로 심사 제출했다.",
     "App Store Connect 수동 항목은 checker에서 blocker inventory로 남긴다."
   ]
 }
