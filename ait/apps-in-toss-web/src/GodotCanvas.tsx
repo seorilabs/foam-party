@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import splashImage from '../../../godot/assets/branding/seori-labs-boot-splash-1024.png'
 import { GODOT_CONFIG, GODOT_SCRIPT_PATH, GODOT_THREADS_ENABLED } from './godotBuild'
 
 type GodotConfig = typeof GODOT_CONFIG & {
@@ -64,7 +65,7 @@ function loadGodotScript(src: string) {
 
 export default function GodotCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [status, setStatus] = useState('Loading...')
+  const [status, setStatus] = useState('게임을 준비하고 있어요')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -95,7 +96,7 @@ export default function GodotCanvas() {
           throw new Error(`Missing browser features: ${missingFeatures.join(', ')}`)
         }
 
-        setStatus('Starting...')
+        setStatus('게임을 시작하고 있어요')
         const engine = new Engine({
           ...GODOT_CONFIG,
           canvas,
@@ -107,7 +108,7 @@ export default function GodotCanvas() {
             if (cancelled || total <= 0) {
               return
             }
-            setStatus(`Loading ${Math.round((current / total) * 100)}%`)
+            setStatus(`게임 준비 ${Math.round((current / total) * 100)}%`)
           },
         } as Partial<GodotConfig>)
 
@@ -134,7 +135,10 @@ export default function GodotCanvas() {
         Canvas is required to run Foam Party.
       </canvas>
       {(status || error) && (
-        <div className={error ? 'status status-error' : 'status'}>{error ?? status}</div>
+        <div className={error ? 'status status-error' : 'status'}>
+          <img className="status-symbol" src={splashImage} alt="서리랩스" />
+          <span>{error ?? status}</span>
+        </div>
       )}
     </main>
   )
