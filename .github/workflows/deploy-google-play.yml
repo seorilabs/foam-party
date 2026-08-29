@@ -75,3 +75,6 @@ jobs:
       # 프로젝트가 개발/테스트된 엔진과 동일하게 4.7.stable 로 빌드 (재사용 워크플로우 기본값은 4.6.3).
       godot_version: "4.6.3"
       godot_status: "stable"
+      # Android AAB 를 vzyx-cluster 의 x64 셀프호스티드 ARC 러너에서 빌드한다.
+      # GitHub-hosted 분량과 Cloud Build 과금을 모두 쓰지 않는다.
+      runs_on: seorilabs-x64-android
