@@ -23,14 +23,40 @@ on:
         type: string
         required: false
         default: ""
+    # caller 는 secret 을 상속하지 않는다. 아래 이름만 1:1 로 명시 전달한다.
+    secrets:
+      APPS_IN_TOSS_API_KEY:
+        required: false
+      GODOT_ANALYTICS_CONFIG_JSON_BASE64:
+        required: false
+      VITE_FIREBASE_API_KEY:
+        required: false
+      VITE_GA4_MP_API_SECRET:
+        required: false
+      VITE_TOSS_FULLSCREEN_AD_GROUP_ID:
+        required: false
+      VITE_TOSS_INTERSTITIAL_AD_GROUP_ID:
+        required: false
+      VITE_TOSS_LEVEL_REWARD_AD_GROUP_ID:
+        required: false
+      VITE_TOSS_REWARDED_AD_GROUP_ID:
+        required: false
 
 permissions:
   contents: read
 
 jobs:
   ait:
-    uses: seorilabs/.github/.github/workflows/godot-deploy-ait.yml@main
-    secrets: inherit
+    uses: seorilabs/.github/.github/workflows/godot-deploy-ait.yml@9afa357f9ba6c8d6a813c7cec7ad3d35c626bdd5
+    secrets:
+      APPS_IN_TOSS_API_KEY: ${{ secrets.APPS_IN_TOSS_API_KEY }}
+      GODOT_ANALYTICS_CONFIG_JSON_BASE64: ${{ secrets.GODOT_ANALYTICS_CONFIG_JSON_BASE64 }}
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_GA4_MP_API_SECRET: ${{ secrets.VITE_GA4_MP_API_SECRET }}
+      VITE_TOSS_FULLSCREEN_AD_GROUP_ID: ${{ secrets.VITE_TOSS_FULLSCREEN_AD_GROUP_ID }}
+      VITE_TOSS_INTERSTITIAL_AD_GROUP_ID: ${{ secrets.VITE_TOSS_INTERSTITIAL_AD_GROUP_ID }}
+      VITE_TOSS_LEVEL_REWARD_AD_GROUP_ID: ${{ secrets.VITE_TOSS_LEVEL_REWARD_AD_GROUP_ID }}
+      VITE_TOSS_REWARDED_AD_GROUP_ID: ${{ secrets.VITE_TOSS_REWARDED_AD_GROUP_ID }}
     with:
       release_tag: ${{ inputs.release_tag }}
       memo: ${{ inputs.memo }}

@@ -18,7 +18,7 @@ function pngDimensions(relativePath: string): { width: number; height: number } 
 }
 
 describe('Google Play source of truth', () => {
-  it('contains English and Korean listing text and 1.0.0 release notes', () => {
+  it('contains English and Korean listing text and release notes', () => {
     for (const locale of ['en-US', 'ko-KR']) {
       expect(config.storeListing.appName[locale]).toBeTruthy()
       expect(config.storeListing.shortDescription[locale]).toBeTruthy()
@@ -26,8 +26,14 @@ describe('Google Play source of truth', () => {
       expect(config.release.releaseNotes[locale]).toBeTruthy()
     }
     expect(config.release.track).toBe('production')
-    expect(config.release.versionName).toBe('1.0.0')
-    expect(config.release.versionCode).toBe(1_000_000)
+  })
+
+  // 버전은 릴리즈 태그가 정한다. 마켓 config JSON은 version authority가 아니므로
+  // 값이 남아 있으면 중앙 워크플로우의 artifact readback 대조가 어긋난다.
+  it('keeps no version authority in the market config', () => {
+    expect(config.release.versionName).toBeUndefined()
+    expect(config.release.versionCode).toBeUndefined()
+    expect(config.release.name).toBeUndefined()
   })
 
   it('tracks the exact feature graphic and tablet screenshot dimensions', () => {
