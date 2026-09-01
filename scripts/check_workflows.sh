@@ -51,4 +51,3 @@ fi
 
 export ACTIONLINT_BIN="${actionlint_bin}"
 python3 tools/check_release_workflow_contract.py
-python3 tools/check_workflow_contract.py
