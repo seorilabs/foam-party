@@ -1,10 +1,8 @@
-# Godot Web export → GitHub Pages. 웹 채널이라 push→main 자동 배포 유지(마켓 아님).
-# org 재사용 워크플로우 호출(export 캐시로 비용 절감).
+# Godot Web export → GitHub Pages. org 재사용 워크플로우 호출(export 캐시로 비용 절감).
+# main과 PR은 정적 게이트만 실행하고 Pages 배포는 명시적 dispatch로만 시작한다.
 name: Deploy Godot Web Pages
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
