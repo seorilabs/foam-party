@@ -25,7 +25,7 @@ BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${
 REPO="${CI_PRIMARY_REPOSITORY_PATH:-$(cd "$(dirname "$0")/../../.." && pwd)}"
 cd "${REPO}"
 
-echo "▸ Node 설치(Homebrew) — 릴리즈 버전 resolver(ci_pre_xcodebuild)용"
+echo "▸ Node 설치(Homebrew) — org 정본 버전 주입 helper(ci_pre_xcodebuild)용"
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
 brew install node || true

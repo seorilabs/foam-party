@@ -47,7 +47,6 @@ jobs:
     timeout-minutes: 10
     outputs:
       tag: ${{ steps.t.outputs.tag }}
-      version_name: ${{ steps.t.outputs.version_name }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -62,8 +61,7 @@ jobs:
             tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)"
             [ -n "$tag" ] || { echo "release_tag 비어있고 vX.Y.Z 태그 없음. 먼저 Release Tag 실행." >&2; exit 1; }
           fi
-          version_name="${tag#v}"
-          { echo "tag=$tag"; echo "version_name=$version_name"; } >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   ait:
     name: Deploy AIT
@@ -83,7 +81,6 @@ jobs:
     secrets: inherit
     with:
       release_tag: ${{ needs.resolve.outputs.tag }}
-      version_name: ${{ needs.resolve.outputs.version_name }}
       upload: true
       track: ${{ inputs.google_play_track }}
       release_status: ${{ inputs.google_play_release_status }}

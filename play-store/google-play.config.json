@@ -82,9 +82,6 @@
   },
   "release": {
     "track": "production",
-    "name": "Foam Party 1.0.0 (1000000)",
-    "versionName": "1.0.0",
-    "versionCode": 1000000,
     "sourceTag": "v1.0.0",
     "sourceCommit": "0e22fa23cb0b3c13396df5c29cb9e4899122dff6",
     "bundleSha256": "0b8a5469c23efe4b87c2dfaf39d30ee2c6b822438636a537d59b282316aae296",
