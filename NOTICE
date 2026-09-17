@@ -1,0 +1,34 @@
+# NOTICE
+
+## 1. Assets not covered by the MIT license
+
+The following are original works of Seori Labs and are **not** licensed under
+the MIT license in `LICENSE`. All rights are reserved. Do not copy, reuse,
+redistribute, or create derivative works from them without written permission.
+
+- `godot/assets/art/**` — in-game illustrations, icons, and sprites
+- `godot/assets/branding/**` — Seori Labs branding and boot splash
+- `godot/assets/AppIcon.png` — application icon
+- `apps-in-toss/assets/**` — AppsInToss listing logo, thumbnail, screenshots
+- `play-store/assets/**`, `play-store/screenshots/**` — Google Play listing assets
+- `app-store/assets/**`, `app-store/screenshots/**` — App Store listing assets
+
+The names "Seori Labs", "Foam Party", and "버블 버블 거품 세차", and the
+associated logos, are not licensed for use by the MIT license.
+
+## 2. Third-party components
+
+This repository vendors the following third-party components. Each remains
+under its own license, and the MIT license in `LICENSE` does not apply to them.
+
+| Path | Component | License |
+| --- | --- | --- |
+| `godot/addons/admob/` | AdMob plugin for Godot v4.3.1 — Poing Studios | MIT — see `godot/addons/admob/LICENSE` |
+| `godot/addons/godotx_firebase/` | Godotx Firebase v2.4.1 — Paulo Coutinho | See upstream project; the vendored copy carries no license file |
+| `godot/assets/fonts/DoHyeon-Regular.ttf` | Do Hyeon typeface | SIL Open Font License 1.1 — see `godot/assets/fonts/OFL.txt` |
+| `godot/ios/plugins/firebase_core/`, `godot/ios/plugins/firebase_analytics/` | Prebuilt Firebase / Google App Measurement iOS binaries | Google's Firebase and Google Mobile Ads terms; redistributed as supplied by Google |
+| `godot/ios/plugins/poing-godot-admob/` | Prebuilt AdMob iOS binaries — Poing Studios | MIT — see `godot/addons/admob/LICENSE` |
+| `godot/android/firebase_core/`, `godot/android/firebase_analytics/` | Prebuilt Firebase Android AARs | Google's Firebase terms; redistributed as supplied by Google |
+
+The Godot engine itself is not vendored here. Build scripts download the engine
+and its export templates from the upstream release at build time.
