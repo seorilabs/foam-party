@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "release": {
+    "lastTag": null,
+    "lastSourceSha": null,
+    "marketingVersion": null
+  },
+  "android": {
+    "authority": "github-ledger",
+    "lastVersionCode": 1003010,
+    "legacyFallbackSealed": false
+  },
+  "ios": {
+    "authority": "xcode-cloud",
+    "lastObservedBuildNumber": null,
+    "lastObservedTag": null
+  },
+  "provenance": {
+    "initializedAt": "2026-09-17T16:48:22Z",
+    "initializedBy": "release-version-ledger-init-v1",
+    "initializedFromWorkflowSha": "8cd3684077b368b8ffd768e98781d4772b43ae73",
+    "authorityRevision": "26721fdbf3cdde6da01b8af05f7d867bfe71a40e7180f1bc1f6c903df4aa9422",
+    "baseline": {
+      "androidVersionCode": 1003010,
+      "rule": "max-of-verified-sources",
+      "sources": [
+        {
+          "kind": "google-play-bundles-list",
+          "androidVersionCode": 1003010,
+          "packageName": "com.seorilabs.foamparty",
+          "observedAt": "2026-09-17T15:57:14Z",
+          "evidenceDigest": "sha256:79b1a0d2a541de39439ce6c2dd6d64a55a083c801c059d5fa6602f459e7f1900"
+        }
+      ]
+    }
+  }
+}
