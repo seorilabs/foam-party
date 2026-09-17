@@ -1,4 +1,4 @@
-# Godot 서명 AAB + Google Play 업로드 — 중앙 재사용 워크플로우(러너 seorilabs-x64-android 고정).
+# Godot 서명 AAB + Google Play 업로드 — 중앙 재사용 워크플로우(러너 ubuntu-latest, x64 필수).
 # 버전과 업로더는 중앙 정본이 소유한다. 저장소는 태그 파생값을 주입받기만 한다.
 # contract(tools/, 선택): install_android_build_template.sh, build_admob_plugin.sh,
 #   check_google_play_readiness.py

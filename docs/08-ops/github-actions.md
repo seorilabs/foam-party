@@ -18,13 +18,13 @@
 
 - 러너는 repo 가시성에 따라 갈린다. workflow에 `github.event.repository.private` 가드를 둬서 private이면 ARC, public이면 `ubuntu-latest`로 보낸다.
 - Godot compile, Godot Web build, 일반 repo checks: `seorilabs-rpi-arm64` ↔ `ubuntu-latest`.
-- Android release build: x64가 필요하므로 `seorilabs-x64-android`를 쓴다. RPI ARC로 보내지 않는다.
+- Android release build: `aapt2`가 x86-64 binary라 x64 Linux가 필요하다. 중앙 워크플로우가 `ubuntu-latest`를 쓰며 RPI ARC로 보내지 않는다.
 - App Store build는 macOS가 필요하므로 ARC로 보내지 않고 Xcode Cloud를 쓴다.
 - public 경로에는 Seorilabs private ARC runner를 노출하지 않는다. 러너가 고정된 재사용 워크플로우를 호출할 때도 caller가 `runs_on` 가드를 넘겨 public fallback을 유지한다.
 
 ## Central Source
 
-- org 재사용 워크플로우는 `seorilabs/.github`에 있고, caller는 커밋 SHA로 pin한다. 버전을 올릴 때 pin을 함께 갱신한다.
+- org 재사용 워크플로우는 `seorilabs/.github`에 있고, caller는 `@main`으로 호출한다. 중앙 정본이 곧 실행되는 정의다. SHA로 pin하지 않는다.
 - runner 이름, Node/Godot 버전, action 버전의 shared source of truth는 org 운영 저장소의 `global-versions.yaml`이다. 위치와 최신값은 `seorilabs-arc-runners` 스킬로 확인한다.
 - 수치는 운영 중 바뀌므로 workflow 수정 전에 중앙 파일을 다시 확인한다. 아래는 2026-06-16 확인값이다.
 

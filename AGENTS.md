@@ -49,7 +49,7 @@ flowchart LR
 - Godot compile, Godot Web build, docs/core/architecture checks는 repo가 private이면 `seorilabs-rpi-arm64`, public이면 `ubuntu-latest`로 간다. workflow의 `github.event.repository.private` 가드가 이 분기를 담당한다.
 - public 경로에는 Seorilabs private ARC runner를 노출하지 않는다. 러너를 고정하는 재사용 워크플로우를 호출할 때도 `runs_on` 가드를 함께 넘긴다.
 - ARM64/RPI Docker build는 `seorilabs-rpi-arm64-dind`를 사용한다.
-- Android AAB/APK release build는 RPI ARC로 보내지 않고 x64 러너(`seorilabs-x64-android`)를 쓴다. Android SDK Build Tools Linux `aapt2`가 x86-64 binary이기 때문이다.
+- Android AAB/APK release build는 RPI ARC로 보내지 않는다. Android SDK Build Tools Linux `aapt2`가 x86-64 binary라 x64 Linux가 필요하고, 중앙 워크플로우는 `ubuntu-latest`를 쓴다.
 - Apple App Store/Xcode build는 macOS runner가 필요하므로 RPI ARC로 보내지 않는다.
 
 ## 테스트 레이어
