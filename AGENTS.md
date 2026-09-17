@@ -43,12 +43,13 @@ flowchart LR
 ## GitHub Actions / ARC
 
 - Seorilabs GitHub Actions 또는 ARC runner 라우팅을 작성/수정/진단할 때는 `seorilabs-arc-runners` 스킬을 사용한다.
-- 먼저 `/Users/syous/Workspace/kubectl/github-actions-runners/global-versions.yaml`을 확인한다. runner 이름, Node/Godot 버전, action 버전의 shared source of truth다.
+- runner 이름, Node/Godot 버전, action 버전의 shared source of truth는 org 운영 저장소의 `global-versions.yaml`이다. 위치와 최신값은 `seorilabs-arc-runners` 스킬로 확인한다.
 - GitHub Actions action/module 버전은 GitHub 공식 repo/API 또는 공식 문서 기준 최신 stable major를 확인한다. `@latest`나 branch 참조보다 확인된 major tag를 선호한다.
 - 현재 확인 기준: `actions/checkout@v6`, `actions/setup-node@v6`, `actions/upload-artifact@v7`.
-- 이 repo는 private repo이므로 Godot compile, Godot Web build, docs/core/architecture checks는 `seorilabs-rpi-arm64` 대상이다. public PR 경로에는 Seorilabs private ARC runner를 노출하지 않는다.
+- Godot compile, Godot Web build, docs/core/architecture checks는 repo가 private이면 `seorilabs-rpi-arm64`, public이면 `ubuntu-latest`로 간다. workflow의 `github.event.repository.private` 가드가 이 분기를 담당한다.
+- public 경로에는 Seorilabs private ARC runner를 노출하지 않는다. 러너를 고정하는 재사용 워크플로우를 호출할 때도 `runs_on` 가드를 함께 넘긴다.
 - ARM64/RPI Docker build는 `seorilabs-rpi-arm64-dind`를 사용한다.
-- Android AAB/APK release build는 RPI ARC로 보내지 않는다. Android SDK Build Tools Linux `aapt2`가 x86-64 binary인 경로를 기본으로 본다.
+- Android AAB/APK release build는 RPI ARC로 보내지 않고 x64 러너(`seorilabs-x64-android`)를 쓴다. Android SDK Build Tools Linux `aapt2`가 x86-64 binary이기 때문이다.
 - Apple App Store/Xcode build는 macOS runner가 필요하므로 RPI ARC로 보내지 않는다.
 
 ## 테스트 레이어
