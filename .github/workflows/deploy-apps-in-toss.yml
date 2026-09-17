@@ -47,7 +47,7 @@ permissions:
 
 jobs:
   ait:
-    uses: seorilabs/.github/.github/workflows/godot-deploy-ait.yml@9afa357f9ba6c8d6a813c7cec7ad3d35c626bdd5
+    uses: seorilabs/.github/.github/workflows/godot-deploy-ait.yml@main
     secrets:
       APPS_IN_TOSS_API_KEY: ${{ secrets.APPS_IN_TOSS_API_KEY }}
       GODOT_ANALYTICS_CONFIG_JSON_BASE64: ${{ secrets.GODOT_ANALYTICS_CONFIG_JSON_BASE64 }}
