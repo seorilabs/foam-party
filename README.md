@@ -113,3 +113,9 @@ xvfb-run -a godot --path godot --script res://tests/screenshot_scene.gd --audio-
 - 비누는 펜타토닉 음계 거품 팝과 몽글한 fizz를 겹칩니다.
 - 스펀지는 말랑한 squish 리듬과 귀여운 boing을 반복합니다.
 - 오물 제거 시 피치가 살짝 바뀌는 팝+차임 효과음이 추가로 재생됩니다.
+
+## 라이선스
+
+소스 코드는 [MIT 라이선스](LICENSE)입니다.
+
+게임 아트, 브랜딩, 스토어 등록 이미지와 제품·회사 명칭은 MIT 적용 대상이 아닙니다. vendoring된 제3자 구성요소도 각자의 라이선스를 따릅니다. 범위와 목록은 [NOTICE](NOTICE)에 있습니다.
