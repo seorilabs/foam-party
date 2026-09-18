@@ -70,6 +70,9 @@ jobs:
     with:
       release_tag: ${{ inputs.release_tag }}
       upload: ${{ inputs.upload }}
+      # 업로드 단계가 AAB manifest 의 package 와 대조한다. 비어 있으면 업로드 직전에
+      # fail-closed 하므로 upload=true 경로에서는 필수다.
+      package_name: com.seorilabs.foamparty
       track: ${{ inputs.track }}
       release_status: ${{ inputs.release_status }}
       project_dir: godot

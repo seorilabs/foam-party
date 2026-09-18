@@ -88,7 +88,7 @@
     "aabPath": "build/android/foam-party-internal.aab",
     "minimumTargetSdk": 35,
     "signing": "play-app-signing-with-upload-key",
-    "uploadKeyAlias": "seorilabs-upload",
+    "uploadKeyAlias": "foam-party-upload",
     "releaseNotes": {
       "en-US": "Foam Party 1.0.0 is here!\n\n- Wash cars using water, soap, sponge, and air tools\n- Build combos, earn stars and coins, and unlock upgrades and skins\n- Added Korean and English auto-localization with a bundled Korean font\n- Improved mobile layouts and touch controls",
       "ko-KR": "폼 파티 1.0.0 정식 출시!\n\n- 물·비누·스펀지·바람 도구로 자동차를 깨끗하게 세차해 보세요\n- 콤보를 이어 별과 코인을 얻고 업그레이드와 스킨을 잠금 해제하세요\n- 한국어·영어 자동 전환과 한글 전용 폰트를 적용했습니다\n- 모바일 화면 배치와 터치 조작을 개선했습니다"
@@ -138,6 +138,14 @@
       ],
       "blocker": "Play API commit rejected until Korean developer Account Details are completed",
       "commitError": "To comply with Korean law, developers in Korea must provide additional information on the Account Details page."
+    },
+    "uploadKey": {
+      "catalogId": "app/foam-party/google-play/upload-key",
+      "alias": "foam-party-upload",
+      "certificateSha256": "23:67:6B:7C:DB:F4:50:54:FC:73:4C:C4:56:56:29:94:4E:CA:72:EB:F3:E0:E5:17:BF:AF:82:18:2F:B0:47:9E",
+      "createdAt": "2026-09-18",
+      "status": "play-console-reset-requested",
+      "note": "이전에는 조직 공용 seorilabs-upload 키를 GitHub org 시크릿으로만 썼고 로컬 사본이 없었다. 저장소를 public 으로 전환하면서 org 시크릿(PRIVATE 가시성) 접근이 끊겨 전용 키로 교체했다. Play Console 업로드 키 재설정 승인 전까지 업로드는 거부된다."
     }
   },
   "adMob": {
