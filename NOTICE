@@ -1,5 +1,13 @@
 # NOTICE
 
+## 0. Scope of the MIT license
+
+The MIT license in `LICENSE` covers the source code of this repository.
+
+It does NOT cover the artwork, branding, and store listing assets in section 1,
+and it does NOT cover the third-party components in section 2. Those sections
+are part of the licensing terms of this repository, not a summary of them.
+
 ## 1. Assets not covered by the MIT license
 
 The following are original works of Seori Labs and are **not** licensed under
