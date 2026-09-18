@@ -144,8 +144,9 @@
       "alias": "foam-party-upload",
       "certificateSha256": "23:67:6B:7C:DB:F4:50:54:FC:73:4C:C4:56:56:29:94:4E:CA:72:EB:F3:E0:E5:17:BF:AF:82:18:2F:B0:47:9E",
       "createdAt": "2026-09-18",
-      "status": "play-console-reset-requested",
-      "note": "이전에는 조직 공용 seorilabs-upload 키를 GitHub org 시크릿으로만 썼고 로컬 사본이 없었다. 저장소를 public 으로 전환하면서 org 시크릿(PRIVATE 가시성) 접근이 끊겨 전용 키로 교체했다. Play Console 업로드 키 재설정 승인 전까지 업로드는 거부된다."
+      "status": "approved-active-from-2026-09-20",
+      "note": "이전에는 조직 공용 seorilabs-upload 키를 GitHub org 시크릿으로만 썼고 로컬 사본이 없었다. 저장소를 public 으로 전환하면서 org 시크릿(PRIVATE 가시성) 접근이 끊겨 전용 키로 교체했다. 2026-09-18 Google 이 재설정을 승인했고 2026-09-20T12:30:00Z 부터 사용 가능하다. 그 전 업로드는 거부된다.",
+      "activeFrom": "2026-09-20T12:30:00Z"
     }
   },
   "adMob": {
