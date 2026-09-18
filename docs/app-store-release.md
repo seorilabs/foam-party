@@ -1,6 +1,6 @@
 # App Store Release
 
-폼 파티의 Apple App Store 빌드 기준 문서다. 현재 배포 정본은 Xcode Cloud `Release` workflow이며 로컬 Xcode archive/export는 검증·복구 경로다.
+폼 파티의 Apple App Store 빌드 기준 문서다. 현재 배포 정본은 GitHub Actions `Deploy to App Store`(org `godot-deploy-app-store.yml`, `macos-26`)이며 로컬 Xcode archive/export는 검증·복구 경로다. 1.3.16/build 25까지는 Xcode Cloud로 빌드했고 이후 Actions로 이관했다.
 
 ## 현재 심사 상태
 
