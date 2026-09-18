@@ -1,28 +1,96 @@
-# App Store(iOS) 배포는 GitHub Actions macOS 로 빌드하지 않는다(액션 미닛 쿼타).
-# Xcode Cloud 로 빌드/업로드하며, 트리거는 Backoffice(ASC ciBuildRuns)에서 태그 대상으로
-# 수행한다(repo 는 XCODE_CLOUD_APP_STORE_REPOS allowlist 에 포함).
+# foam-party App Store 배포. org 재사용 워크플로우 호출.
 #
-# 이 파일은 삭제하지 않고 비활성 스텁으로 남긴다: Backoffice 의 마켓 타깃 감지가
-# `.github/workflows/deploy-app-store.yml` 파일 존재로 "appstore" 를 판정하므로(compute.ts
-# pathExists), 파일이 없으면 Backoffice 에서 App Store 배포 옵션이 사라진다.
-# workflow_call 은 제거해 deploy-all 등에서 호출할 수 없고, 수동 dispatch 시 macOS 빌드
-# 없이 즉시 안내 후 실패한다(ARC runner, 쿼타 소모 없음).
-name: Deploy App Store (disabled — use Xcode Cloud)
+# 실행 환경: GitHub-hosted macOS(macos-26). 이 저장소는 public이라 표준 러너가
+# 무료라 Xcode Cloud 없이 Actions에서 archive·서명·업로드를 끝낸다.
+#
+# 파일 자체는 삭제하지 않는다: Backoffice의 마켓 타깃 감지가
+# `.github/workflows/deploy-app-store.yml` 존재로 "appstore"를 판정한다.
+#
+# 버전 정본은 릴리즈 태그 하나다. 같은 태그를 다시 올리면 build number가 같아
+# App Store가 거부하므로 재업로드는 패치 태그로 한다.
+name: Deploy to App Store
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "배포할 릴리즈 태그. 비우면 실행한 ref를 사용합니다."
+        required: false
+        default: ""
+        type: string
+      upload:
+        description: "App Store Connect 업로드. false면 xcarchive artifact만 만듭니다."
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  workflow_call:
+    inputs:
+      release_tag:
+        description: "배포할 릴리즈 태그"
+        required: false
+        default: ""
+        type: string
+      upload:
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      APPLE_DISTRIBUTION_CERTIFICATE_BASE64:
+        required: false
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD:
+        required: false
+      APPLE_KEYCHAIN_PASSWORD:
+        required: false
+      APPLE_PROVISIONING_PROFILE_BASE64:
+        required: false
+      APP_STORE_CONNECT_API_KEY_ID:
+        required: false
+      APP_STORE_CONNECT_ISSUER_ID:
+        required: false
+      APP_STORE_CONNECT_PRIVATE_KEY_BASE64:
+        required: false
+      GODOT_ANALYTICS_CONFIG_JSON_BASE64:
+        required: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: app-store-deploy-${{ inputs.release_tag || github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  disabled:
-    name: App Store builds via Xcode Cloud
-    runs-on: ${{ github.event.repository.private && 'seorilabs-rpi-arm64' || 'ubuntu-latest' }}
-    timeout-minutes: 5
-    steps:
-      - shell: bash
-        run: |
-          echo "::error::App Store(iOS)는 Xcode Cloud로 빌드합니다. GitHub Actions macOS 빌드는 비활성입니다(액션 미닛 쿼타)."
-          echo "App Store 배포는 Backoffice에서 트리거하세요(ASC ciBuildRuns, 태그 대상)."
-          exit 1
+  deploy:
+    uses: seorilabs/.github/.github/workflows/godot-deploy-app-store.yml@main
+    secrets:
+      APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+      GODOT_ANALYTICS_CONFIG_JSON_BASE64: ${{ secrets.GODOT_ANALYTICS_CONFIG_JSON_BASE64 }}
+    with:
+      release_tag: ${{ inputs.release_tag }}
+      upload: ${{ inputs.upload == true || inputs.upload == 'true' }}
+      project_dir: godot
+      scripts_dir: tools
+      # godot/project.godot 의 config/features("4.6")와 정합.
+      godot_version: "4.6.3"
+      godot_status: "stable"
+      # 주입 대상 preset과 export 대상 preset이 같아야 한다. 다르면 중앙이 fail-closed한다.
+      ios_export_preset: iOS
+      # export_presets.cfg의 iOS preset export_path와 같은 파일이어야 한다.
+      # 파일명이 xcodebuild scheme 이름을 결정한다.
+      xcode_project_path: release-artifacts/ios/xcode/foam-party.xcodeproj
+      export_options_plist: app-store/exportOptions.plist
+      bundle_id: com.seorilabs.foamparty
+      # 커밋된 native_ads.json 기본값은 Google 테스트 ID다. archive 전에 iOS 운영
+      # ID로 확정하고, 테스트 ID가 남으면 빌드를 멈춘다.
+      prepare_project_script: tools/prepare_ios_native_ads.sh
+      # headless export가 끝내지 못하는 AdMob pbxproj 패치와 SwiftPM lockfile 고정.
+      post_export_project_script: tools/prepare_ios_xcode_project.sh
