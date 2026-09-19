@@ -20,7 +20,7 @@ jobs:
   checks:
     uses: seorilabs/.github/.github/workflows/godot-checks.yml@main
     with:
-      runs_on: ${{ github.event.repository.private && 'seorilabs-rpi-arm64' || 'ubuntu-latest' }}
+      runs_on: ${{ github.event.repository.private && 'seorilabs-x64' || 'ubuntu-latest' }}
       project_dir: godot
       check_command: |
         npm run test:core

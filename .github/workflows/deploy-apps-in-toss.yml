@@ -64,7 +64,7 @@ jobs:
       wrapper_dir: ait/apps-in-toss-web
       # 중앙 워크플로우는 러너 기본값이 ARC 다. public 전환 시 private ARC 가
       # public 저장소 컨텍스트에서 돌지 않도록 caller 가 가드를 넘긴다.
-      runs_on: ${{ github.event.repository.private && 'seorilabs-rpi-arm64' || 'ubuntu-latest' }}
+      runs_on: ${{ github.event.repository.private && 'seorilabs-x64' || 'ubuntu-latest' }}
       # godot/project.godot 의 config/features("4.6")와 정합. 재사용 워크플로우 기본값도 4.6.3.
       godot_version: "4.6.3"
       godot_status: "stable"
