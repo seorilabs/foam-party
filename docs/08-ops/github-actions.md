@@ -17,7 +17,7 @@
 ## Runner Routing
 
 - 러너는 repo 가시성에 따라 갈린다. workflow에 `github.event.repository.private` 가드를 둬서 private이면 ARC, public이면 `ubuntu-latest`로 보낸다.
-- Godot compile, Godot Web build, 일반 repo checks: `seorilabs-rpi-arm64` ↔ `ubuntu-latest`.
+- Godot compile, Godot Web build, 일반 repo checks: `seorilabs-x64` ↔ `ubuntu-latest`.
 - Android release build: `aapt2`가 x86-64 binary라 x64 Linux가 필요하다. 중앙 워크플로우가 `ubuntu-latest`를 쓰며 RPI ARC로 보내지 않는다.
 - App Store build는 macOS가 필요하므로 ARC로 보내지 않고 GitHub-hosted `macos-26`을 쓴다. public 저장소라 표준 러너가 무료다.
 - public 경로에는 Seorilabs private ARC runner를 노출하지 않는다. 러너가 고정된 재사용 워크플로우를 호출할 때도 caller가 `runs_on` 가드를 넘겨 public fallback을 유지한다.
@@ -34,6 +34,6 @@
 - `actions/upload-pages-artifact@v5`
 - `actions/deploy-pages@v5`
 - `actions/upload-artifact@v7`
-- `seorilabs-rpi-arm64`
+- `seorilabs-x64`
 - Godot `4.6.3.stable`
 - Node `24.16.0`

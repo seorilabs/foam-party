@@ -18,4 +18,4 @@ jobs:
   pages:
     uses: seorilabs/.github/.github/workflows/godot-pages.yml@main
     with:
-      runs_on: ${{ github.event.repository.private && 'seorilabs-rpi-arm64' || 'ubuntu-latest' }}
+      runs_on: ${{ github.event.repository.private && 'seorilabs-x64' || 'ubuntu-latest' }}
