@@ -150,30 +150,38 @@
     }
   },
   "adMob": {
-    "publisherId": "pub-2444587584524186",
-    "androidAppId": "ca-app-pub-2444587584524186~8642747667",
+    "publisherId": "pub-9932778305312246",
+    "androidAppId": "ca-app-pub-9932778305312246~1897457409",
     "plugin": "Poing AdMob v4.3.1 / Godot 4.6.3 Android platform binary",
     "androidInterstitialAdUnits": {
-      "game_over": "ca-app-pub-2444587584524186/7916431267"
+      "game_over": "ca-app-pub-9932778305312246/6583552731"
     },
     "androidRewardedAdUnits": {
-      "foam_bomb_free": "ca-app-pub-2444587584524186/5358816619",
-      "level_reward_2x": "ca-app-pub-2444587584524186/3854163255",
+      "foam_bomb_free": "ca-app-pub-9932778305312246/1257319840",
+      "level_reward_2x": "ca-app-pub-9932778305312246/6318074836",
       "coin_double": "확정 필요",
       "star_rescue": "확정 필요"
+    },
+    "legacyPublisherId": "pub-2444587584524186",
+    "legacyAndroidAppId": "ca-app-pub-2444587584524186~8642747667",
+    "legacyAndroidAdUnits": {
+      "game_over": "ca-app-pub-2444587584524186/7916431267",
+      "foam_bomb_free": "ca-app-pub-2444587584524186/5358816619",
+      "level_reward_2x": "ca-app-pub-2444587584524186/3854163255"
     },
     "rejectedAdUnits": {
       "ca-app-pub-2444587584524186/5440739953": "AdMob console format is rewarded interstitial; incompatible with the current RewardedAdLoader"
     },
     "productionUnitVerification": {
-      "checkedAt": "2026-07-29",
+      "checkedAt": "2026-09-21",
       "console": "Google AdMob",
+      "publisherId": "pub-9932778305312246",
       "game_over": "전면 광고",
       "foam_bomb_free": "보상형",
       "level_reward_2x": "보상형",
       "githubEnvironment": "google-play"
     },
-    "runtimeStatus": "Native adapter keeps Google test IDs only as repository defaults. The google-play environment supplies the verified Android app/interstitial/rewarded IDs, and ADMOB_REQUIRE_PRODUCTION=1 blocks a Google Play build when any Android runtime slot still uses the Google test publisher. Physical-device ad and GA4 QA remain pending",
+    "runtimeStatus": "Native adapter keeps Google test IDs only as repository defaults. The google-play environment supplies the Android app/interstitial/rewarded IDs above, and ADMOB_REQUIRE_PRODUCTION=1 blocks a Google Play build when any Android runtime slot still uses the Google test publisher. Migrated to the retained publisher pub-9932778305312246 on 2026-09-21; the legacy ids are kept for comparison until the old build audience drains. Physical-device ad and GA4 QA remain pending",
     "lastLocalVerification": "2026-07-21 debug AAB export passed. Bundle manifest contains Google test APPLICATION_ID plus PoingGodotAdMob/InterstitialAd/RewardedAd singleton metadata; DEX contains Google Mobile Ads and Poing rewarded/interstitial implementations. Release AAB and physical-device QA pending"
   },
   "firebase": {

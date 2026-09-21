@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Regression tests for the Xcode Cloud AdMob SPM link patch.
+"""Regression tests for the App Store AdMob SPM link patch.
 
 headless CLI export 는 AdMob export 플러그인의 deferred pbxproj 패치를 실행하지
-않으므로, ci_post_clone.sh 가 export 후 이 스크립트로 결정론적으로 패치한다.
-GoogleMobileAds/UMP 링크가 다시 깨지지 않도록 링크 삽입과 idempotency 를 고정한다.
+않으므로, export 직후 tools/prepare_ios_xcode_project.sh 가 이 스크립트로
+결정론적으로 패치한다. GoogleMobileAds/UMP 링크가 다시 깨지지 않도록 링크 삽입과
+idempotency 를 고정한다.
 """
 
 from __future__ import annotations
@@ -20,7 +21,8 @@ from check_ios_package_resolved import EXPECTED_VERSIONS, validate_package_resol
 from patch_ios_admob_project import BUILD_FILE, LOCAL_REF, patch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CI_POST_CLONE = REPO_ROOT / "build" / "ios" / "ci_scripts" / "ci_post_clone.sh"
+POST_EXPORT_PREPARE = REPO_ROOT / "tools" / "prepare_ios_xcode_project.sh"
+APP_STORE_CALLER = REPO_ROOT / ".github" / "workflows" / "deploy-app-store.yml"
 
 
 # Godot 4.6.3 iOS export 가 굽는 pbxproj 의 최소 재현본. patch() 가 의존하는 앵커를
@@ -141,44 +143,47 @@ class PatchIosAdMobProjectTest(unittest.TestCase):
             patch(path)
 
 
-class CiPostCloneOrchestrationTest(unittest.TestCase):
-    """Xcode Cloud ci_post_clone.sh 가 export 전후로 올바른 스크립트를 부르는지 고정한다.
+class AppStoreExportOrchestrationTest(unittest.TestCase):
+    """App Store 빌드가 export 전후로 올바른 스크립트를 부르는지 고정한다.
 
     headless export 는 AdMob export 플러그인의 deferred pbxproj 패치를 실행하지 않으므로
     export 후 patch_ios_admob_project.py 호출이 반드시 있어야 GAD*/UMP* 링크가 성공한다.
-    광고 ID 는 export 시점의 .gdip 를 읽으므로 configure_native_ads.py 는 export 전에
-    실행돼야 한다. 두 호출의 상대적 순서가 계약이라 순서까지 assertion 으로 고정한다.
+    광고 ID 는 export 시점의 .gdip 를 읽으므로 광고 ID 주입은 export 전에 끝나야 한다.
+    export 와의 상대 순서는 중앙 워크플로우(godot-deploy-app-store.yml)가 caller input
+    이름으로 소유하므로, caller 배선과 스크립트 내부 단계 순서를 각각 고정한다.
     """
 
     def setUp(self) -> None:
-        self.script = CI_POST_CLONE.read_text(encoding="utf-8")
-        self.export_at = self.script.find("--export-release iOS")
-        self.assertNotEqual(self.export_at, -1, "export 단계를 찾지 못함")
+        self.script = POST_EXPORT_PREPARE.read_text(encoding="utf-8")
+        self.caller = APP_STORE_CALLER.read_text(encoding="utf-8")
 
     def test_patches_pbxproj_after_export(self) -> None:
-        """AC-1: export 후 tools/patch_ios_admob_project.py 로 pbxproj 를 패치한다."""
-        patch_at = self.script.find("tools/patch_ios_admob_project.py")
-        self.assertNotEqual(patch_at, -1, "patch_ios_admob_project.py 호출이 없음")
-        self.assertGreater(
-            patch_at, self.export_at, "패치는 export 뒤에서 실행돼야 함"
+        """AC-1: export 후 스크립트가 tools/patch_ios_admob_project.py 로 pbxproj 를 패치한다."""
+        self.assertIn("tools/patch_ios_admob_project.py", self.script)
+        self.assertIn(
+            "post_export_project_script: tools/prepare_ios_xcode_project.sh",
+            self.caller,
         )
 
     def test_configures_native_ads_before_export(self) -> None:
-        """AC-2: export 전 tools/configure_native_ads.py 로 광고 ID 를 확정한다."""
-        configure_at = self.script.find("tools/configure_native_ads.py")
-        self.assertNotEqual(configure_at, -1, "configure_native_ads.py 호출이 없음")
-        self.assertLess(
-            configure_at, self.export_at, "광고 ID 설정은 export 앞에서 실행돼야 함"
+        """AC-2: export 전 준비 스크립트가 광고 ID 를 확정한다."""
+        self.assertIn(
+            "prepare_project_script: tools/prepare_ios_native_ads.sh", self.caller
         )
+        prepare = (REPO_ROOT / "tools" / "prepare_ios_native_ads.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("tools/configure_native_ads.py", prepare)
+        self.assertIn("--require-production", prepare)
 
     def test_resolves_packages_after_pbxproj_patch(self) -> None:
         """AC-3: pbxproj 패치 후 package resolve 와 lockfile 검증을 수행한다."""
         patch_at = self.script.find("tools/patch_ios_admob_project.py")
         swift_resolve_at = self.script.find(
-            'swift package --package-path "${REPO}/build/ios" resolve'
+            'swift package --package-path "$package_dir" resolve'
         )
         copy_at = self.script.find(
-            'cp "${SWIFT_PACKAGE_RESOLVED}" "${PACKAGE_RESOLVED}"'
+            'cp "$swift_resolved" "${resolved_dir}/Package.resolved"'
         )
         xcode_resolve_at = self.script.find("-resolvePackageDependencies")
         locked_xcode_at = self.script.find("-onlyUsePackageVersionsFromResolvedFile")

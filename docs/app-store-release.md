@@ -63,14 +63,14 @@ export FOAM_PARTY_IOS_TARGETED_DEVICE_FAMILY="1"
 AdMob app/unit ID도 같은 빌드에서 주입한다. 미설정 값은 Google 공식 테스트 ID로 남으므로 production 제출 전에 모두 지정해야 한다.
 
 ```bash
-export ADMOB_IOS_APP_ID="ca-app-pub-2444587584524186~1722116096"
-export ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID="ca-app-pub-2444587584524186/5905611520"
-export ADMOB_IOS_FOAM_BOMB_REWARDED_AD_UNIT_ID="ca-app-pub-2444587584524186/1826765714"
-export ADMOB_IOS_LEVEL_REWARD_REWARDED_AD_UNIT_ID="ca-app-pub-2444587584524186/8531774866"
+export ADMOB_IOS_APP_ID="ca-app-pub-9932778305312246~7227831828"
+export ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID="ca-app-pub-9932778305312246/1584622900"
+export ADMOB_IOS_FOAM_BOMB_REWARDED_AD_UNIT_ID="ca-app-pub-9932778305312246/3266379398"
+export ADMOB_IOS_LEVEL_REWARD_REWARDED_AD_UNIT_ID="ca-app-pub-9932778305312246/3883483180"
 export ADMOB_REQUIRE_PRODUCTION="1"
 ```
 
-Xcode Cloud `Release` workflow에는 위 5개 변수를 2026-07-29 등록하고 저장 후 재조회했다. 광고 단위 형식은 `game_over=전면 광고`, `foam_bomb_free/level_reward_2x=보상형`으로 AdMob 콘솔에서 확인했다.
+위 값은 로컬 빌드용 override다. CI 정본은 `app-store/app-store.config.json`의 `adMob` 절이고, `Deploy to App Store`가 export 전에 `tools/prepare_ios_native_ads.sh`로 같은 값을 주입한다. 광고 단위 형식은 `game_over=전면 광고`, `foam_bomb_free/level_reward_2x=보상형`으로 AdMob 콘솔에서 확인했다. `보상형 전면`으로 만든 유닛은 `RewardedAdLoader`가 로드하지 못하므로 설정 스크립트가 거부한다.
 
 Godot iOS export는 `build/ios/foam-party.xcodeproj`와 AdMob용 local `Package.swift`를 만든다. 스크립트는 headless export에서 누락될 수 있는 Swift Package project reference를 idempotent하게 보정한 뒤 `build/ios/foam-party.xcarchive`와 `.ipa` export를 이어서 만든다.
 
@@ -93,6 +93,7 @@ tools/check_app_store_readiness.py --json
 
 ## 검증 기록
 
+- 2026-09-21: AdMob 유지 publisher `pub-9932778305312246`로 iOS 앱(`~7227831828`)과 유닛 3종(`game_over` 전면 `/1584622900`, `foam_bomb_free` 보상형 `/3266379398`, `level_reward_2x` 보상형 `/3883483180`)을 발급하고 `app-store/app-store.config.json`에 반영했다. `tools/prepare_ios_native_ads.sh`를 로컬 실행해 `ADMOB_REQUIRE_PRODUCTION=1` 주입이 새 ID로 통과하는 것을 확인했다. 실기기 광고 QA와 스토어 업로드는 미수행.
 - 2026-08-21: Xcode Cloud `Release` run 25의 `v1.3.16`/`7e8e96f` build 25가 `VALID`, `APP_STORE_ELIGIBLE`임을 확인하고 App Store version 1.3.16에 선택했다.
 - 2026-08-21: App Privacy에 Firebase `User ID`를 `App Functionality`, linked=yes, tracking=no로 게시했다.
 - 2026-08-21: review submission `94a206fe-cdbc-4355-9e6d-0bb6a3a849fa`를 제출하고 version/submission 모두 `WAITING_FOR_REVIEW`, releaseType `MANUAL`을 API로 재조회했다.

@@ -99,19 +99,20 @@ FTUE 이벤트의 이름과 파라미터 원본은 `packages/product-core/src/an
 - 마켓 릴리즈는 `ADMOB_REQUIRE_PRODUCTION=1`과 `ADMOB_TARGET_PLATFORM=Android|iOS`를 전달한다. 선택한 플랫폼의 최종 `native_ads.json`·Android `config.gd`·iOS `.gdip` 중 테스트 퍼블리셔 `ca-app-pub-3940256099942544`가 하나라도 남으면 빌드가 실패해야 한다. 미설정 시 dev/AIT/PR의 기존 테스트 ID 동작은 유지한다.
 - Android production 변수: `ADMOB_ANDROID_APP_ID`(호환: `ADMOB_APP_ID`), `ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID`(호환: `ADMOB_INTERSTITIAL_AD_UNIT_ID`), `ADMOB_ANDROID_FOAM_BOMB_REWARDED_AD_UNIT_ID`, `ADMOB_ANDROID_LEVEL_REWARD_REWARDED_AD_UNIT_ID`.
 - iOS production 변수: `ADMOB_IOS_APP_ID`, `ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID`, `ADMOB_IOS_FOAM_BOMB_REWARDED_AD_UNIT_ID`, `ADMOB_IOS_LEVEL_REWARD_REWARDED_AD_UNIT_ID`.
-- 확정 앱 ID: Android `ca-app-pub-2444587584524186~8642747667`, iOS `ca-app-pub-2444587584524186~1722116096`.
-- AdMob 콘솔에서 2026-07-29 확인한 운영 유닛:
+- 확정 앱 ID: Android `ca-app-pub-9932778305312246~1897457409`, iOS `ca-app-pub-9932778305312246~7227831828`.
+- AdMob 콘솔에서 2026-09-21 확인한 운영 유닛. 전부 유지 publisher `pub-9932778305312246` 소속이다:
 
 | 플랫폼 | placement | 형식 | 운영 ID |
 |---|---|---|---|
-| Android | `foam_bomb_free` | 보상형 | `ca-app-pub-2444587584524186/5358816619` |
-| Android | `level_reward_2x` | 보상형 | `ca-app-pub-2444587584524186/3854163255` |
-| Android | `game_over` | 전면 광고 | `ca-app-pub-2444587584524186/7916431267` |
-| iOS | `foam_bomb_free` | 보상형 | `ca-app-pub-2444587584524186/1826765714` |
-| iOS | `level_reward_2x` | 보상형 | `ca-app-pub-2444587584524186/8531774866` |
-| iOS | `game_over` | 전면 광고 | `ca-app-pub-2444587584524186/5905611520` |
+| Android | `foam_bomb_free` | 보상형 | `ca-app-pub-9932778305312246/1257319840` |
+| Android | `level_reward_2x` | 보상형 | `ca-app-pub-9932778305312246/6318074836` |
+| Android | `game_over` | 전면 광고 | `ca-app-pub-9932778305312246/6583552731` |
+| iOS | `foam_bomb_free` | 보상형 | `ca-app-pub-9932778305312246/3266379398` |
+| iOS | `level_reward_2x` | 보상형 | `ca-app-pub-9932778305312246/3883483180` |
+| iOS | `game_over` | 전면 광고 | `ca-app-pub-9932778305312246/1584622900` |
 
-- Android `ca-app-pub-2444587584524186/5440739953`와 iOS `ca-app-pub-2444587584524186/7557772414`는 `보상형 전면 광고`라 `RewardedAdLoader`와 호환되지 않으며 설정 스크립트가 거부한다.
-- repo 밖 동반 설정: `seorilabs/.github`의 `godot-deploy-google-play.yml`은 Android rewarded 변수 2개와 `ADMOB_REQUIRE_PRODUCTION=1`을 전달한다. Google Play `google-play` environment와 Xcode Cloud `Release` workflow에는 2026-07-29 각 플랫폼 app/interstitial/rewarded 운영 변수를 등록했다.
+- 2026-09-21 이전 라이브 빌드는 레거시 publisher `pub-2444587584524186`(Android app `~8642747667`, iOS app `~1722116096`)를 싣고 나갔다. 두 publisher는 `www.seorilabs.com/app-ads.txt`에 함께 게시돼 있고, 구버전 설치본이 소진되면 레거시 줄을 지운다. 레거시 유닛 ID는 `play-store/google-play.config.json`과 `app-store/app-store.config.json`의 `legacy*` 항목에 비교용으로 남는다.
+- 레거시 publisher의 Android `ca-app-pub-2444587584524186/5440739953`와 iOS `ca-app-pub-2444587584524186/7557772414`는 `보상형 전면 광고`라 `RewardedAdLoader`와 호환되지 않으며 설정 스크립트가 거부한다. 유지 publisher에서 보상형 유닛을 새로 만들 때도 `보상형 전면`이 아닌 `보상형`을 선택해야 한다.
+- repo 밖 동반 설정: `seorilabs/.github`의 `godot-deploy-google-play.yml`은 Android rewarded 변수 2개와 `ADMOB_REQUIRE_PRODUCTION=1`을 전달한다. Android 운영 ID는 Google Play `google-play` environment 변수에 등록하고, iOS 운영 ID는 `app-store/app-store.config.json`의 `adMob` 절을 정본으로 `tools/prepare_ios_native_ads.sh`가 `Deploy to App Store` 빌드에서 주입한다. 유지 publisher 전환은 2026-09-21에 양쪽 모두 반영했다.
 - iOS는 ATT prompt 없이 `npa=1`을 요청별 기본값으로 보낸다. 이는 UMP 동의 수집을 대체하지 않으므로 EEA/UK 배포 전 AdMob privacy message와 UMP 흐름을 별도 확정한다.
 - 광고 이벤트는 fire-and-forget: 게임 상태/반환값에 영향 없음.
