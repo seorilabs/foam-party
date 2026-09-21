@@ -5,3 +5,4 @@
 - Test strategy: `docs/07-qa/test-strategy.md`
 - Godot smoke scene: `godot/tests/smoke_scene.gd`
 - Screenshot helper: `godot/tests/screenshot_scene.gd`
+- UI 실행 화면 검수: `docs/07-qa/ui-runtime-review.md`

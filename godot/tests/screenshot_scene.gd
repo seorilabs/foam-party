@@ -496,7 +496,9 @@ func _run() -> void:
 		quit(1)
 		return
 	node.call("set_completion_reveal_age_for_test", 1.0)
-	await _settle(1)
+	# STAR_REVEAL_DELAYS 는 0.3/0.75/1.25초다. 이보다 짧게 기다리면 별 3개가 모두
+	# 회색인 프레임이 찍혀 실제보다 나쁜 검수 결과가 나온다.
+	await _settle(90)
 	if not await _capture(out_dir.path_join("shot_complete.png")):
 		quit(1)
 		return
@@ -516,7 +518,7 @@ func _run() -> void:
 		return
 	node.call("set_text_scale_for_test", 1.0)
 	node.set("_double_offer_shown", true)
-	await _settle(2)
+	await _settle(4)
 	if not await _capture(out_dir.path_join("shot_complete_with_double_offer.png")):
 		quit(1)
 		return
