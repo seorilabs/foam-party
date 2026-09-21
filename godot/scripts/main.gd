@@ -1449,7 +1449,8 @@ func _draw() -> void:
 
 	# The static backdrop (sky + wash bay) lives on _background_layer, a cached
 	# behind-parent canvas item, so per-frame redraws skip its ~90 commands.
-	if game_state == STATE_PLAYING:
+	var completion_overlay := _completion_overlay_active()
+	if game_state == STATE_PLAYING and not completion_overlay:
 		_draw_status()
 	if game_state != STATE_TITLE:
 		var transition_offset := _car_transition_offset()
@@ -1471,16 +1472,17 @@ func _draw() -> void:
 		if show_achievement_panel:
 			_draw_achievement_panel()
 	else:
-		_draw_wash_trail()
-		_draw_tool_cursor()
-		# One compact summary row: stars, customer mood, and daily mission.
-		_draw_grade_tracker()
-		_draw_customer_patience()
-		_draw_daily_mission()
-		_draw_tool_hint()
-		_draw_combo_badge()
-		_draw_booster_button()
-		_draw_toolbar()
+		if not completion_overlay:
+			_draw_wash_trail()
+			_draw_tool_cursor()
+			# One compact summary row: stars, customer mood, and daily mission.
+			_draw_grade_tracker()
+			_draw_customer_patience()
+			_draw_daily_mission()
+			_draw_tool_hint()
+			_draw_combo_badge()
+			_draw_booster_button()
+			_draw_toolbar()
 		_draw_completion_panel()
 		_draw_combo_milestone_flash()
 		_draw_gold_spot_reward_pop()
@@ -5442,8 +5444,16 @@ func get_title_skin_swatch_colors_for_test() -> Array[Color]:
 	]
 
 
+## 부제 baseline. 상단 버튼 행 아래 16px 지점에 둔다.
+func _title_subtitle_baseline() -> float:
+	return _title_button_y() + 30.0 + 16.0
+
+
 func get_title_hero_rect_for_test() -> Rect2:
-	return Rect2(34.0, 138.0, 322.0, 234.0)
+	# 상단은 부제 아래에서 시작하고 하단 경계(372)는 유지해 아래 미션 카드와
+	# 시작 버튼 레이아웃을 건드리지 않는다.
+	var top := _title_subtitle_baseline() + 8.0
+	return Rect2(34.0, top, 322.0, 372.0 - top)
 
 
 func _draw_title_hero_car() -> void:
@@ -5494,8 +5504,10 @@ func _draw_title_screen() -> void:
 	var title_font_size := _fit_fs(title_text, 44, DESIGN_SIZE.x - 16.0)
 	draw_string(font, Vector2(2.0, 98.0), title_text, HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, title_font_size, Color("#0d3b55"))
 	draw_string(font, Vector2(0.0, 94.0), title_text, HORIZONTAL_ALIGNMENT_CENTER, DESIGN_SIZE.x, title_font_size, Color.WHITE)
+	# 부제는 상단 버튼 행(TOP_BUTTON_Y ~ +30) 아래에 둔다. 폭 전체 중앙 정렬이라
+	# 같은 밴드에 두면 좌측 아이콘과 우측 글자배율 칩에 가려진다.
 	var subtitle_text := tr("TITLE_SUBTITLE")
-	draw_string(font, Vector2(0.0, 128.0), subtitle_text, HORIZONTAL_ALIGNMENT_CENTER,
+	draw_string(font, Vector2(0.0, _title_subtitle_baseline()), subtitle_text, HORIZONTAL_ALIGNMENT_CENTER,
 		DESIGN_SIZE.x, _fit_fs(subtitle_text, 16, DESIGN_SIZE.x - 24.0), Color("#0d3b55"))
 	_draw_title_hero_car()
 	_draw_title_skin_swatches()
@@ -6630,11 +6642,19 @@ func _draw_quit_confirm() -> void:
 	draw_string(font, Vector2(no.position.x, no.position.y + 30.0), tr("QUIT_NO"), HORIZONTAL_ALIGNMENT_CENTER, no.size.x, 16, Color("#0d3b55"))
 
 
+## 완료 패널이 화면을 점유하는 동안인지. 뒤 HUD 를 숨기는 판정과 패널 자체의
+## 그리기 조건이 갈리지 않도록 한 곳에서 판단한다.
+func _completion_overlay_active() -> bool:
+	return completed and _car_transition_phase != CAR_TRANSITION_EXITING
+
+
 func _draw_completion_panel() -> void:
-	if not completed or _car_transition_phase == CAR_TRANSITION_EXITING:
+	if not _completion_overlay_active():
 		return
 	var font: Font = _font()
-	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.35))
+	# 뒤의 플레이 HUD 는 _draw() 에서 아예 건너뛴다. 이 오버레이는 남은 배경과 차를
+	# 가라앉혀 패널을 띄우는 역할만 한다.
+	draw_rect(Rect2(Vector2.ZERO, DESIGN_SIZE), Color(0.02, 0.1, 0.15, 0.45))
 	var panel := _completion_panel_rect()
 	draw_style_box(_style("panel_shadow", Color(0.03, 0.13, 0.19, 0.4), 24.0), Rect2(panel.position + Vector2(0.0, 5.0), panel.size))
 	draw_style_box(_style("panel", Color("#f7fbff"), 24.0), panel)
@@ -7394,7 +7414,11 @@ func _draw_upgrade_panel() -> void:
 		var row_rect := Rect2(panel.position.x + 14.0, row_y, panel.size.x - 28.0, 78.0)
 		draw_style_box(_style("upg_row_%d" % idx, Color("#ddeaf8"), 14.0), row_rect)
 
-		draw_circle(Vector2(panel.position.x + 43.0, row_y + 39.0), 17.0, _upgrade_tool_color(key))
+		var upgrade_icon_center := Vector2(panel.position.x + 43.0, row_y + 39.0)
+		draw_circle(upgrade_icon_center, 17.0, _upgrade_tool_color(key))
+		# air(#d8eef5)·soap(#f8f4a6)는 흰 패널 위에서 경계가 사라진다. 타이틀 스킨
+		# 스와치와 같은 네이비 아웃라인으로 실루엣을 남긴다.
+		draw_circle(upgrade_icon_center, 17.0, Color("#123246"), false, 1.5)
 		var upg_key: String = key.to_upper()
 		var name_key: String = "UPG_REACH_NAME_" + upg_key if is_reach else "UPG_NAME_" + upg_key
 		draw_string(font, Vector2(panel.position.x + 70.0, row_y + 23.0), tr(name_key), HORIZONTAL_ALIGNMENT_LEFT, 156.0, 14, Color("#0d2a50"))
