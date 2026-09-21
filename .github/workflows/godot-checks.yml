@@ -26,6 +26,9 @@ jobs:
         npm run test:core
         npm run check:architecture
         npm run check:workflows
+        npm run check:native-ads
+        npm run check:native-ads-config
+        npm run check:ios-admob-patch
         npm run check:docs
         bash scripts/godot_quality_gate.sh --project godot --smoke-scene res://tests/smoke_scene.gd
         npm --prefix ait/apps-in-toss-web ci
