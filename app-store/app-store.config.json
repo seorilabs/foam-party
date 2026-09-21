@@ -95,13 +95,20 @@
     "chat": false
   },
   "adMob": {
-    "publisherId": "pub-2444587584524186",
-    "iosAppId": "ca-app-pub-2444587584524186~1722116096",
+    "publisherId": "pub-9932778305312246",
+    "iosAppId": "ca-app-pub-9932778305312246~7227831828",
     "plugin": "Poing AdMob v4.3.1 / Google Mobile Ads 13.3.0",
     "iosInterstitialAdUnits": {
-      "game_over": "ca-app-pub-2444587584524186/5905611520"
+      "game_over": "ca-app-pub-9932778305312246/1584622900"
     },
     "iosRewardedAdUnits": {
+      "foam_bomb_free": "ca-app-pub-9932778305312246/3266379398",
+      "level_reward_2x": "ca-app-pub-9932778305312246/3883483180"
+    },
+    "legacyPublisherId": "pub-2444587584524186",
+    "legacyIosAppId": "ca-app-pub-2444587584524186~1722116096",
+    "legacyIosAdUnits": {
+      "game_over": "ca-app-pub-2444587584524186/5905611520",
       "foam_bomb_free": "ca-app-pub-2444587584524186/1826765714",
       "level_reward_2x": "ca-app-pub-2444587584524186/8531774866"
     },
@@ -109,15 +116,16 @@
       "ca-app-pub-2444587584524186/7557772414": "AdMob console format is rewarded interstitial; incompatible with the current RewardedAdLoader"
     },
     "productionUnitVerification": {
-      "checkedAt": "2026-07-29",
+      "checkedAt": "2026-09-21",
       "console": "Google AdMob",
+      "publisherId": "pub-9932778305312246",
       "game_over": "전면 광고",
       "foam_bomb_free": "보상형",
       "level_reward_2x": "보상형",
-      "xcodeCloudWorkflow": "Release",
+      "githubWorkflow": "Deploy to App Store",
       "strictProductionGuard": true
     },
-    "runtimeStatus": "Repository defaults remain Google test IDs. Xcode Cloud Release injects the verified iOS app/interstitial/rewarded IDs with ADMOB_REQUIRE_PRODUCTION=1. Version 1.3.12 build 24 passed Archive and App Store Connect processing. Physical-device ad and GA4 QA remain pending"
+    "runtimeStatus": "Repository defaults in godot/config/native_ads.json remain Google test IDs. tools/prepare_ios_native_ads.sh injects the adMob values above with ADMOB_REQUIRE_PRODUCTION=1 before the iOS export, so a test ID left in any slot fails the build. Migrated to the retained publisher pub-9932778305312246 on 2026-09-21; the legacy ids are kept for comparison until the old build audience drains. Physical-device ad and GA4 QA remain pending"
   },
   "releaseGates": {
     "appStoreConnectAppShell": "완료: adamId 6779624201",
