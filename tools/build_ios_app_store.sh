@@ -58,8 +58,9 @@ archive_path="${build_dir}/${project_name}.xcarchive"
 export_options="${build_dir}/ExportOptions-app-store.plist"
 
 mkdir -p "$build_dir"
+# AdMob v5 + Godot 4.7 의 export 가 pbxproj 의 SPM 링크를 직접 끝낸다.
+# ("AdMob: Patched project.pbxproj with SPM dependencies")
 godot --headless --path godot --export-release iOS "../${build_dir}/${project_name}.ipa"
-python3 tools/patch_ios_admob_project.py "${build_dir}/${project_name}.xcodeproj/project.pbxproj"
 
 if [[ "${1:-}" == "--project-only" ]]; then
   find "$build_dir" -maxdepth 1 \( -name "*.xcodeproj" -o -name "$project_name" \) -print
