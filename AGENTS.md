@@ -34,7 +34,7 @@ flowchart LR
   Markets --> Release["release checks"]
 ```
 
-- 현재 MVP는 Godot 4.6.3 기반 local-only 게임이다. Firebase, 광고, IAP, 계정 기능은 아직 없다.
+- 현재 MVP는 Godot 4.7.2 기반 local-only 게임이다. Firebase, 광고, IAP, 계정 기능은 아직 없다.
 - `packages/product-core`에는 엔진 독립 규칙, 유스케이스, 포트, 순수 테스트만 둔다.
 - `packages/product-core`는 Godot, Firebase, AppsInToss, Google Play, App Store, 광고 SDK, 결제 SDK, 네트워크 클라이언트를 직접 import하지 않는다.
 - Godot scene tree, rendering, input, animation, physics, lifecycle은 `godot/`에 둔다.

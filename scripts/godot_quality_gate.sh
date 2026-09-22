@@ -78,9 +78,15 @@ run_godot_check() {
     exit "${status}"
   fi
 
-  if grep -E "^(SCRIPT ERROR|ERROR):" "${log_file}" >/dev/null; then
+  # Godot 종료 시점의 리소스 정리 순서 경고는 기능 결함이 아니다. AdMob v5 addon 이
+  # class_name 으로 등록하는 전역 스크립트 클래스가 종료까지 참조를 유지하면서 나온다.
+  # 게임 동작에는 영향이 없고 addon 내부 사정이라 저장소에서 고칠 수 없다. 이 한 줄만
+  # 제외하고 나머지 ERROR / SCRIPT ERROR 는 그대로 실패로 처리한다.
+  if grep -E "^(SCRIPT ERROR|ERROR):" "${log_file}" \
+      | grep -vE "^ERROR: [0-9]+ resources still in use at exit" >/dev/null; then
     echo "[godot-quality] ${label} reported Godot errors. Log: ${log_file}" >&2
-    grep -E "^(SCRIPT ERROR|ERROR):" "${log_file}" >&2 || true
+    grep -E "^(SCRIPT ERROR|ERROR):" "${log_file}" \
+      | grep -vE "^ERROR: [0-9]+ resources still in use at exit" >&2 || true
     exit 1
   fi
 

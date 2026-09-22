@@ -19,3 +19,6 @@ jobs:
     uses: seorilabs/.github/.github/workflows/godot-pages.yml@main
     with:
       runs_on: ${{ github.event.repository.private && 'seorilabs-x64' || 'ubuntu-latest' }}
+      # 중앙 기본값(4.6.3) 대신 프로젝트 엔진을 명시한다.
+      godot_version: "4.7.2"
+      godot_status: "stable"

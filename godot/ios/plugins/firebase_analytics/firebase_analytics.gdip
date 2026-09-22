@@ -10,7 +10,7 @@ deinitialization="uninitialize_godotx_firebase_analytics_module"
 
 linked=[]
 
-embedded=[]
+embedded=["FBLPromises.xcframework", "FirebaseAnalytics.xcframework", "FirebaseCore.xcframework", "FirebaseCoreInternal.xcframework", "FirebaseInstallations.xcframework", "GoogleAdsOnDeviceConversion.xcframework", "GoogleAppMeasurement.xcframework", "GoogleAppMeasurementIdentitySupport.xcframework", "GoogleUtilities.xcframework", "nanopb.xcframework"]
 
 system=["UserNotifications.framework", "UIKit.framework", "Foundation.framework"]
 

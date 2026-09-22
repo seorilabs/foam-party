@@ -170,6 +170,11 @@ class AppStoreExportOrchestrationTest(unittest.TestCase):
         self.assertIn(
             "prepare_project_script: tools/prepare_ios_native_ads.sh", self.caller
         )
+        # godot --import 가 ProjectSettings 를 지우므로 import 후에도 한 번 더 넣는다.
+        # AdMob v5 는 app id 를 ProjectSettings 로 읽는다.
+        self.assertIn(
+            "post_import_script: tools/prepare_ios_native_ads.sh", self.caller
+        )
         prepare = (REPO_ROOT / "tools" / "prepare_ios_native_ads.sh").read_text(
             encoding="utf-8"
         )

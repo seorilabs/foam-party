@@ -94,7 +94,7 @@ FTUE 이벤트의 이름과 파라미터 원본은 `packages/product-core/src/an
 
 ## 안전/비활성 규칙
 
-- Android/iOS는 Poing AdMob v4.3.1과 Godot 4.6.3용 바이너리를 repo에 고정한다. desktop/headless/Web에는 네이티브 singleton이 없어 기존 no-op 경로를 유지한다.
+- Android/iOS는 Poing AdMob v4.3.1 바이너리를 repo에 고정하고 Godot 4.7.2 에서 검증한다. desktop/headless/Web에는 네이티브 singleton이 없어 기존 no-op 경로를 유지한다.
 - `godot/config/native_ads.json` 기본값은 Google 공식 테스트 app/unit ID다. `tools/configure_native_ads.py`가 빌드 환경변수로 실제 ID를 주입한다.
 - 마켓 릴리즈는 `ADMOB_REQUIRE_PRODUCTION=1`과 `ADMOB_TARGET_PLATFORM=Android|iOS`를 전달한다. 선택한 플랫폼의 최종 `native_ads.json`·Android `config.gd`·iOS `.gdip` 중 테스트 퍼블리셔 `ca-app-pub-3940256099942544`가 하나라도 남으면 빌드가 실패해야 한다. 미설정 시 dev/AIT/PR의 기존 테스트 ID 동작은 유지한다.
 - Android production 변수: `ADMOB_ANDROID_APP_ID`(호환: `ADMOB_APP_ID`), `ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID`(호환: `ADMOB_INTERSTITIAL_AD_UNIT_ID`), `ADMOB_ANDROID_FOAM_BOMB_REWARDED_AD_UNIT_ID`, `ADMOB_ANDROID_LEVEL_REWARD_REWARDED_AD_UNIT_ID`.
