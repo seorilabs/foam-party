@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
+import json
 import os
+import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -120,6 +122,27 @@ class ReleaseWorkflowContractTest(unittest.TestCase):
         ):
             with self.subTest(required_text=required_text):
                 self.assertIn(required_text, release_doc)
+
+    def test_workflows_only_run_existing_npm_scripts(self) -> None:
+        """워크플로가 부르는 npm script 가 package.json 에 실제로 있어야 한다.
+
+        CI 의 check_command 목록과 package.json 은 서로 다른 파일이라 한쪽만 고치면
+        드리프트가 난다. 로컬 `npm test` 는 자기 체인만 돌아서 이 어긋남을 못 잡고,
+        push 한 뒤 CI 에서 "Missing script" 로 터진다.
+        """
+        scripts = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["scripts"]
+        pattern = re.compile(r"npm(?:\s+--prefix\s+\S+)?\s+run\s+([A-Za-z0-9:_-]+)")
+        missing = []
+        for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+            text = workflow.read_text(encoding="utf-8")
+            for match in pattern.finditer(text):
+                name = match.group(1)
+                # --prefix 로 다른 패키지를 가리키는 호출은 그 패키지가 소유한다.
+                if "--prefix" in match.group(0):
+                    continue
+                if name not in scripts:
+                    missing.append(f"{workflow.name}: npm run {name}")
+        self.assertEqual(missing, [], "package.json 에 없는 npm script 를 호출한다: " + ", ".join(missing))
 
     def test_actionlint_accepts_all_workflows(self) -> None:
         actionlint_bin = os.environ.get("ACTIONLINT_BIN")
