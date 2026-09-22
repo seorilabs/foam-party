@@ -19,7 +19,7 @@
 
 ## 게이트 · 검증 명령 (npm — pnpm 아님)
 
-- **통합 게이트**: `npm run test` — `test:core` + `check:architecture` + `check:stalled-dirt-overlay` + `check:customer-presentation` + `check:workflows` + `check:native-ads` + `check:ios-admob-patch` + `test:godot` + `check:docs`를 순차 실행.
+- **통합 게이트**: `npm run test` — `test:core` + `check:architecture` + `check:stalled-dirt-overlay` + `check:customer-presentation` + `check:workflows` + `check:native-ads` + `test:godot` + `check:docs`를 순차 실행.
 - 변경 종류별 최소 게이트:
   - core 규칙/유스케이스 변경 → `npm run test:core`, `npm run check:architecture`
   - Godot scene/스크립트 변경 → `npm run test:godot`
