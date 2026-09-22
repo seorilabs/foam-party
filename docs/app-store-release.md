@@ -93,6 +93,8 @@ tools/check_app_store_readiness.py --json
 
 ## 검증 기록
 
+- 2026-09-22: `v1.3.18`(source `d4f83a2`) build `1003018` 을 GitHub Actions 로 업로드하고 ASC 에서 `VALID` 를 확인했다. appStoreVersion 1.3.18 을 만들어 build 를 연결하고 ko/en-US whatsNew 를 넣은 뒤 심사 제출했다. reviewSubmission `1eec01db-aaf8-4a56-a5c7-e49b36bf61ac`, state `WAITING_FOR_REVIEW`, releaseType `MANUAL`. 앱의 App Store 로케일이 ko/en-US 둘뿐이라 ja/zh-Hans 노트는 대상이 없어 건너뛰었다.
+- 2026-09-22: AdMob v5 로 올리면서 caller 의 `post_export_project_script` 를 뺐다. v4 시절 후처리가 v5 의 `admob_spm/Package.swift` 위치를 못 찾아 첫 배포가 실패했고, 훅 제거 후 같은 태그로 재실행해 성공했다.
 - 2026-09-21: AdMob 유지 publisher `pub-9932778305312246`로 iOS 앱(`~7227831828`)과 유닛 3종(`game_over` 전면 `/1584622900`, `foam_bomb_free` 보상형 `/3266379398`, `level_reward_2x` 보상형 `/3883483180`)을 발급하고 `app-store/app-store.config.json`에 반영했다. `tools/prepare_ios_native_ads.sh`를 로컬 실행해 `ADMOB_REQUIRE_PRODUCTION=1` 주입이 새 ID로 통과하는 것을 확인했다. 실기기 광고 QA와 스토어 업로드는 미수행.
 - 2026-08-21: Xcode Cloud `Release` run 25의 `v1.3.16`/`7e8e96f` build 25가 `VALID`, `APP_STORE_ELIGIBLE`임을 확인하고 App Store version 1.3.16에 선택했다.
 - 2026-08-21: App Privacy에 Firebase `User ID`를 `App Functionality`, linked=yes, tracking=no로 게시했다.

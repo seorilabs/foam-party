@@ -105,12 +105,13 @@
       ]
     },
     "lastInternalUpload": {
-      "uploadedAt": "2026-07-09T20:34:18+09:00",
+      "uploadedAt": "2026-09-22T16:09:00+09:00",
       "status": "completed",
       "track": "internal",
-      "versionCode": 1000000,
-      "verifiedAt": "2026-07-18",
-      "credential": "seorilabs-play-publisher@seorilabs-gws.iam.gserviceaccount.com"
+      "versionCode": 1003012,
+      "versionName": "1.3.18",
+      "verifiedAt": "2026-09-22",
+      "artifactSha256": "7837ecc65cba551a3db1316a84081340103acb4ed8fd1968682371aa2f4a9d93"
     },
     "previousProductionRelease": {
       "verifiedAt": "2026-07-18",
@@ -124,20 +125,17 @@
       }
     },
     "productionLaunch": {
-      "requestedAt": "2026-07-18",
-      "verifiedAt": "2026-07-18",
+      "requestedAt": "2026-09-22",
+      "verifiedAt": "2026-09-22",
       "track": "production",
-      "name": "1000000 (1.0.0)",
-      "versionName": "1.0.0",
-      "versionCode": 1000000,
-      "currentStatus": "draft",
+      "versionName": "1.3.18",
+      "versionCode": 1003012,
+      "currentStatus": "completed",
       "intendedStatus": "completed",
-      "storeListingLocales": [
-        "en-US",
-        "ko-KR"
-      ],
-      "blocker": "Play API commit rejected until Korean developer Account Details are completed",
-      "commitError": "To comply with Korean law, developers in Korea must provide additional information on the Account Details page."
+      "rollout": "full",
+      "promotedFrom": "internal",
+      "evidence": "promote-google-play run 35701754237 readback: {\"fromTrack\":\"internal\",\"toTrack\":\"production\",\"releaseStatus\":\"completed\",\"versionCode\":1003012}",
+      "note": "2026-07-18 에 Play API commit 을 막던 한국 개발자 Account Details blocker 는 이 승격에서 재현되지 않았다."
     },
     "uploadKey": {
       "catalogId": "app/foam-party/google-play/upload-key",
