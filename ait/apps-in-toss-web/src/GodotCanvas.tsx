@@ -21,6 +21,11 @@ declare global {
   }
 }
 
+// Godot 로더의 init 은 wasm 적재, 모듈 초기화, initFS 를 연쇄 then 으로만 잇고 rejection
+// 핸들러를 달지 않는다. 중간에 하나라도 실패하면 startGame 의 Promise 가 영원히 pending 이
+// 되어 로딩 화면이 단서 없이 멈춘다(#297). 진행률이 이만큼 멈춰 있으면 실패로 판정한다.
+const BOOT_STALL_TIMEOUT_MS = 20_000
+
 const scriptPromises = new Map<string, Promise<void>>()
 
 function loadGodotScript(src: string) {
@@ -102,15 +107,54 @@ export default function GodotCanvas() {
           canvas,
         })
 
-        await engine.startGame({
-          canvas,
-          onProgress: (current: number, total: number) => {
-            if (cancelled || total <= 0) {
-              return
-            }
-            setStatus(`게임 준비 ${Math.round((current / total) * 100)}%`)
-          },
-        } as Partial<GodotConfig>)
+        // 로더가 삼킨 실패를 화면에 올리기 위해 부팅 동안의 첫 오류를 잡아 둔다.
+        let firstRuntimeFailure: string | null = null
+        const rememberFailure = (reason: unknown) => {
+          if (firstRuntimeFailure !== null) {
+            return
+          }
+          firstRuntimeFailure = reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason)
+        }
+        const onWindowError = (event: ErrorEvent) => rememberFailure(event.error ?? event.message)
+        const onUnhandledRejection = (event: PromiseRejectionEvent) => rememberFailure(event.reason)
+        window.addEventListener('error', onWindowError)
+        window.addEventListener('unhandledrejection', onUnhandledRejection)
+
+        let stallTimer: ReturnType<typeof setTimeout> | undefined
+        let failStalledBoot: () => void = () => {}
+        const stalled = new Promise<never>((_resolve, reject) => {
+          failStalledBoot = () =>
+            reject(
+              new Error(
+                `게임 초기화가 응답하지 않아요: ${firstRuntimeFailure ?? '원인을 확인하지 못했습니다'}`,
+              ),
+            )
+        })
+        const armStallWatchdog = () => {
+          clearTimeout(stallTimer)
+          stallTimer = setTimeout(() => failStalledBoot(), BOOT_STALL_TIMEOUT_MS)
+        }
+
+        try {
+          armStallWatchdog()
+          await Promise.race([
+            engine.startGame({
+              canvas,
+              onProgress: (current: number, total: number) => {
+                armStallWatchdog()
+                if (cancelled || total <= 0) {
+                  return
+                }
+                setStatus(`게임 준비 ${Math.round((current / total) * 100)}%`)
+              },
+            } as Partial<GodotConfig>),
+            stalled,
+          ])
+        } finally {
+          clearTimeout(stallTimer)
+          window.removeEventListener('error', onWindowError)
+          window.removeEventListener('unhandledrejection', onUnhandledRejection)
+        }
 
         if (!cancelled) {
           setStatus('')
