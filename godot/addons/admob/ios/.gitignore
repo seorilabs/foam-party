@@ -1,2 +1,2 @@
-# Remove /bin folder line if you want to commit
-/bin
+# 이 저장소는 네이티브 바이너리를 vendoring 한다. 플러그인 기본 .gitignore 의
+# `/bin` 무시 줄을 지운 상태다. 플러그인을 다시 받으면 같은 조치를 해야 한다.

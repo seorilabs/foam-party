@@ -8,6 +8,9 @@
   - source: `https://github.com/poingstudios/godot-admob-plugin` (releases `poing-godot-admob-v5.1.0.zip`, `ios-template-v4.7.2.zip`, `android-template-v4.7.2.zip`)
   - vendored path: `godot/addons/admob` (네이티브 바이너리는 `android/bin`, `ios/bin`)
   - 네이티브 템플릿은 Godot 버전별로 배포된다. 엔진을 올리면 같은 버전의 템플릿으로 교체한다.
+  - 플러그인이 `addons/admob/{ios,android}/.gitignore` 에 `/bin` 무시 줄을 넣어 둔다.
+    이 저장소는 바이너리를 vendoring 하므로 그 줄을 지운 상태를 유지한다. 플러그인을
+    다시 받으면 같은 조치가 필요하다.
 - godotx Firebase: `3.1.0`
   - source: `https://github.com/godot-x/firebase` (release asset `godotx_firebase.zip`)
   - vendored path: `godot/addons/godotx_firebase`, `godot/android/firebase_*`, `godot/ios/plugins/firebase_*`
