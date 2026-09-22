@@ -15,10 +15,14 @@
   - source: `https://github.com/godot-x/firebase` (release asset `godotx_firebase.zip`)
   - vendored path: `godot/addons/godotx_firebase`, `godot/android/firebase_*`, `godot/ios/plugins/firebase_*`
   - Godot 4.7 이상 전용이다.
-- Seorilabs Platform GDScript SDK: `0.6.3`
+- Seorilabs Platform GDScript SDK: `0.6.5`
   - source: `https://github.com/seorilabs/platform/tree/main/sdk-gdscript`
   - vendored path: `godot/addons/seorilabs_platform`
-  - `VERSION`과 `CHECKSUM`을 함께 고정한다.
+  - `VERSION`과 `CHECKSUM`을 함께 고정한다. `CHECKSUM`은 `scripts/check_platform_sdk.sh`와
+    같은 방식(addon 안의 `*.gd`를 경로와 함께 해시)으로 재계산한다. 상류의 `tools/`는
+    vendoring 하지 않고 checksum에서도 제외된다.
+  - `core/presence_client.gd`는 RPI Edge heartbeat다. 기본 opt-in은 `false`이며
+    활성화는 중앙 게이트(seorilabs/platform#78) 통과 후 별도 릴리스에서 한다.
 
 ## GitHub Actions
 
