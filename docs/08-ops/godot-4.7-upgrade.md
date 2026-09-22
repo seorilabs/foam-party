@@ -105,6 +105,39 @@ Google Play 워크플로는 `Build AdMob plugin` 단계가 이미 import 뒤에 
 - iOS: `build/ios/<name>/<name>-Info.plist`의 `GADApplicationIdentifier`
 - Android: AAB manifest의 `com.google.android.gms.ads.APPLICATION_ID`
 
+## AIT 웹 로더 후처리 파손 (#297)
+
+4.7.2 로 올린 뒤 AppsInToss 미니앱이 열리지 않았다. 화면은 `게임 준비 100%` 에서 멈추고
+오류도 로그도 남지 않았다. 원인은 엔진이 아니라 **래퍼의 로더 후처리가 반쪽만 적용된 것**이다.
+
+`sync-godot-web.mjs` 는 브라우저 코드 실행 브리지를 무력화하려고 두 가지를 함께 바꿨다.
+
+| 대상 | 4.6.3 | 4.7.2 |
+| --- | --- | --- |
+| 함수 정의 `function _godot_js_eval(` | 있음 → 교체됨 | 있음 → **교체됨** |
+| import 항목 `godot_js_eval:_godot_js_eval` | 있음 → 교체됨 | **없음(`$e:_godot_js_eval` 로 최소화)** → 미적용 |
+
+emscripten 이 import 키를 최소화하면서 두 번째 치환이 0 건이 됐다. 정의는 사라지고 참조만
+남아 import 객체를 만드는 순간 `ReferenceError: _godot_js_eval is not defined` 가 난다.
+Godot 로더의 init 은 연쇄 `then` 만 쓰고 rejection 핸들러가 없어서, 이 오류가 바깥 Promise 를
+영원히 pending 으로 만든다. `startGame()` 이 resolve 도 reject 도 하지 않으니 래퍼의 `catch` 도
+돌지 않고 로딩 문구만 남는다.
+
+치환이 실패해도 스크립트는 **성공으로 보고했다.** 패턴을 못 찾으면 원본을 그대로 돌려주는
+fail-open 구조였기 때문이다.
+
+해소 방법은 두 가지다.
+
+- import 키는 wasm 의 import 이름과 1:1 이므로 **건드리지 않고 값만** 새 이름으로 바꾼다.
+  키를 안 바꾸니 wasm 바이트 패치도 필요 없어졌고, 판본별 최소화 규칙과 무관해졌다.
+- 후처리 각 단계를 **패치 후 불변식**으로 판정하고 어긋나면 예외를 던진다. 예를 들어 브리지
+  단계는 "치환 뒤 `_godot_js_eval` 참조가 0 건" 을 요구한다. 로직은
+  `ait/apps-in-toss-web/src/godotLoaderSanitizer.ts` 에 있고 단위 테스트가 4.7 최소화 형태와
+  4.6 원래 형태를 모두 덮는다.
+
+래퍼에는 부팅 감시도 넣었다. 진행률이 20 초 동안 멈추면 그동안 잡아 둔 첫 오류를 화면에
+띄운다. 다음에 같은 종류의 실패가 나면 실기기에서 바로 사유를 읽을 수 있다.
+
 ## 교체 시 주의
 
 - AdMob v5는 `RewardedAdLoader`·`InterstitialAdLoader`·`OnUserEarnedRewardListener`와

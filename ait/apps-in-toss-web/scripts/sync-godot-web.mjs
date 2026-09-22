@@ -1,7 +1,7 @@
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { neutralizeGeminiKeyFalsePositiveSource } from '../src/godotLoaderSanitizer.ts'
+import { sanitizeGodotLoaderSource } from '../src/godotLoaderSanitizer.ts'
 
 const wrapperRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = path.resolve(wrapperRoot, '..', '..')
@@ -47,127 +47,6 @@ function prefixGodotConfig(config, basePath) {
   }
 }
 
-function replaceGeneratedFunction(source, functionName, replacement) {
-  const marker = `function ${functionName}(`
-  const start = source.indexOf(marker)
-  if (start === -1) {
-    return source
-  }
-
-  const bodyStart = source.indexOf('{', start + marker.length)
-  if (bodyStart === -1) {
-    throw new Error(`Generated Godot loader has malformed ${functionName} function`)
-  }
-
-  let depth = 0
-  for (let index = bodyStart; index < source.length; index += 1) {
-    const char = source[index]
-    if (char === '{') {
-      depth += 1
-    } else if (char === '}') {
-      depth -= 1
-      if (depth === 0) {
-        return `${source.slice(0, start)}${replacement}${source.slice(index + 1)}`
-      }
-    }
-  }
-
-  throw new Error(`Generated Godot loader has unterminated ${functionName} function`)
-}
-
-async function disableGodotCodeExecutionShim(loaderPath) {
-  const loaderSource = await readFile(loaderPath, 'utf8')
-  const shimImportName = ['godot_js', 'ev' + 'al'].join('_')
-  const shimName = ['_godot_js', 'ev' + 'al'].join('_')
-  const disabledShimName = '_godot_js_disabled_bridge'
-  const replacement =
-    `function ${disabledShimName}(p_js,p_use_global_ctx,p_union_ptr,p_byte_arr,p_byte_arr_write,p_callback){GodotRuntime.error("Browser code execution bridge is disabled for AppsInToss review.");return 0}`
-  const sanitizedLoader = replaceGeneratedFunction(loaderSource, shimName, replacement).replaceAll(
-    `${shimImportName}:${shimName}`,
-    `godot_js_noop:${disabledShimName}`,
-  )
-
-  if (sanitizedLoader !== loaderSource) {
-    await writeFile(loaderPath, sanitizedLoader)
-    return true
-  }
-  return false
-}
-
-async function neutralizeGeminiKeyFalsePositive(loaderPath) {
-  // AppsInToss 정적 분석 파이프라인은 신형 Gemini API Key의 `AQ.<base64>` 형태를
-  // 탐지한다. Godot/emscripten 로더에는 진단용 URL `.../FAQ.html#...` 이 들어 있고,
-  // minify된 한 줄에서 그 `AQ.` 접두가 greedy하게 매칭되어 심사가
-  // "Gemini API 키를 사용 중인지 확인해주세요" 오탐 반려를 낸다(앱인토스 측 확인 완료,
-  // 길이 조건 보강 예정). 해당 문자열은 emscripten의 abort() 진단 메시지 안에만 있어
-  // 런타임 동작에 영향이 없으므로 `AQ.` 시퀀스를 깨뜨려 오탐을 무력화한다.
-  const source = await readFile(loaderPath, 'utf8')
-  const sanitized = neutralizeGeminiKeyFalsePositiveSource(source)
-  if (sanitized !== source) {
-    await writeFile(loaderPath, sanitized)
-    return true
-  }
-  return false
-}
-
-async function enableInsecureSandboxAudioFallback(loaderPath) {
-  const source = await readFile(loaderPath, 'utf8')
-  const audioPositionWorkletInit =
-    'GodotAudio.audioPositionWorkletPromise=ctx.audioWorklet.addModule(path);'
-  const guardedAudioPositionWorkletInit =
-    'GodotAudio.audioPositionWorkletPromise=ctx.audioWorklet?ctx.audioWorklet.addModule(path):Promise.resolve();'
-  const samplePositionWorkletConnect =
-    'async connectPositionWorklet(start){await GodotAudio.audioPositionWorkletPromise;if(this.isCanceled){return}this._source.connect(this.getPositionWorklet());if(start){this.start()}}'
-  const guardedSamplePositionWorkletConnect =
-    'async connectPositionWorklet(start){await GodotAudio.audioPositionWorkletPromise;if(this.isCanceled){return}if(!GodotAudio.ctx.audioWorklet){if(start){this.start()}return}this._source.connect(this.getPositionWorklet());if(start){this.start()}}'
-  const patched = source
-    .replace(audioPositionWorkletInit, guardedAudioPositionWorkletInit)
-    .replace(samplePositionWorkletConnect, guardedSamplePositionWorkletConnect)
-
-  if (patched !== source) {
-    await writeFile(loaderPath, patched)
-    return true
-  }
-  return false
-}
-
-function replaceAsciiBytes(buffer, from, to) {
-  if (from.length !== to.length) {
-    throw new Error(`Cannot replace "${from}" with "${to}": byte lengths differ`)
-  }
-
-  const source = Buffer.from(from, 'ascii')
-  const target = Buffer.from(to, 'ascii')
-  let count = 0
-  let offset = 0
-
-  while ((offset = buffer.indexOf(source, offset)) !== -1) {
-    target.copy(buffer, offset)
-    offset += target.length
-    count += 1
-  }
-
-  return count
-}
-
-async function patchGodotWasmBridgeStrings(wasmPath) {
-  const wasm = await readFile(wasmPath)
-  const replacements = [
-    ['godot_js_' + 'ev' + 'al', 'godot_js_noop'],
-  ]
-  let replacementCount = 0
-
-  for (const [from, to] of replacements) {
-    replacementCount += replaceAsciiBytes(wasm, from, to)
-  }
-
-  if (replacementCount > 0) {
-    await writeFile(wasmPath, wasm)
-  }
-
-  return replacementCount
-}
-
 const files = await readdir(sourceDir).catch(() => {
   throw new Error('Run Godot Web export before syncing: build/web does not exist')
 })
@@ -195,12 +74,11 @@ await rm(targetDir, { recursive: true, force: true })
 await mkdir(targetDir, { recursive: true })
 await cp(sourceDir, targetDir, { recursive: true })
 await writeFile(path.join(targetDir, '.gitkeep'), '')
-const disabledCodeExecutionShim = await disableGodotCodeExecutionShim(path.join(targetDir, loaderFile))
-const neutralizedGeminiFalsePositive = await neutralizeGeminiKeyFalsePositive(path.join(targetDir, loaderFile))
-const enabledInsecureSandboxAudioFallback = await enableInsecureSandboxAudioFallback(
-  path.join(targetDir, loaderFile),
-)
-const patchedWasmBridgeStrings = await patchGodotWasmBridgeStrings(path.join(targetDir, `${executableName}.wasm`))
+// wasm 은 건드리지 않는다. 로더가 emscripten import 항목의 키를 그대로 두므로 wasm 쪽
+// import 이름과 계속 일치한다. 예전에는 양쪽 이름을 함께 바꿨는데, 4.7.2 에서 로더의
+// 키가 최소화되면서 그 이중 수정이 반쪽만 적용돼 게임이 열리지 않았다(#297).
+const loaderPath = path.join(targetDir, loaderFile)
+await writeFile(loaderPath, sanitizeGodotLoaderSource(await readFile(loaderPath, 'utf8')))
 
 const html = await readFile(path.join(sourceDir, htmlFile), 'utf8')
 const { config, threadsEnabled } = parseGodotConfig(html)
@@ -218,15 +96,4 @@ await writeFile(generatedPath, generated)
 
 console.log(`Synced Godot Web export to ${path.relative(wrapperRoot, targetDir)}`)
 console.log(`Generated ${path.relative(wrapperRoot, generatedPath)} using ${loaderFile}`)
-if (disabledCodeExecutionShim) {
-  console.log(`Disabled Godot browser code execution shim in ${path.join('public', 'godot', loaderFile)}`)
-}
-if (neutralizedGeminiFalsePositive) {
-  console.log(`Neutralized AppsInToss Gemini-key false positive (FAQ.html) in ${path.join('public', 'godot', loaderFile)}`)
-}
-if (enabledInsecureSandboxAudioFallback) {
-  console.log(`Enabled Godot audio fallback for insecure AppsInToss sandbox in ${path.join('public', 'godot', loaderFile)}`)
-}
-if (patchedWasmBridgeStrings > 0) {
-  console.log(`Patched ${patchedWasmBridgeStrings} Godot Web bridge string(s) in ${path.join('public', 'godot', `${executableName}.wasm`)}`)
-}
+console.log(`Sanitized Godot Web loader ${path.join('public', 'godot', loaderFile)}`)

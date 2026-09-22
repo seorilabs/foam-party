@@ -12,6 +12,9 @@
   - `brand`에는 `primaryColor`만 남는다. 표기명은 `index.html`의 `<title>`이, 아이콘은 콘솔
     등록 이미지가 정본이다.
   - **3.x로 출시하면 2.x로 롤백할 수 없다.** 콘솔 QR로 확인한 뒤 출시한다.
+  - Godot Web 로더 후처리는 `src/godotLoaderSanitizer.ts` 가 소유하고, 각 단계는 패치 후
+    불변식으로 판정한다. 엔진을 올릴 때 로더 최소화 규칙이 바뀌면 sync 가 실패하도록 두고
+    조용히 넘어가게 두지 않는다. 경위는 `godot-4.7-upgrade.md` 의 AIT 웹 로더 항목에 있다.
   - 3.x부터 CORS 허용 도메인이 `*.apps.tossmini.com`에서 `*.web.tossmini.com`으로 바뀐다.
     AIT에서 Platform API를 호출하게 되면 `seorilabs/platform` 레지스트리의 `cors_origins`를
     먼저 갱신해야 한다. 현재 AIT 경로는 Platform 인증을 쓰지 않는다.
