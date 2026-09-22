@@ -5,7 +5,7 @@
 - Korean app name: 폼 파티
 - English app name: Foam Party
 - Genre: mobile-first casual car wash game
-- Engine: Godot 4.6.3
+- Engine: Godot 4.7.2
 - Project path: `godot/`
 - Main scene: `res://scenes/main.tscn`
 - One-line pitch: 도구를 바꿔 쓰며 더러워진 카툰 차량을 빠르게 세차하는 캐주얼 게임.

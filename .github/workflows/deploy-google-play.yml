@@ -79,8 +79,8 @@ jobs:
       scripts_dir: tools
       aab_name: foam-party-internal
       # 프로젝트가 개발/테스트된 엔진과 동일하게 고정한다. godot/project.godot 의
-      # config/features 와 재사용 워크플로우 기본값 모두 4.6.3 이다.
-      godot_version: "4.6.3"
+      # config/features 는 4.7 이고 중앙 기본값(4.6.3)을 덮어쓴다.
+      godot_version: "4.7.2"
       godot_status: "stable"
       # 주입 대상 preset과 export 대상 preset이 같아야 한다. 다르면 중앙 워크플로우가 fail-closed한다.
       android_export_preset: Android

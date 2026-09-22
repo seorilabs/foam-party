@@ -2,7 +2,7 @@
 
 ## Runtime
 
-- Godot: 4.6.3 stable
+- Godot: 4.7.2 stable
 - Node for repo checks: 24.x
 - Seorilabs Platform GDScript SDK: `0.6.3`
   - source: `https://github.com/seorilabs/platform/tree/main/sdk-gdscript`

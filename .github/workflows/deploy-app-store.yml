@@ -79,8 +79,8 @@ jobs:
       upload: ${{ inputs.upload == true || inputs.upload == 'true' }}
       project_dir: godot
       scripts_dir: tools
-      # godot/project.godot 의 config/features("4.6")와 정합.
-      godot_version: "4.6.3"
+      # godot/project.godot 의 config/features("4.7")와 정합. 중앙 기본값(4.6.3)을 덮어쓴다.
+      godot_version: "4.7.2"
       godot_status: "stable"
       # 주입 대상 preset과 export 대상 preset이 같아야 한다. 다르면 중앙이 fail-closed한다.
       ios_export_preset: iOS

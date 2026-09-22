@@ -45,7 +45,7 @@
   },
   "build": {
     "godotPreset": "iOS",
-    "godotVersion": "4.6.3.stable",
+    "godotVersion": "4.7.2.stable",
     "marketingVersion": "1.3.16",
     "buildNumber": "25",
     "versionNote": "v1.3.16 / 7e8e96f를 Xcode Cloud Release run 25로 archive해 App Store Connect build 25에 업로드하고 심사 제출했다.",

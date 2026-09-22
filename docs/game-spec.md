@@ -80,7 +80,7 @@
 
 ## MVP 상태
 
-- Engine: Godot 4.6.3.
+- Engine: Godot 4.7.2.
 - Project path: `godot/`.
 - Main scene: `res://scenes/main.tscn`.
 - Smoke test: `res://tests/smoke_scene.gd`.

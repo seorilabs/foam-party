@@ -35,5 +35,5 @@
 - `actions/deploy-pages@v5`
 - `actions/upload-artifact@v7`
 - `seorilabs-x64`
-- Godot `4.6.3.stable`
+- Godot `4.7.2.stable`
 - Node `24.16.0`
