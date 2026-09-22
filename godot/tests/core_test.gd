@@ -955,6 +955,16 @@ func _test_ftue_release_attribution_and_shared_native_path(FtueEvents: GDScript)
 	if not native_adapter_source.contains("func log_event(event_name: String, params: Dictionary = {})"):
 		_fail("native FTUE events must keep the shared AnalyticsPort log_event path")
 		return false
+	# #245: Android 플러그인 싱글턴의 @UsedByGodot 메서드는 런타임 디스패치라
+	# GDScript has_method() 가 false 를 돌려준다. 이 가드를 다시 넣으면 네이티브
+	# 경로에서 initialize/log_event 가 전부 조용히 차단된다. 실기기에서 확인했다.
+	for blocked_guard in [
+		'has_method("log_event")',
+		'has_method("initialize")',
+	]:
+		if native_adapter_source.contains(blocked_guard):
+			_fail("native plugin calls must not be gated by has_method(): " + blocked_guard)
+			return false
 	return true
 
 
