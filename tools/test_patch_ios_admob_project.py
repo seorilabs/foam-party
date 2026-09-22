@@ -157,13 +157,18 @@ class AppStoreExportOrchestrationTest(unittest.TestCase):
         self.script = POST_EXPORT_PREPARE.read_text(encoding="utf-8")
         self.caller = APP_STORE_CALLER.read_text(encoding="utf-8")
 
-    def test_patches_pbxproj_after_export(self) -> None:
-        """AC-1: export 후 스크립트가 tools/patch_ios_admob_project.py 로 pbxproj 를 패치한다."""
-        self.assertIn("tools/patch_ios_admob_project.py", self.script)
-        self.assertIn(
-            "post_export_project_script: tools/prepare_ios_xcode_project.sh",
-            self.caller,
-        )
+    def test_no_post_export_hook_with_admob_v5(self) -> None:
+        """AdMob v5 는 SPM 등록과 pbxproj 패치를 스스로 한다.
+
+        v4 시절의 후처리 훅을 그대로 두면 v5 가 Package.swift 를 admob_spm 아래에 두는
+        탓에 "Could not find Package.swift" 로 App Store 빌드가 실패한다.
+        """
+        # 주석에서 이유를 설명할 수 있으므로 YAML 키로 정확히 본다.
+        for line in self.caller.splitlines():
+            self.assertFalse(
+                line.strip().startswith("post_export_project_script:"),
+                "AdMob v5 에서는 후처리 훅을 넘기지 않는다: " + line.strip(),
+            )
 
     def test_configures_native_ads_before_export(self) -> None:
         """AC-2: export 전 준비 스크립트가 광고 ID 를 확정한다."""
