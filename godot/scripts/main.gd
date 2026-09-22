@@ -500,6 +500,11 @@ func _load_progress() -> void:
 		_load_reduce_motion_setting(config)
 		_load_language_preference(config)
 		tutorial_seen = bool(config.get_value("settings", "tutorial_seen", false))
+		# 인메모리 카운터만 쓰면 세션당 level_complete 가 1건 수준인 실사용에서
+		# 임계 3 에 영영 도달하지 못해 전면 광고가 한 번도 뜨지 않는다(#265).
+		_level_transitions = clampi(
+			int(config.get_value("settings", "level_transitions", 0)), 0, INTERSTITIAL_EVERY
+		)
 		_load_upgrade_progress(config)
 		_load_nozzle_skin_customization(config)
 		_load_car_paint_customization(config)
@@ -767,6 +772,7 @@ func _save_progress() -> Error:
 	_store_reduce_motion_setting(config)
 	_store_language_preference(config)
 	config.set_value("settings", "tutorial_seen", tutorial_seen)
+	config.set_value("settings", "level_transitions", _level_transitions)
 	config.set_value("game", "best_times", best_times)
 	config.set_value("game", "best_stars", best_stars)
 	config.set_value("game", "milestone_rewards_claimed", milestone_rewards_claimed)
@@ -1197,13 +1203,18 @@ func _notification(what: int) -> void:
 		_update_canvas_transform()
 		queue_redraw()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
+		# 전면 광고가 떠 있는 동안의 pause 는 사용자가 앱을 떠난 것이 아니라 우리가
+		# 띄운 광고다. 이탈로 기록하면 광고를 볼수록 이탈률이 나빠 보이고, 일시정지
+		# 시트를 강제로 열면 폼밤 광고를 보고 돌아온 플레이어가 열지 않은 화면을
+		# 만난다(#269). 저장은 아래에서 그대로 수행한다.
+		var ad_showing: bool = ads != null and ads.is_fullscreen_ad_showing()
 		# Backgrounding/closing mid-level is the dominant silent abandon (level_start
 		# as last event). Cap at one per attempt so a background→foreground bounce is
 		# not double-counted; a later same-level level_complete marks it soft-abandon.
-		if _level_started and not completed and not _level_abandon_bg_emitted:
+		if not ad_showing and _level_started and not completed and not _level_abandon_bg_emitted:
 			_level_abandon_bg_emitted = true
 			_emit_level_abandon(ContentEvents.REASON_APP_BACKGROUND)
-		if what == NOTIFICATION_APPLICATION_PAUSED:
+		if what == NOTIFICATION_APPLICATION_PAUSED and not ad_showing:
 			if presence != null:
 				presence.call("stop")
 			is_washing = false
@@ -3032,10 +3043,14 @@ func _on_double_coins_reward() -> void:
 func _maybe_show_game_over_interstitial() -> void:
 	if ads == null:
 		return
+	var before := _level_transitions
 	if _level_transitions < INTERSTITIAL_EVERY:
 		_level_transitions += 1
 	if _level_transitions >= INTERSTITIAL_EVERY and ads.show_interstitial("game_over"):
 		_level_transitions = 0
+	# 세션이 끊겨도 진행이 남아야 임계에 도달한다(#265).
+	if _level_transitions != before:
+		_save_progress()
 
 
 func _calc_coin_reward(stars: int) -> int:

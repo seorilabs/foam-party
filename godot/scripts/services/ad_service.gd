@@ -57,6 +57,13 @@ func setup() -> void:
 	_setup_native()
 
 
+## 전면/보상형이 화면을 점유하는 중인지. OS 는 이때도 앱을 pause 시키는데, 그것은
+## 사용자가 앱을 떠난 것이 아니라 우리가 띄운 광고다. 이탈 기록과 강제 일시정지를
+## 건너뛰는 판단에 쓴다(#269).
+func is_fullscreen_ad_showing() -> bool:
+	return _interstitial_in_flight or _rewarded_in_flight
+
+
 func is_rewarded_ready(placement: String) -> bool:
 	if _rewarded_in_flight:
 		return false

@@ -18,6 +18,26 @@ class AnalyticsRecorder:
 		events.append({"name": event_name, "params": params.duplicate(true)})
 
 
+## 전면 광고가 화면을 점유한 상태만 흉내낸다(#269). 실제 AdService 는 네이티브
+## 싱글턴을 요구해 headless 에서 만들 수 없다.
+class FullscreenAdStub:
+	extends Node
+
+	var showing := false
+
+	func is_fullscreen_ad_showing() -> bool:
+		return showing
+
+	func show_interstitial(_placement: String) -> bool:
+		return false
+
+	func is_rewarded_ready(_placement: String) -> bool:
+		return false
+
+	func setup() -> void:
+		pass
+
+
 class RewardRecorder:
 	extends RefCounted
 
@@ -777,6 +797,8 @@ func _run_smoke() -> void:
 	if not _test_replay_level_start_contract(root_node, analytics_recorder):
 		return
 	if not _test_go_home_pause_home_abandon_contract(root_node, analytics_recorder):
+		return
+	if not _test_ad_pause_and_cadence(root_node, analytics_recorder):
 		return
 	if not _test_level_abandon_contract(root_node, analytics_recorder):
 		return
@@ -2150,6 +2172,88 @@ func _test_go_home_pause_home_abandon_contract(root_node: Node, analytics_record
 	root_node.set("game_state", orig_state)
 	analytics_recorder.events.clear()
 	return true
+
+
+## #269: 전면 광고가 떠 있는 동안의 pause 는 이탈이 아니다. 이탈 이벤트도,
+## 강제 일시정지도 일어나지 않아야 한다.
+## #265: 전환 카운터는 세션을 넘겨 누적돼야 임계에 도달한다.
+func _test_ad_pause_and_cadence(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
+	var original_ads: Variant = root_node.get("ads")
+	var orig_state := String(root_node.get("game_state"))
+	var orig_level := int(root_node.get("active_level_index"))
+	var stub := FullscreenAdStub.new()
+	root_node.add_child(stub)
+	root_node.set("ads", stub)
+
+	root_node.set("game_state", "playing")
+	root_node.call("reset_game", 2, "ad_pause_smoke")
+	root_node.set("game_state", "playing")
+	root_node.set("show_tutorial", false)
+	root_node.set("_level_started", true)
+	root_node.set("completed", false)
+	root_node.set("show_pause", false)
+	root_node.set("_level_abandon_bg_emitted", false)
+	analytics_recorder.events.clear()
+
+	stub.showing = true
+	root_node.call("_notification", NOTIFICATION_APPLICATION_PAUSED)
+	var abandons := analytics_recorder.events.filter(
+		func(event: Dictionary) -> bool:
+			return event.get("name") == "level_abandon"
+	)
+	var ok := true
+	if abandons.size() != 0:
+		_fail("#269: showing a fullscreen ad must not record level_abandon: " + str(abandons))
+		ok = false
+	elif bool(root_node.get("show_pause")):
+		_fail("#269: showing a fullscreen ad must not force the pause sheet open")
+		ok = false
+
+	# 같은 조건에서 광고가 아닐 때는 기존 계약(이탈 기록)이 그대로 남아야 한다.
+	if ok:
+		stub.showing = false
+		root_node.set("_level_abandon_bg_emitted", false)
+		root_node.set("show_pause", false)
+		analytics_recorder.events.clear()
+		root_node.call("_notification", NOTIFICATION_APPLICATION_PAUSED)
+		if analytics_recorder.events.filter(
+			func(event: Dictionary) -> bool:
+				return event.get("name") == "level_abandon"
+		).size() != 1:
+			_fail("#269: a real background pause must still record exactly one level_abandon")
+			ok = false
+
+	if ok:
+		# #265: 카운터가 세션 간 보존된다. 저장 후 다시 읽어 같은 값이 나와야 한다.
+		var every := int(root_node.get("INTERSTITIAL_EVERY"))
+		root_node.set("_level_transitions", 0)
+		root_node.call("_maybe_show_game_over_interstitial")
+		var after_one := int(root_node.get("_level_transitions"))
+		if after_one != 1:
+			_fail("#265: a level transition must advance the interstitial counter")
+			ok = false
+		elif every < 2:
+			_fail("#265: INTERSTITIAL_EVERY must stay above 1 for the cadence to mean anything")
+			ok = false
+		else:
+			var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+			if not main_source.contains('config.set_value("settings", "level_transitions", _level_transitions)'):
+				_fail("#265: the interstitial counter must be persisted with progress")
+				ok = false
+			elif not main_source.contains('int(config.get_value("settings", "level_transitions", 0)), 0, INTERSTITIAL_EVERY'):
+				_fail("#265: the persisted counter must be restored and clamped on load")
+				ok = false
+
+	root_node.set("ads", original_ads)
+	stub.queue_free()
+	root_node.set("_level_started", false)
+	root_node.set("_level_abandon_bg_emitted", false)
+	root_node.set("show_pause", false)
+	root_node.set("_level_transitions", 0)
+	# 뒤따르는 검사들이 레벨 1 기준이라 원래 상태로 되돌린다.
+	root_node.call("reset_game", orig_level, "ad_pause_smoke_restore")
+	root_node.set("game_state", orig_state)
+	return ok
 
 
 func _test_level_abandon_contract(root_node: Node, analytics_recorder: AnalyticsRecorder) -> bool:
