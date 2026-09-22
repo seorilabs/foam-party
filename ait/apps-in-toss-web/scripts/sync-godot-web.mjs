@@ -110,6 +110,31 @@ async function neutralizeGeminiKeyFalsePositive(loaderPath) {
   return false
 }
 
+// emscripten 런타임은 UA 에 Safari/ 가 있고 Version/x 가 잡히면 Safari 로 보고
+// v15.2.0 미만이면 엔진 시작 전에 throw 한다. Android WebView 의 UA 는
+// "... Version/4.0 Chrome/152.0.0.0 Mobile Safari/537.36" 이라 Safari 4.0 으로
+// 오인되어 Chrome 웹뷰인데도 게임이 스플래시에서 멈춘다. 실기기 AIT 에서
+// "requires Safari v15.2.0 (detected v040000)" 로 확인된 증상이다.
+// Chrome/ 이 있으면 Safari 분기를 타지 않게 해 진짜 Safari 만 검사하게 한다.
+// seorilabs/lucid-chess 가 같은 증상을 같은 패치로 해결했다.
+async function relaxEmscriptenSafariGate(loaderPath) {
+  const source = await readFile(loaderPath, 'utf8')
+  const target = 'userAgent.includes("Safari/")&&userAgent.match('
+  if (!source.includes(target)) {
+    throw new Error('Generated Godot loader does not include the expected Safari version gate')
+  }
+  const patched = source.replace(
+    target,
+    'userAgent.includes("Safari/")&&!userAgent.includes("Chrome/")&&userAgent.match(',
+  )
+  if (patched === source) {
+    return false
+  }
+  await writeFile(loaderPath, patched)
+  return true
+}
+
+
 async function enableInsecureSandboxAudioFallback(loaderPath) {
   const source = await readFile(loaderPath, 'utf8')
   const audioPositionWorkletInit =
@@ -200,6 +225,7 @@ const neutralizedGeminiFalsePositive = await neutralizeGeminiKeyFalsePositive(pa
 const enabledInsecureSandboxAudioFallback = await enableInsecureSandboxAudioFallback(
   path.join(targetDir, loaderFile),
 )
+const relaxedSafariGate = await relaxEmscriptenSafariGate(path.join(targetDir, loaderFile))
 const patchedWasmBridgeStrings = await patchGodotWasmBridgeStrings(path.join(targetDir, `${executableName}.wasm`))
 
 const html = await readFile(path.join(sourceDir, htmlFile), 'utf8')
@@ -220,6 +246,9 @@ console.log(`Synced Godot Web export to ${path.relative(wrapperRoot, targetDir)}
 console.log(`Generated ${path.relative(wrapperRoot, generatedPath)} using ${loaderFile}`)
 if (disabledCodeExecutionShim) {
   console.log(`Disabled Godot browser code execution shim in ${path.join('public', 'godot', loaderFile)}`)
+}
+if (relaxedSafariGate) {
+  console.log(`Relaxed emscripten Safari version gate for Android WebView in ${path.join('public', 'godot', loaderFile)}`)
 }
 if (neutralizedGeminiFalsePositive) {
   console.log(`Neutralized AppsInToss Gemini-key false positive (FAQ.html) in ${path.join('public', 'godot', loaderFile)}`)
