@@ -31,6 +31,7 @@ const AudioService = preload("res://scripts/services/audio_service.gd")
 const FirebaseAnalyticsAdapter = preload("res://scripts/services/firebase_analytics_adapter.gd")
 const AdService = preload("res://scripts/services/ad_service.gd")
 const PlatformAuthService = preload("res://scripts/services/platform_auth_service.gd")
+const PresenceClient = preload("res://addons/seorilabs_platform/core/presence_client.gd")
 const I18n = preload("res://scripts/services/i18n.gd")
 const BackgroundLayer = preload("res://scripts/background_layer.gd")
 
@@ -302,6 +303,10 @@ var audio: AudioService
 # _emit_analytics with a pure-core catalog builder, not scattered dictionaries.
 var analytics: Node = null
 var platform_auth: Node = null
+var presence: Node = null
+## Presence opt-in. 중앙 선행 게이트(seorilabs/platform#78)를 통과한 릴리스에서만
+## true 로 바꾼다(#264 Phase B). false 면 SDK 가 네트워크를 전혀 열지 않는다.
+const PRESENCE_ENABLED := false
 var _platform_auth_client_override: Node = null
 var _platform_identity_override: Node = null
 var _level_started := false
@@ -423,6 +428,7 @@ func _ready() -> void:
 	add_child(analytics)
 	analytics.setup()
 	_setup_platform_auth()
+	_setup_presence()
 	_emit_analytics(FtueEvents.title_screen_view(FtueEvents.ENTRY_COLD_START))
 	ads = AdService.new()
 	add_child(ads)
@@ -459,6 +465,21 @@ func _setup_platform_auth() -> void:
 		}
 	platform_auth.call("configure", options)
 	platform_auth.call("start")
+
+
+## RPI Edge 로 보내는 익명 세션 heartbeat(#264). 기본은 비활성이라 요청이 0회다.
+## SDK 는 제품 HTTP 경로를 공유하지 않고 2초 timeout 안에서 fail-open 한다.
+## 복귀는 SDK 가 NOTIFICATION_APPLICATION_FOCUS_IN 에서 스스로 처리한다.
+func _setup_presence() -> void:
+	presence = PresenceClient.new()
+	add_child(presence)
+	# 사용자 식별자·광고 ID·세션 원문을 넘기지 않는다. 안정된 app id 만 준다.
+	presence.call("configure", {
+		"enabled": PRESENCE_ENABLED,
+		"token_base_url": PlatformAuthService.PLATFORM_API_BASE_URL,
+		"app_id": PlatformAuthService.PLATFORM_APP_ID,
+		"context": {},
+	})
 
 
 func _load_progress() -> void:
@@ -1183,6 +1204,8 @@ func _notification(what: int) -> void:
 			_level_abandon_bg_emitted = true
 			_emit_level_abandon(ContentEvents.REASON_APP_BACKGROUND)
 		if what == NOTIFICATION_APPLICATION_PAUSED:
+			if presence != null:
+				presence.call("stop")
 			is_washing = false
 			if audio != null:
 				_stop_tool_loop()

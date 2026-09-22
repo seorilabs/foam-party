@@ -478,6 +478,26 @@ func _run_smoke() -> void:
 		_fail("platform auth start guard must prevent duplicate sign_in calls")
 		return
 
+	# #264 Phase A: Presence 는 기본 비활성이고, 그 상태에서 네트워크를 전혀 열지
+	# 않아야 한다. Edge 나 집 서버가 죽어도 게임 시작을 막지 않는다는 계약이다.
+	var presence_node: Node = root_node.get("presence") as Node
+	if presence_node == null:
+		_fail("presence client must be wired in the composition root")
+		return
+	if bool(presence_node.get("_enabled")):
+		_fail("presence opt-in must default to false until the central gate passes")
+		return
+	if bool(presence_node.get("_running")):
+		_fail("disabled presence must not run its heartbeat cycle")
+		return
+	if not String(presence_node.get("_app_id")) == String(PlatformAuthService.PLATFORM_APP_ID):
+		_fail("presence must report the stable platform app id")
+		return
+	var presence_context: Variant = presence_node.get("_context_source")
+	if typeof(presence_context) != TYPE_DICTIONARY or not (presence_context as Dictionary).is_empty():
+		_fail("presence context must not carry identifiers in Phase A")
+		return
+
 	if not root_node.has_method("get_patch_count_for_test"):
 		_fail("test API missing")
 		return
