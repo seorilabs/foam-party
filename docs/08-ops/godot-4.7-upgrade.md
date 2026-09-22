@@ -68,7 +68,7 @@ Android는 JVM `.aar`이라 이 제약이 없다. iOS만 해당한다.
 - [x] iOS unsigned build 링크 통과 — `BUILD SUCCEEDED`
 - [x] 운영 app id가 생성 plist에 반영됨 — `GADApplicationIdentifier` = `ca-app-pub-9932778305312246~7227831828`
 - [ ] Android 실기기에서 `level_start` 등 커스텀 이벤트 수집 확인 (#245 AC-2)
-- [ ] **CI 주입 순서** — 아래 참조
+- [x] **CI 주입 순서** — `seorilabs/.github#202` 머지 후 caller 연결
 
 ## 남은 블로커: CI 주입 순서
 
@@ -92,9 +92,14 @@ Export Xcode project             ← export (기본값 = Google 테스트 ID)
 주입이 무효화되고 **테스트 광고 ID로 조용히 빌드된다.** `ADMOB_REQUIRE_PRODUCTION=1`
 검사는 prepare 시점에 돌아 통과하므로 잡지 못한다.
 
-해소하려면 `seorilabs/.github`의 `godot-deploy-*.yml`에 import 직후·export 직전 훅
-(`post_import_script` 같은 선택 입력)이 필요하다. 그 전까지 **iOS·Android 릴리스 빌드를
-내지 않는다.**
+해소했다. `seorilabs/.github#202`(`efabd09`)가 `godot-deploy-app-store.yml`에
+`post_import_script` 선택 입력을 추가했고, 이 저장소의 App Store caller가 import 전후로
+`tools/prepare_ios_native_ads.sh`를 두 번 넘긴다. 주입 대상이 둘이고 살아남는 시점이 다르다.
+
+- `native_ads.json`의 유닛 ID: pck에 들어가야 하므로 **import 전**
+- ProjectSettings의 app id: import가 지우므로 **import 후**
+
+Google Play 워크플로는 `Build AdMob plugin` 단계가 이미 import 뒤에 있어 그대로 둔다.
 
 검증은 산출물로 한다.
 - iOS: `build/ios/<name>/<name>-Info.plist`의 `GADApplicationIdentifier`
