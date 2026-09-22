@@ -4,6 +4,17 @@
 
 - Godot: 4.7.2 stable
 - Node for repo checks: 24.x
+- AppsInToss web framework: `3.5.0`
+  - 설정 정본은 `ait/apps-in-toss-web/apps-in-toss.config.ts`다. 2.x의 `granite.config.ts`는
+    `ait migrate v3`로 변환했다.
+  - 3.x는 `webBundleDir`을 그대로 패킹한다. `ait build` 전에 웹 빌드가 끝나 있어야 하므로
+    `build` 스크립트가 `build:web → ait build → check:no-google-api-key` 순이다.
+  - `brand`에는 `primaryColor`만 남는다. 표기명은 `index.html`의 `<title>`이, 아이콘은 콘솔
+    등록 이미지가 정본이다.
+  - **3.x로 출시하면 2.x로 롤백할 수 없다.** 콘솔 QR로 확인한 뒤 출시한다.
+  - 3.x부터 CORS 허용 도메인이 `*.apps.tossmini.com`에서 `*.web.tossmini.com`으로 바뀐다.
+    AIT에서 Platform API를 호출하게 되면 `seorilabs/platform` 레지스트리의 `cors_origins`를
+    먼저 갱신해야 한다. 현재 AIT 경로는 Platform 인증을 쓰지 않는다.
 - Poing AdMob: `5.1.0`
   - source: `https://github.com/poingstudios/godot-admob-plugin` (releases `poing-godot-admob-v5.1.0.zip`, `ios-template-v4.7.2.zip`, `android-template-v4.7.2.zip`)
   - vendored path: `godot/addons/admob` (네이티브 바이너리는 `android/bin`, `ios/bin`)
