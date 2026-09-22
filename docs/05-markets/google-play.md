@@ -26,6 +26,10 @@
 - Internal track: `1.0.0` / versionCode `1000000` / `completed`
 - Production track: `1.0.0` / versionCode `1000000` / `draft`
 - Intended rollout: production `completed` with `en-US` and `ko-KR` release notes
+- Production track (2026-09-22): `1.3.18` / versionCode `1003012` / `completed`
+  - `promote-google-play` 로 internal 에서 재빌드 없이 승격했다. readback:
+    `{"fromTrack":"internal","toTrack":"production","releaseStatus":"completed","versionCode":1003012}`
+  - 2026-07-18 에 commit 을 막던 한국 개발자 Account Details blocker 는 이 승격에서 재현되지 않았다.
 
 ## Current Status
 
