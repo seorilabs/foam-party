@@ -62,18 +62,52 @@ Android는 JVM `.aar`이라 이 제약이 없다. iOS만 해당한다.
 - [x] caller 5곳 `godot_version: "4.7.2"` 고정 — 중앙 재사용 워크플로 기본값이 4.6.3이라 `godot-checks`·`deploy-godot-pages`도 명시해야 한다
 - [x] `scripts/ensure_godot.sh` 기본값, 마켓 config, docs
 - [x] 검증: `npm test` 통과, Android AAB에 `google_app_id`·`gcm_defaultSenderId`·`google_api_key`·`project_id` 생성 확인, iOS export(project-only) 성공
-- [ ] Poing AdMob v5.1.0 교체 — `godot/addons/admob/`, iOS `godot/ios/plugins/poing-godot-admob*`, Android `godot/addons/admob/android/bin/`
-- [ ] godotx Firebase 3.1.0 교체 — `godot/addons/godotx_firebase/`, `godot/android/firebase_*`, `godot/ios/plugins/firebase_*`
-- [ ] `tools/check_native_admob_bundle.py` 고정값 갱신 (현재 `v4.3.1`·Ads SDK `24.9.0`·GMA `13.3.0`·UMP `3.1.0`을 검사)
-- [ ] iOS unsigned build 링크 통과 확인
+- [x] Poing AdMob v5.1.0 교체 — v5는 네이티브 바이너리를 addon 안(`android/bin`, `ios/bin`)에 두고, v4의 `res://ios/plugins/poing-godot-admob*` 배치를 충돌로 거부한다
+- [x] godotx Firebase 3.1.0 교체
+- [x] `tools/check_native_admob_bundle.py` 고정값 갱신
+- [x] iOS unsigned build 링크 통과 — `BUILD SUCCEEDED`
+- [x] 운영 app id가 생성 plist에 반영됨 — `GADApplicationIdentifier` = `ca-app-pub-9932778305312246~7227831828`
 - [ ] Android 실기기에서 `level_start` 등 커스텀 이벤트 수집 확인 (#245 AC-2)
+- [ ] **CI 주입 순서** — 아래 참조
+
+## 남은 블로커: CI 주입 순서
+
+AdMob v5는 app id를 `.gdip`/`config.gd`가 아니라 ProjectSettings
+(`admob/general/<platform>/app_id`)로 읽는다. 그런데 **`godot --import`가 등록되지 않은
+커스텀 ProjectSettings를 저장 시 버린다.** 에디터에서는 AdMob addon의 `_enter_tree`가
+`register_settings()`로 등록하지만 headless import는 EditorPlugin을 로드하지 않는다.
+
+그래서 app id는 저장소에 보관할 수 없고 빌드마다 주입해야 한다.
+`tools/configure_native_ads.py`가 `[admob]` 섹션을 upsert하도록 바꿨고, 로컬 빌드는
+`configure → export` 순서라 정상 동작한다.
+
+중앙 재사용 워크플로는 순서가 다르다.
+
+```
+Run caller project preparation   ← prepare_ios_native_ads.sh (주입)
+Import Godot project             ← godot --import   (여기서 삭제됨)
+Export Xcode project             ← export (기본값 = Google 테스트 ID)
+```
+
+주입이 무효화되고 **테스트 광고 ID로 조용히 빌드된다.** `ADMOB_REQUIRE_PRODUCTION=1`
+검사는 prepare 시점에 돌아 통과하므로 잡지 못한다.
+
+해소하려면 `seorilabs/.github`의 `godot-deploy-*.yml`에 import 직후·export 직전 훅
+(`post_import_script` 같은 선택 입력)이 필요하다. 그 전까지 **iOS·Android 릴리스 빌드를
+내지 않는다.**
+
+검증은 산출물로 한다.
+- iOS: `build/ios/<name>/<name>-Info.plist`의 `GADApplicationIdentifier`
+- Android: AAB manifest의 `com.google.android.gms.ads.APPLICATION_ID`
 
 ## 교체 시 주의
 
 - AdMob v5는 `RewardedAdLoader`·`InterstitialAdLoader`·`OnUserEarnedRewardListener`와
   `PoingGodotAdMob*` 싱글턴 이름을 유지한다. `ad_service.gd` 대규모 수정은 예상되지 않으나
   `.gdip`의 `binary` 경로가 `bin/`에서 `libs/`로 바뀌므로 exporter 규칙을 따라 배치한다.
-- Firebase 3.1.0은 export option 이름(`firebase/enable_analytics` 등)을 유지하고
-  `privacy_safe_defaults`가 추가됐다. 기본 수집이 꺼질 수 있으니 확인한다.
+- Firebase 3.1.0에 `privacy_safe_defaults` export option이 추가됐고 **기본값이 true**다.
+  켜면 `firebase_analytics_collection_enabled=false`와 consent 신호 denied가 manifest/plist에
+  들어가 수집이 멈춘다. 2.4.1에는 없던 동작이라 양 preset에서 `false`로 고정했고
+  `check:native-ads`가 이를 검사한다. EEA/UK 동의 흐름(`umpConsent`)을 갖추면 다시 검토한다.
 - 릴리스 게이트에 AAB 리소스 검사를 넣으면 같은 회귀를 막는다.
   `unzip -p <aab> base/resources.pb | grep -a google_app_id`

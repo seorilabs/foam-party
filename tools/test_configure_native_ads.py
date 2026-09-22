@@ -77,14 +77,11 @@ class ConfigureNativeAdsTest(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
-        self.android_config = self.root / "godot/addons/admob/android/config.gd"
-        self.android_config.write_text(
-            f'const APPLICATION_ID := "{TEST_PUBLISHER}~3347511713"\n',
-            encoding="utf-8",
-        )
-        self.ios_gdip = self.root / "godot/ios/plugins/poing-godot-admob-ads.gdip"
-        self.ios_gdip.write_text(
-            f'GADApplicationIdentifier:string_input="{TEST_PUBLISHER}~1458002511"\n',
+        self.project_godot = self.root / "godot/project.godot"
+        self.project_godot.write_text(
+            "[admob]\n\n"
+            f'general/android/app_id="{TEST_PUBLISHER}~3347511713"\n'
+            f'general/ios/app_id="{TEST_PUBLISHER}~1458002511"\n',
             encoding="utf-8",
         )
 
@@ -167,7 +164,7 @@ class ConfigureNativeAdsTest(unittest.TestCase):
         self.assertNotIn(TEST_PUBLISHER, json.dumps(android))
         self.assertIn(
             f'{PRODUCTION_PUBLISHER}~1000000001',
-            self.android_config.read_text(encoding="utf-8"),
+            self.project_godot.read_text(encoding="utf-8"),
         )
         self.assertIn(
             TEST_PUBLISHER,

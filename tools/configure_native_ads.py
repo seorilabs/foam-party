@@ -11,8 +11,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "godot" / "config" / "native_ads.json"
-ANDROID_PLUGIN_CONFIG = ROOT / "godot" / "addons" / "admob" / "android" / "config.gd"
-IOS_GDIP = ROOT / "godot" / "ios" / "plugins" / "poing-godot-admob-ads.gdip"
+# AdMob v5 는 app id 를 ProjectSettings(`admob/general/<platform>/app_id`)로 읽는다.
+# v4 의 `addons/admob/android/config.gd` 상수와 iOS `.gdip` plist 치환은 사라졌다.
+PROJECT_GODOT = ROOT / "godot" / "project.godot"
 
 APP_ID_PATTERN = re.compile(r"^ca-app-pub-\d+~\d+$")
 UNIT_ID_PATTERN = re.compile(r"^ca-app-pub-\d+/\d+$")
@@ -90,6 +91,26 @@ def replace_once(path, pattern, replacement):
         path.write_text(updated, encoding="utf-8")
 
 
+def upsert_project_setting(path, key, value):
+    """`[admob]` 섹션의 key 를 value 로 맞춘다. 없으면 만든다.
+
+    `godot --import` 는 등록되지 않은 커스텀 ProjectSettings 를 저장 시 버린다.
+    그래서 app id 는 저장소에 보관할 수 없고 빌드마다 다시 주입해야 한다.
+    """
+    original = path.read_text(encoding="utf-8")
+    pattern = rf'^{re.escape(key)}="[^"]*"'
+    updated, count = re.subn(
+        pattern, f'{key}="{value}"', original, count=1, flags=re.MULTILINE
+    )
+    if count == 0:
+        if "[admob]" in original:
+            updated = original.replace("[admob]\n", f'[admob]\n\n{key}="{value}"\n', 1)
+        else:
+            updated = original.rstrip("\n") + f'\n\n[admob]\n\n{key}="{value}"\n'
+    if updated != original:
+        path.write_text(updated, encoding="utf-8")
+
+
 def test_id_slots(config, platforms):
     slots = []
     for platform in PLATFORMS:
@@ -106,16 +127,17 @@ def test_id_slots(config, platforms):
                         f"{platform} {format_name}/{placement}"
                     )
 
+    # 최종 산출물의 app id 는 ProjectSettings 한 곳에 모인다(AdMob v5).
     artifact_patterns = {
         "Android": (
-            ANDROID_PLUGIN_CONFIG,
-            r'^const APPLICATION_ID := "([^"]+)"',
-            "Android plugin applicationId",
+            PROJECT_GODOT,
+            r'^general/android/app_id="([^"]+)"',
+            "admob/general/android/app_id",
         ),
         "iOS": (
-            IOS_GDIP,
-            r'^GADApplicationIdentifier:string_input="([^"]+)"',
-            "iOS plugin GADApplicationIdentifier",
+            PROJECT_GODOT,
+            r'^general/ios/app_id="([^"]+)"',
+            "admob/general/ios/app_id",
         ),
     }
     for platform in PLATFORMS:
@@ -123,9 +145,8 @@ def test_id_slots(config, platforms):
             continue
         path, pattern, label = artifact_patterns[platform]
         match = re.search(pattern, path.read_text(encoding="utf-8"), re.MULTILINE)
-        if not match:
-            slots.append(f"{path.relative_to(ROOT)}: {label} missing")
-        elif GOOGLE_TEST_PUBLISHER in match.group(1):
+        # 설정이 없으면 AdMob v5 가 Google 테스트 ID 를 기본값으로 쓴다.
+        if not match or GOOGLE_TEST_PUBLISHER in match.group(1):
             slots.append(f"{path.relative_to(ROOT)}: {label}")
     return slots
 
@@ -211,16 +232,8 @@ def main():
 
     android_app_id = config["platforms"]["Android"]["appId"]
     ios_app_id = config["platforms"]["iOS"]["appId"]
-    replace_once(
-        ANDROID_PLUGIN_CONFIG,
-        r'^const APPLICATION_ID := "[^"]+"',
-        f'const APPLICATION_ID := "{android_app_id}"',
-    )
-    replace_once(
-        IOS_GDIP,
-        r'^GADApplicationIdentifier:string_input="[^"]+"',
-        f'GADApplicationIdentifier:string_input="{ios_app_id}"',
-    )
+    upsert_project_setting(PROJECT_GODOT, "general/android/app_id", android_app_id)
+    upsert_project_setting(PROJECT_GODOT, "general/ios/app_id", ios_app_id)
 
     if args.require_production or environment_flag("ADMOB_REQUIRE_PRODUCTION"):
         require_production_ids(config, platforms)

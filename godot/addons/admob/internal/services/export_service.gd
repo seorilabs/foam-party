@@ -22,6 +22,7 @@
 
 const EXPORT_PRESETS_PATH := "res://export_presets.cfg"
 
+
 static func get_activated_plugins(platform_name: String) -> Array[String]:
 	var activated_plugins: Array[String] = []
 
