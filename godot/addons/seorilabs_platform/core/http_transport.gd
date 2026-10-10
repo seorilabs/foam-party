@@ -23,9 +23,24 @@ const MAX_PENDING := 16
 ## Apple 검증은 외부 API 왕복이 붙어 오래 걸린다.
 const DEFAULT_TIMEOUT_SEC := 15.0
 
+## 관측 헤더가 가질 수 있는 값. 서버와 같은 상한과 문자 집합이다.
+##
+## 헤더 줄에 그대로 들어가므로 여기서 좁히지 않으면 개행 하나로 요청이 깨진다.
+const OBSERVATION_VALUE_PATTERN := "^[A-Za-z0-9._/+-]{1,32}$"
+
 var base_url := ""
 var app_id := ""
 var max_retries := 3
+var sdk_version := ""
+var client_context_provider := Callable()
+## 개발용 빌드인지. 기본값은 이 빌드가 debug export인지다.
+##
+## 서버는 이 표시가 붙은 요청을 그대로 처리하되 운영 관측(신규 가입·버전 최초
+## 관측·이벤트 수집·광고 보상 알림)에서 뺀다. QA 기기가 운영 서버에 붙어도 운영
+## 지표가 오염되지 않게 하는 신호다. 마켓 배포 빌드는 release export라 false다.
+var debug_build := OS.is_debug_build()
+
+var _observation_regex: RegEx
 
 var _http: HTTPRequest
 var _busy := false
@@ -42,6 +57,15 @@ func configure(p_base_url: String, p_app_id: String, p_max_retries: int = 3) -> 
 	base_url = p_base_url.rstrip("/")
 	app_id = p_app_id
 	max_retries = p_max_retries
+
+
+## 관측 헤더 공급자를 연결한다.
+##
+## provider는 appVersion과 runtime을 담은 Dictionary를 돌려준다. 요청마다 부르므로
+## 앱이 버전을 바꿔도 다음 요청부터 반영된다.
+func set_client_context(p_sdk_version: String, provider: Callable) -> void:
+	sdk_version = p_sdk_version.strip_edges()
+	client_context_provider = provider
 
 
 ## 요청을 보낸다.
@@ -169,7 +193,50 @@ func _build_headers(data: Dictionary) -> PackedStringArray:
 	if not app_check_token.is_empty():
 		headers.append("X-Firebase-AppCheck: " + app_check_token)
 
+	# 어느 SDK 버전의 트래픽인지는 SDK가 스스로 안다. 앱 설정에 의존하지 않는다.
+	if not sdk_version.is_empty():
+		headers.append("X-Seori-Sdk: gd/" + sdk_version)
+
+	# 앱 설정에 맡기지 않는다. QA 빌드마다 앱이 기억해서 켜야 하는 값이면 결국 빠진다.
+	if debug_build:
+		headers.append("X-Seori-Build: debug")
+
+	var context := _client_context()
+	var app_version := _observation_value(context.get("appVersion", ""))
+	if not app_version.is_empty():
+		headers.append("X-Seori-AppVer: " + app_version)
+
+	var runtime := _observation_value(context.get("runtime", ""))
+	if not runtime.is_empty():
+		headers.append("X-Seori-Runtime: " + runtime)
+
+	var iap_environment := String(data.get("iap_environment", ""))
+	if ["production", "sandbox"].has(iap_environment):
+		headers.append("X-Seori-IAP-Environment: " + iap_environment)
 	return headers
+
+
+func _client_context() -> Dictionary:
+	if not client_context_provider.is_valid():
+		return {}
+	var raw: Variant = client_context_provider.call()
+	if typeof(raw) != TYPE_DICTIONARY:
+		return {}
+	return raw
+
+
+## 형식을 어긴 값은 잘라 보내지 않고 뺀다.
+## 자르면 관측에 없는 버전 문자열이 만들어진다.
+func _observation_value(value: Variant) -> String:
+	var clean := String(value).strip_edges()
+	if clean.is_empty():
+		return ""
+	if _observation_regex == null:
+		_observation_regex = RegEx.new()
+		_observation_regex.compile(OBSERVATION_VALUE_PATTERN)
+	if _observation_regex.search(clean) == null:
+		return ""
+	return clean
 
 
 func _ensure_http() -> void:

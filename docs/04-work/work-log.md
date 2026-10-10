@@ -1,5 +1,13 @@
 # Work Log
 
+## 2026-10-10
+
+- vendored Platform GDScript SDK를 `main` 트리 복사본 `0.6.5`에서 공개 Release `v0.9.0` archive로
+  교체했다. 디버그 빌드는 SDK가 `X-Seori-Build: debug`를 자동으로 보내 운영 가입 알림·지표에서
+  빠진다. 게임이 쓰는 `configure`·`sign_in`·`ensure_identity`·Presence `configure`는 바뀌지 않아
+  호출부 수정은 없다. `check:platform-sdk`는 Release tree 체크섬 규칙으로 바꾸고, archive에 없는
+  `.uid`는 이 addon 디렉터리에서만 커밋하지 않는다.
+
 ## 2026-08-20
 
 - Platform GDScript SDK `0.6.3`을 `VERSION`·`CHECKSUM`과 함께 vendoring하고,

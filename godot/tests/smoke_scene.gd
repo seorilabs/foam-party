@@ -364,9 +364,13 @@ func _test_platform_identity_persistence() -> bool:
 	).strip_edges()
 	var checksum_pattern := RegEx.new()
 	checksum_pattern.compile("^[0-9a-f]{64}$")
+	var release_source := (
+		"https://github.com/seorilabs/platform/releases/download/v%s/seorilabs-platform-gdscript-%s.tar.gz"
+		% [version, version]
+	)
 	if version != PlatformClient.SDK_VERSION \
 			or checksum_pattern.search(checksum) == null \
-			or source != "https://github.com/seorilabs/platform/tree/main/sdk-gdscript":
+			or source != release_source:
 		_fail("vendored Platform SDK provenance is incomplete or inconsistent")
 		return false
 	if PlatformAuthService.firebase_api_key_from_android_json(
