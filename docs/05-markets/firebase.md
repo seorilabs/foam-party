@@ -3,7 +3,7 @@
 ## Current Status
 
 - Android/iOS는 Firebase Core·Analytics 설정과 네이티브 플러그인을 포함한다.
-- Android/iOS 시작 시 vendored Platform SDK `0.6.3`의
+- Android/iOS 시작 시 vendored Platform SDK(버전은 `docs/08-ops/dependencies.md`)의
   `firebase_identity_adapter.gd`가 Platform custom token을 Firebase ID token으로
   교환하고, 그 ID token으로 `foam-party` Platform 세션을 비동기로 연다.
 - 로컬 `user://seori_firebase_identity.json`에는 UID·refresh token·만료·provider만

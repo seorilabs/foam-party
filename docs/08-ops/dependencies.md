@@ -29,12 +29,18 @@
   - source: `https://github.com/godot-x/firebase` (release asset `godotx_firebase.zip`)
   - vendored path: `godot/addons/godotx_firebase`, `godot/android/firebase_*`, `godot/ios/plugins/firebase_*`
   - Godot 4.7 이상 전용이다.
-- Seorilabs Platform GDScript SDK: `0.6.5`
-  - source: `https://github.com/seorilabs/platform/tree/main/sdk-gdscript`
+- Seorilabs Platform GDScript SDK: `0.9.0`
+  - source: `https://github.com/seorilabs/platform/releases/download/v0.9.0/seorilabs-platform-gdscript-0.9.0.tar.gz`
   - vendored path: `godot/addons/seorilabs_platform`
-  - `VERSION`과 `CHECKSUM`을 함께 고정한다. `CHECKSUM`은 `scripts/check_platform_sdk.sh`와
-    같은 방식(addon 안의 `*.gd`를 경로와 함께 해시)으로 재계산한다. 상류의 `tools/`는
-    vendoring 하지 않고 checksum에서도 제외된다.
+  - Release asset과 `.sha256`을 검증한 뒤 archive 안의 `seorilabs_platform/`로 통째로 교체한다.
+    파일을 직접 고치지 않는다. `SOURCE`·`VERSION`·`CHECKSUM`은 archive 값 그대로 둔다.
+  - `CHECKSUM`은 Release 파이프라인의 tree 체크섬(`VERSION`·`SOURCE` 포함 전체 파일)이다.
+    `npm run check:platform-sdk`가 `scripts/lib/vendored_tree_checksum.mjs`로 재계산해 대조하고,
+    `npm run test:platform-sdk`가 커밋된 파일만으로도 같은 값이 나오는지 확인한다.
+  - Godot이 만드는 `.uid`는 archive에 없으므로 이 디렉터리에서만 `.gitignore`로 제외한다.
+    커밋하면 Backoffice discovery의 tree 체크섬이 어긋나 SDK 소비자로 인식되지 않는다.
+  - 디버그 빌드(`OS.is_debug_build()`)는 SDK가 `X-Seori-Build: debug`를 자동으로 보내
+    운영 가입 알림과 지표에서 빠진다. 마켓 배포 release export는 보내지 않는다.
   - `core/presence_client.gd`는 RPI Edge heartbeat다. 기본 opt-in은 `false`이며
     활성화는 중앙 게이트(seorilabs/platform#78) 통과 후 별도 릴리스에서 한다.
 
